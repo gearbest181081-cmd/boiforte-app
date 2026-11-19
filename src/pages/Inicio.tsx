@@ -1,14 +1,16 @@
 import { Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, FASES } from '../db';
-import { useLotesInfo, type LoteInfo } from '../hooks';
+import { useEscala, useEstoque, useLotesInfo, type LoteInfo } from '../hooks';
 import { ordenarAlertas } from '../alertas';
-import { fmtData, fmtGmd, fmtKg, fmtNum } from '../calc';
+import { fmtData, fmtGmd, fmtKg, fmtNum, hojeISO } from '../calc';
 import { Indicador, Topo } from '../components/ui';
 
 export function Inicio() {
   const props = useLiveQuery(() => db.propriedades.toArray());
   const infos = useLotesInfo();
+  const escala = useEscala(hojeISO());
+  const estoque = useEstoque();
   if (!props || !infos) return <Topo titulo="BoiForte" />;
 
   if (props.length === 0) {
@@ -31,7 +33,11 @@ export function Inicio() {
   }
 
   const cabecas = infos.reduce((s, i) => s + (i.lote.qtdCabecas || 0), 0);
-  const alertas = ordenarAlertas(infos.flatMap((i) => i.alertas));
+  const alertasEstoque = (estoque ?? []).filter((e) => e.situacao.nivel === 'ruim' || e.situacao.nivel === 'atencao')
+    .map((e) => ({ nivel: e.situacao.nivel as 'ruim' | 'atencao', titulo: `Estoque: ${e.nome}`, texto: `${e.situacao.texto} Saldo de ${fmtNum(e.situacao.saldoKg, 0)} kg.${e.tipo === 'mistura' ? ' Hora de bater nova ração.' : ''}` }));
+  const alertas = ordenarAlertas([...infos.flatMap((i) => i.alertas), ...alertasEstoque]);
+  const tratos = (escala ?? []).filter((l) => l.formula);
+  const tratosFeitos = tratos.filter((l) => l.fornecimento).length;
   const comPeso = infos.filter((i) => i.resumo.pesoAtual != null);
   const pesoMedio = comPeso.length
     ? comPeso.reduce((s, i) => s + i.resumo.pesoAtual! * i.lote.qtdCabecas, 0) / Math.max(1, comPeso.reduce((s, i) => s + i.lote.qtdCabecas, 0))
@@ -51,6 +57,13 @@ export function Inicio() {
           <Link to="/pesar" className="btn">Pesar gado</Link>
           <Link to="/lotes/novo" className="btn sec">Novo lote</Link>
         </div>
+
+        {tratos.length > 0 && (
+          <Link to="/trato" className={`alerta ${tratosFeitos === tratos.length ? 'bom' : 'atencao'}`} style={{ textDecoration: 'none' }}>
+            <span className="ic">{tratosFeitos === tratos.length ? '✅' : '🪣'}</span>
+            <div><b>Trato de hoje: {tratosFeitos} de {tratos.length} lotes</b>{tratosFeitos === tratos.length ? 'Tudo fornecido.' : 'Toque para marcar o que já foi dado.'}</div>
+          </Link>
+        )}
 
         {alertas.length > 0 && (
           <>

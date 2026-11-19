@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { criarLote, db, FASES, type Controle, type Fase, type Sexo } from '../db';
 import { hojeISO } from '../calc';
+import { TIPOS } from '../nutricao';
 import { CampoNumero, CampoTexto, num, Opcoes, Topo, useAviso } from '../components/ui';
 
 /** GMD de referência por fase (tabela de referência da planilha, ajustável). */
@@ -15,9 +16,10 @@ export function LoteForm() {
   const nav = useNavigate();
   const aviso = useAviso();
   const props = useLiveQuery(() => db.propriedades.toArray());
+  const formulas = useLiveQuery(() => db.formulas.toArray());
   const [f, setF] = useState({
     nome: '', propriedadeId: 0, piqueteId: 0, fase: 'recria' as Fase, sexo: 'macho' as Sexo, controle: 'lote' as Controle,
-    qtd: '', data: hojeISO(), pesoEntrada: '', pesoAlvo: String(PESO_ALVO_SUGERIDO.recria), gmdMeta: String(GMD_SUGERIDO.recria).replace('.', ','), obs: '',
+    qtd: '', data: hojeISO(), pesoEntrada: '', pesoAlvo: String(PESO_ALVO_SUGERIDO.recria), gmdMeta: String(GMD_SUGERIDO.recria).replace('.', ','), obs: '', formulaId: 0, consumo: '',
   });
   const set = (k: keyof typeof f) => (v: any) => setF((x) => ({ ...x, [k]: v }));
 
@@ -29,6 +31,7 @@ export function LoteForm() {
         nome: l.nome, propriedadeId: l.propriedadeId, piqueteId: l.piqueteId ?? 0, fase: l.fase, sexo: l.sexo, controle: l.controle,
         qtd: String(l.qtdCabecas), data: l.dataEntrada, pesoEntrada: '', pesoAlvo: l.pesoAlvo ? String(l.pesoAlvo) : '',
         gmdMeta: l.gmdMeta ? String(l.gmdMeta).replace('.', ',') : '', obs: l.obs ?? '',
+        formulaId: l.formulaId ?? 0, consumo: l.consumoPctPV ? String(+(l.consumoPctPV * 100).toFixed(4)).replace('.', ',') : '',
       });
     });
   }, [editando, id]);
@@ -70,7 +73,9 @@ export function LoteForm() {
     const dados = {
       nome: f.nome.trim(), propriedadeId: f.propriedadeId, piqueteId: f.piqueteId || null, fase: f.fase, sexo: f.sexo, controle: f.controle,
       qtdCabecas: Math.round(qtd), dataEntrada: f.data, pesoAlvo: num(f.pesoAlvo), gmdMeta: num(f.gmdMeta), obs: f.obs.trim() || undefined,
+      formulaId: f.formulaId || null, consumoPctPV: num(f.consumo) ? num(f.consumo)! / 100 : null,
     };
+    try {
     if (editando) {
       await db.lotes.update(Number(id), dados);
       aviso('Lote atualizado.');
@@ -81,6 +86,7 @@ export function LoteForm() {
       aviso('Lote salvo no celular.');
       nav(f.controle === 'individual' ? `/pesar/${novo}` : `/lotes/${novo}`, { replace: true });
     }
+    } catch (e) { aviso((e as Error).message, true); }
   };
 
   return (
@@ -128,12 +134,24 @@ export function LoteForm() {
 
         {piquetes && piquetes.length > 0 && (
           <label className="campo"><span>Piquete (opcional)</span>
-            <select value={f.piqueteId} onChange={(e) => set('piqueteId')(Number(e.target.value))}>
+            <select name="piquete" value={f.piqueteId} onChange={(e) => set('piqueteId')(Number(e.target.value))}>
               <option value={0}>Nenhum</option>
               {piquetes.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
             </select>
           </label>
         )}
+
+        <label className="campo"><span>Dieta / suplemento</span>
+          <select name="formula" value={f.formulaId} onChange={(e) => set('formulaId')(Number(e.target.value))}>
+            <option value={0}>Nenhuma (só pasto e sal)</option>
+            {formulas?.map((x) => <option key={x.id} value={x.id}>{x.nome}</option>)}
+          </select>
+          <small>{formulas?.length === 0 ? 'Crie fórmulas em Mais › Nutrição.' : 'Usada no trato do dia e no custo do lote.'}</small>
+        </label>
+        {f.formulaId ? (
+          <CampoNumero rotulo="Consumo do lote" valor={f.consumo} aoMudar={set('consumo')} unidade="% PV" nome="consumoLote"
+            dica={`Deixe em branco para usar o da fórmula (${String(+((formulas?.find((x) => x.id === f.formulaId)?.consumoPctPV ?? 0) * 100).toFixed(3)).replace('.', ',')}% PV). ${TIPOS[formulas?.find((x) => x.id === f.formulaId)?.tipo ?? 'outro'].descricao}`} />
+        ) : null}
 
         <label className="campo"><span>Observações</span><textarea value={f.obs} onChange={(e) => set('obs')(e.target.value)} /></label>
 

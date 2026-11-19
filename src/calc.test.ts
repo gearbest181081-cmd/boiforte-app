@@ -78,3 +78,13 @@ describe('Datas e formatação', () => {
     expect(fmtData('2026-09-28')).toBe('28/09/2026');
   });
 });
+
+import { pesoEstimado } from './calc';
+describe('peso estimado para o trato', () => {
+  it('soma o GMD do último período aos dias desde a pesagem', () => {
+    expect(pesoEstimado(pts, '2026-12-07')).toBeCloseTo(246 + 0.8 * 10, 6);
+    expect(pesoEstimado(pts, '2026-11-01')).toBe(246);
+    expect(pesoEstimado([pts[0]], '2026-10-08', 0.75)).toBeCloseTo(207.5, 6);
+    expect(pesoEstimado([], '2026-10-08', 0.75)).toBeNull();
+  });
+});

@@ -1,5 +1,7 @@
 // Dados de exemplo baseados na planilha de recria/TIP. Os pesos são ilustrativos.
-import { criarLote, db, registrarPesagemIndividual } from './db';
+import { comprarInsumo, criarLote, db, garantirIngredientesPadrao, registrarBatida, registrarFornecimento, registrarPesagemIndividual } from './db';
+import { hojeISO, pesoEstimado, somaDias } from './calc';
+import { pontosDoLote } from './db';
 
 export async function carregarExemplo() {
   const pid = await db.propriedades.add({ nome: 'Fazenda Exemplo', municipio: 'Exemplo', uf: 'TO', areaHa: 120, criadoEm: Date.now() });
@@ -18,5 +20,35 @@ export async function carregarExemplo() {
   await registrarPesagemIndividual(femeas, '2026-09-30', base.map((p, i) => ({ brinco: String(101 + i), peso: p })), 'Entrada');
   await registrarPesagemIndividual(femeas, '2026-10-30', base.map((p, i) => ({ brinco: String(101 + i), peso: p + [19, 16, 21, 9, 18, 17, 20, 12][i] })));
   await registrarPesagemIndividual(femeas, '2026-11-18', base.map((p, i) => ({ brinco: String(101 + i), peso: p + [31, 27, 34, 14, 30, 28, 33, 20][i] })));
+
+  // Nutrição: fórmulas da planilha, compras, batida e o trato de ontem
+  await garantirIngredientesPadrao();
+  const ings = await db.ingredientes.toArray();
+  const ing = (p: string) => ings.find((i) => i.nome.startsWith(p))!.id!;
+  const hoje = hojeISO();
+  const rip = await db.formulas.add({ nome: 'RIP fêmeas (planilha)', tipo: 'rip', unidade: 'kg', modo: 'batida', consumoPctPV: 0.007,
+    itens: [{ ingredienteId: ing('Milho'), qtd: 575 }, { ingredienteId: ing('Farelo de soja'), qtd: 275 }, { ingredienteId: ing('Núcleo TIP'), qtd: 150 }], criadoEm: Date.now() });
+  const pe = await db.formulas.add({ nome: 'Proteico energético machos', tipo: 'proteico_energetico', unidade: 'pct', modo: 'direto', consumoPctPV: 0.003,
+    itens: [{ ingredienteId: ing('Milho'), qtd: 58 }, { ingredienteId: ing('Farelo de soja'), qtd: 25 }, { ingredienteId: ing('Ureia'), qtd: 3 }, { ingredienteId: ing('Sal mineral'), qtd: 14 }], criadoEm: Date.now() });
+  await db.lotes.update(femeas, { formulaId: rip });
+  await db.lotes.update(machos, { formulaId: pe });
+  const d = somaDias(hoje, -6);
+  await comprarInsumo(ing('Milho'), d, 1500, 1800);
+  await comprarInsumo(ing('Farelo de soja'), d, 600, 1602);
+  await comprarInsumo(ing('Núcleo TIP'), d, 150, 450);
+  await comprarInsumo(ing('Sal mineral'), d, 120, 384);
+  await comprarInsumo(ing('Ureia'), d, 25, 112.5);
+  await registrarBatida(rip, somaDias(hoje, -5), 950);
+  for (const [loteId, n] of [[machos, 30], [femeas, 8]] as const) {
+    const pes = await db.pesagens.where('loteId').equals(loteId).toArray();
+    for (let k = 5; k >= 1; k--) {
+      const dia = somaDias(hoje, -k);
+      const peso = pesoEstimado(pontosDoLote(pes), dia) ?? 0;
+      const lote = (await db.lotes.get(loteId))!;
+      const consumo = loteId === machos ? 0.003 : 0.007;
+      const kg = Math.round(peso * consumo * n * 10) / 10;
+      if (lote.dataEntrada <= dia) await registrarFornecimento({ loteId, data: dia, kgFornecido: kg, kgPrevisto: kg, cabecas: n, pesoRef: Math.round(peso * 10) / 10 });
+    }
+  }
   return pid;
 }

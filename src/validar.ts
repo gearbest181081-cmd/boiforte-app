@@ -1,0 +1,143 @@
+// Validação de tudo que é gravado no banco, independente da tela que gravou.
+// Roda dentro do banco (ganchos do Dexie), então também protege a importação de cópias
+// e qualquer gravação feita por código. Quando houver servidor (Etapa 4), as mesmas regras
+// serão repetidas lá; o servidor nunca vai confiar no que vier do celular.
+
+export class ErroValidacao extends Error {
+  constructor(msg: string) { super(msg); this.name = 'ErroValidacao'; }
+}
+
+type Regra =
+  | { t: 'texto'; max: number; obrigatorio?: boolean }
+  | { t: 'num'; min: number; max: number; obrigatorio?: boolean; inteiro?: boolean }
+  | { t: 'data'; obrigatorio?: boolean }
+  | { t: 'enum'; valores: readonly string[]; obrigatorio?: boolean }
+  | { t: 'bool' }
+  | { t: 'id'; obrigatorio?: boolean }
+  | { t: 'lista'; max: number; item: Record<string, Regra> };
+
+const TXT = (max = 120, obrigatorio = false): Regra => ({ t: 'texto', max, obrigatorio });
+const NUM = (min: number, max: number, obrigatorio = false, inteiro = false): Regra => ({ t: 'num', min, max, obrigatorio, inteiro });
+const ID = (obrigatorio = true): Regra => ({ t: 'id', obrigatorio });
+const DATA = (obrigatorio = true): Regra => ({ t: 'data', obrigatorio });
+const ENUM = (valores: readonly string[], obrigatorio = true): Regra => ({ t: 'enum', valores, obrigatorio });
+const BOOL: Regra = { t: 'bool' };
+const CRIADO = NUM(0, 4102444800000, false, true);
+
+export const FASES_V = ['cria', 'recria', 'engorda_pasto', 'tip', 'confinamento'] as const;
+export const TIPOS_FORMULA_V = ['sal_mineral', 'proteinado', 'proteico_energetico', 'rip', 'tip', 'creep', 'confinamento', 'outro'] as const;
+
+export const ESQUEMAS: Record<string, Record<string, Regra>> = {
+  propriedades: { id: ID(false), nome: TXT(120, true), municipio: TXT(80), uf: TXT(2), areaHa: NUM(0, 10_000_000), criadoEm: CRIADO },
+  modulos: { id: ID(false), propriedadeId: ID(), nome: TXT(80, true), criadoEm: CRIADO },
+  piquetes: { id: ID(false), moduloId: ID(), nome: TXT(80, true), areaHa: NUM(0, 1_000_000), capim: TXT(60), criadoEm: CRIADO },
+  lotes: {
+    id: ID(false), propriedadeId: ID(), piqueteId: ID(false), nome: TXT(80, true), fase: ENUM(FASES_V), sexo: ENUM(['macho', 'femea', 'misto']),
+    controle: ENUM(['lote', 'individual']), qtdCabecas: NUM(0, 1_000_000, true, true), dataEntrada: DATA(), pesoAlvo: NUM(0, 2000), gmdMeta: NUM(0, 5),
+    formulaId: ID(false), consumoPctPV: NUM(0, 0.05), encerrado: BOOL, obs: TXT(1000), criadoEm: CRIADO,
+  },
+  animais: { id: ID(false), loteId: ID(), brinco: TXT(30, true), sexo: ENUM(['macho', 'femea', 'misto'], false), raca: TXT(40), ativo: BOOL, criadoEm: CRIADO },
+  pesagens: {
+    id: ID(false), loteId: ID(), data: DATA(), tipo: ENUM(['media', 'individual']), pesoMedio: NUM(1, 2000, true), qtdPesada: NUM(0, 1_000_000, true, true),
+    pesos: { t: 'lista', max: 100_000, item: { animalId: ID(), peso: NUM(1, 2000, true) } }, obs: TXT(300), criadoEm: CRIADO,
+  },
+  ingredientes: {
+    id: ID(false), nome: TXT(80, true), ms: NUM(1, 100, true), pb: NUM(0, 300, true), ndt: NUM(0, 100, true), ca: NUM(0, 40, true), p: NUM(0, 25, true),
+    preco: NUM(0, 100_000, true), ureia: BOOL, diasAlerta: NUM(0, 365, false, true), ativo: BOOL, criadoEm: CRIADO,
+  },
+  formulas: {
+    id: ID(false), nome: TXT(80, true), tipo: ENUM(TIPOS_FORMULA_V), unidade: ENUM(['pct', 'kg']), modo: ENUM(['direto', 'batida']),
+    consumoPctPV: NUM(0, 0.05, true), itens: { t: 'lista', max: 60, item: { ingredienteId: ID(), qtd: NUM(0, 1_000_000, true) } },
+    custoEstoque: NUM(0, 100_000), diasAlerta: NUM(0, 365, false, true), obs: TXT(1000), criadoEm: CRIADO,
+  },
+  movimentos: {
+    id: ID(false), ingredienteId: ID(false), formulaId: ID(false), data: DATA(), tipo: ENUM(['entrada', 'saida', 'ajuste']),
+    kg: NUM(-10_000_000, 10_000_000, true), valor: NUM(0, 100_000_000), origem: ENUM(['compra', 'batida', 'fornecimento', 'ajuste']),
+    refId: ID(false), obs: TXT(300), criadoEm: CRIADO,
+  },
+  batidas: {
+    id: ID(false), formulaId: ID(), data: DATA(), kg: NUM(0.001, 10_000_000, true), custoTotal: NUM(0, 100_000_000, true),
+    itens: { t: 'lista', max: 60, item: { ingredienteId: ID(), kg: NUM(0, 10_000_000, true), custo: NUM(0, 100_000_000, true) } }, criadoEm: CRIADO,
+  },
+  fornecimentos: {
+    id: ID(false), loteId: ID(), formulaId: ID(), data: DATA(), cabecas: NUM(0, 1_000_000, true, true), pesoRef: NUM(0, 2000, true),
+    kgPrevisto: NUM(0, 10_000_000, true), kgFornecido: NUM(0, 10_000_000, true), custo: NUM(0, 100_000_000, true), criadoEm: CRIADO,
+  },
+  config: { chave: TXT(40, true), valor: NUM(-1e12, 1e12, true) },
+};
+
+function dataValida(s: unknown): boolean {
+  if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const [a, m, d] = s.split('-').map(Number);
+  if (a < 1990 || a > 2100) return false;
+  const dt = new Date(Date.UTC(a, m - 1, d));
+  return dt.getUTCFullYear() === a && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+}
+
+function checar(campo: string, regra: Regra, v: unknown, rotulo: string): unknown {
+  const vazio = v === undefined || v === null || v === '';
+  if (vazio) {
+    if ('obrigatorio' in regra && regra.obrigatorio) throw new ErroValidacao(`${rotulo}: o campo "${campo}" é obrigatório.`);
+    return regra.t === 'texto' ? undefined : v === '' ? undefined : v;
+  }
+  switch (regra.t) {
+    case 'texto': {
+      if (typeof v !== 'string') throw new ErroValidacao(`${rotulo}: "${campo}" deve ser texto.`);
+      // remove caracteres de controle
+      const s = v.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '').trim();
+      if (s.length > regra.max) throw new ErroValidacao(`${rotulo}: "${campo}" passou de ${regra.max} letras.`);
+      if (!s && regra.obrigatorio) throw new ErroValidacao(`${rotulo}: o campo "${campo}" é obrigatório.`);
+      return s || undefined;
+    }
+    case 'num': {
+      if (typeof v !== 'number' || !Number.isFinite(v)) throw new ErroValidacao(`${rotulo}: "${campo}" deve ser um número.`);
+      if (v < regra.min || v > regra.max) throw new ErroValidacao(`${rotulo}: "${campo}" fora do limite (${regra.min} a ${regra.max}).`);
+      if (regra.inteiro && !Number.isInteger(v)) throw new ErroValidacao(`${rotulo}: "${campo}" deve ser inteiro.`);
+      return v;
+    }
+    case 'id':
+      if (typeof v !== 'number' || !Number.isInteger(v) || v <= 0) throw new ErroValidacao(`${rotulo}: referência "${campo}" inválida.`);
+      return v;
+    case 'data':
+      if (!dataValida(v)) throw new ErroValidacao(`${rotulo}: data "${campo}" inválida.`);
+      return v;
+    case 'enum':
+      if (typeof v !== 'string' || !regra.valores.includes(v)) throw new ErroValidacao(`${rotulo}: valor de "${campo}" não permitido.`);
+      return v;
+    case 'bool':
+      if (typeof v !== 'boolean') throw new ErroValidacao(`${rotulo}: "${campo}" deve ser sim/não.`);
+      return v;
+    case 'lista': {
+      if (!Array.isArray(v)) throw new ErroValidacao(`${rotulo}: "${campo}" deve ser uma lista.`);
+      if (v.length > regra.max) throw new ErroValidacao(`${rotulo}: "${campo}" tem itens demais.`);
+      return v.map((it) => limpar(regra.item, it, `${rotulo} (${campo})`));
+    }
+  }
+}
+
+function limpar(esquema: Record<string, Regra>, obj: unknown, rotulo: string): Record<string, unknown> {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) throw new ErroValidacao(`${rotulo}: registro inválido.`);
+  const fonte = obj as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const [campo, regra] of Object.entries(esquema)) {
+    const v = checar(campo, regra, fonte[campo], rotulo);
+    if (v !== undefined) out[campo] = v;
+  }
+  return out; // campos desconhecidos são descartados
+}
+
+const ROTULOS: Record<string, string> = {
+  propriedades: 'Fazenda', modulos: 'Módulo', piquetes: 'Piquete', lotes: 'Lote', animais: 'Animal', pesagens: 'Pesagem',
+  ingredientes: 'Ingrediente', formulas: 'Fórmula', movimentos: 'Estoque', batidas: 'Batida', fornecimentos: 'Fornecimento', config: 'Configuração',
+};
+
+/** Valida e devolve uma cópia limpa do registro (sem campos desconhecidos). */
+export function validarRegistro(tabela: string, obj: unknown): Record<string, unknown> {
+  const esquema = ESQUEMAS[tabela];
+  if (!esquema) throw new ErroValidacao(`Tabela desconhecida: ${tabela}`);
+  return limpar(esquema, obj, ROTULOS[tabela] ?? tabela);
+}
+
+/** Limite de tamanho de um arquivo de cópia (evita travar o celular com arquivo gigante). */
+export const MAX_BACKUP_BYTES = 50 * 1024 * 1024;
+export const MAX_LINHAS_TABELA = 500_000;

@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, excluirLote, FASES, pontosDoAnimal, pontosDoLote, SEXOS } from '../db';
+import { db, excluirLote, FASES, lerConfig, pontosDoAnimal, pontosDoLote, SEXOS } from '../db';
 import { montarInfo } from '../hooks';
-import { arrobas, fmtData, fmtGmd, fmtKg, fmtNum, fmtPct, desvioMeta, periodos, resumo } from '../calc';
+import { arrobas, fmtData, fmtGmd, fmtKg, fmtNum, fmtPct, desvioMeta, hojeISO, periodos, pesoEstimado, resumo } from '../calc';
+import { calcularFormula, custoArrobaNutricao, kgCabDia } from '../nutricao';
+import { rs } from './Nutricao';
 import { GraficoCrescimento } from '../components/Grafico';
 import { Indicador, Opcoes, Topo, useAviso } from '../components/ui';
 
@@ -25,13 +27,17 @@ export function LoteDetalhe() {
       const md = pq ? await db.modulos.get(pq.moduloId) : undefined;
       if (pq) local = `${md ? md.nome + ' › ' : ''}${pq.nome}`;
     }
-    return { info: montarInfo(lote, pesagens), animais, prop, local };
+    const fornecimentos = await db.fornecimentos.where('loteId').equals(loteId).toArray();
+    const formula = lote.formulaId ? await db.formulas.get(lote.formulaId) : undefined;
+    const ingredientes = formula ? await db.ingredientes.bulkGet(formula.itens.map((i) => i.ingredienteId)) : [];
+    const config = await lerConfig();
+    return { info: montarInfo(lote, pesagens), animais, prop, local, fornecimentos, formula, ingredientes: ingredientes.filter((x) => !!x) as any[], config };
   }, [loteId]);
 
   if (dados === undefined) return <Topo titulo="Lote" voltar />;
   if (dados === null) return (<><Topo titulo="Lote" voltar /><main><p>Lote não encontrado.</p></main></>);
 
-  const { info, animais, prop, local } = dados;
+  const { info, animais, prop, local, fornecimentos, formula, ingredientes, config } = dados;
   const { lote, resumo: r, projecao: p, alertas, pesagens } = info;
   const pontos = pontosDoLote(pesagens);
   const per = periodos(pontos).reverse();
@@ -89,6 +95,7 @@ export function LoteDetalhe() {
               <Indicador rotulo={`Previsão ${lote.pesoAlvo ?? '—'} kg`} valor={p == null ? '—' : p.jaAtingiu ? 'Atingiu' : fmtData(p.dataPrevista)}
                 sub={p && !p.jaAtingiu ? `faltam ${p.diasFaltando} dias (GMD ${p.origemGmd === 'meta' ? 'da meta' : p.origemGmd === 'ultimo' ? 'do último período' : 'médio'})` : undefined} />
             </div>
+            <CartaoNutricao lote={lote} pontos={pontos} gmdRef={gmdRef} fornecimentos={fornecimentos} formula={formula} ingredientes={ingredientes} config={config} />
             <h2>Curva de crescimento</h2>
             <div className="cartao">
               <GraficoCrescimento pontos={pontos} gmdMeta={lote.gmdMeta} pesoAlvo={lote.pesoAlvo} projecao={p} />
@@ -157,5 +164,40 @@ function ListaAnimais({ animais, pesagens, gmdMeta }: { animais: { id?: number; 
       </table>
       <p className="mudo" style={{ marginTop: 10 }}>Ordenado do maior para o menor GMD. Em vermelho, animais 10% ou mais abaixo da meta.</p>
     </div>
+  );
+}
+
+function CartaoNutricao({ lote, pontos, gmdRef, fornecimentos, formula, ingredientes, config }: any) {
+  const custoTotal = fornecimentos.reduce((s: number, f: any) => s + f.custo, 0);
+  const kgTotal = fornecimentos.reduce((s: number, f: any) => s + f.kgFornecido, 0);
+  const cabDias = fornecimentos.reduce((s: number, f: any) => s + f.cabecas, 0);
+  const diariaReal = cabDias ? custoTotal / cabDias : null;
+  const r = formula ? calcularFormula(formula.itens, ingredientes) : null;
+  const peso = pesoEstimado(pontos, hojeISO(), lote.gmdMeta);
+  const consumo = lote.consumoPctPV || formula?.consumoPctPV || 0;
+  const kgCab = peso ? kgCabDia(peso, consumo) : 0;
+  const custoKg = formula?.modo === 'batida' ? formula.custoEstoque ?? r?.custoKg ?? 0 : r?.custoKg ?? 0;
+  const diariaPrev = kgCab * custoKg;
+  const diaria = diariaReal ?? (formula ? diariaPrev : null);
+  const custoArroba = diaria != null ? custoArrobaNutricao(diaria, gmdRef, config.rendimento) : null;
+  if (!formula && !fornecimentos.length) {
+    return <div className="cartao" style={{ marginTop: 12 }}><b>Nutrição</b><p className="mudo">Sem dieta definida. <Link to={`/lotes/${lote.id}/editar`}>Definir dieta</Link></p></div>;
+  }
+  return (
+    <>
+      <h2>Nutrição</h2>
+      <div className="cartao">
+        <p>{formula ? <><b>{formula.nome}</b> · {fmtNum(consumo * 100, 2)}% PV · {fmtNum(kgCab, 2)} kg/cab/dia hoje</> : 'Dieta removida'}</p>
+        <div className="grade">
+          <div><div className="mudo">Diária por cabeça</div><b>{rs(diaria)}</b><div className="mudo" style={{ fontSize: 13 }}>{diariaReal != null ? `média de ${fornecimentos.length} trato(s)` : 'prevista'}</div></div>
+          <div><div className="mudo">Custo da @ (nutrição)</div><b style={{ color: custoArroba != null && custoArroba > config.precoArroba ? 'var(--alerta)' : undefined }}>{rs(custoArroba)}</b><div className="mudo" style={{ fontSize: 13 }}>@ a {rs(config.precoArroba, 0)}</div></div>
+          <div><div className="mudo">Gasto com trato</div><b>{rs(custoTotal)}</b><div className="mudo" style={{ fontSize: 13 }}>{fmtNum(kgTotal, 0)} kg fornecidos</div></div>
+          <div><div className="mudo">Por cabeça</div><b>{rs(lote.qtdCabecas ? custoTotal / lote.qtdCabecas : null)}</b></div>
+        </div>
+        {custoArroba != null && custoArroba > config.precoArroba && (
+          <div className="alerta ruim" style={{ marginTop: 10 }}><span className="ic">⚠️</span><div><b>Nutrição mais cara que a arroba</b>Cada @ produzida custa {rs(custoArroba)} só de trato, acima do preço de {rs(config.precoArroba, 0)}. Reveja a fórmula ou o GMD.</div></div>
+        )}
+      </div>
+    </>
   );
 }

@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { db, exportarBackup, importarBackup, TABELAS } from '../db';
+import { Link, useNavigate } from 'react-router-dom';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db, exportarBackup, importarBackup, lerArquivoBackup, lerConfig, TABELAS } from '../db';
 import { carregarExemplo } from '../exemplo';
-import { Topo, useAviso } from '../components/ui';
+import { CampoNumero, num, Topo, useAviso } from '../components/ui';
 
 export function Mais() {
   const aviso = useAviso();
@@ -39,13 +40,13 @@ export function Mais() {
 
   const restaurar = async (f: File) => {
     try {
-      const bk = JSON.parse(await f.text());
+      const bk = lerArquivoBackup(await f.text());
       if (!window.confirm('Isto vai SUBSTITUIR tudo o que está no celular pelos dados da cópia. Continuar?')) return;
       await importarBackup(bk);
       aviso('Cópia restaurada.');
       nav('/');
     } catch (e) {
-      aviso((e as Error).message.includes('BoiForte') ? (e as Error).message : 'Não consegui ler este arquivo.', true);
+      aviso((e as Error).name === 'ErroValidacao' ? (e as Error).message : 'Não consegui ler este arquivo.', true);
     }
   };
 
@@ -66,6 +67,13 @@ export function Mais() {
     <>
       <Topo titulo="Mais" />
       <main>
+        <div className="grade" style={{ marginBottom: 12 }}>
+          <Link to="/fazenda" className="btn sec">Fazenda</Link>
+          <Link to="/nutricao" className="btn sec">Nutrição</Link>
+          <Link to="/estoque" className="btn sec">Estoque</Link>
+          <Link to="/lotes" className="btn sec">Lotes</Link>
+        </div>
+        <Mercado />
         {!instalado && (
           <div className="cartao">
             <h3>Instalar no celular</h3>
@@ -102,10 +110,39 @@ export function Mais() {
 
         <div className="cartao">
           <h3>Sobre</h3>
-          <p className="mudo">BoiForte versão 0.1 (Etapa 1: rebanho, pesagens, GMD e projeção). Próximas etapas: nutrição e fornecimento, estoque, financeiro, sanidade e relatórios.</p>
+          <p className="mudo">BoiForte versão 0.2. Etapa 1: rebanho, pesagens, GMD e projeção. Etapa 2: nutrição, trato do dia e estoque. Próximas: financeiro, sanidade e relatórios.</p>
           <button className="btn perigo pequeno" onClick={apagarTudo}>Apagar todos os dados</button>
         </div>
       </main>
     </>
+  );
+}
+
+function Mercado() {
+  const aviso = useAviso();
+  const cfg = useLiveQuery(() => lerConfig());
+  const [arroba, setArroba] = useState<string | null>(null);
+  const [rend, setRend] = useState<string | null>(null);
+  if (!cfg) return null;
+  const vA = arroba ?? String(cfg.precoArroba).replace('.', ',');
+  const vR = rend ?? String(+(cfg.rendimento * 100).toFixed(2)).replace('.', ',');
+  const salvar = async () => {
+    const a = num(vA), r = num(vR);
+    if (!a || a <= 0) return aviso('Informe o preço da arroba.', true);
+    if (!r || r < 40 || r > 65) return aviso('Rendimento de carcaça costuma ficar entre 48% e 56%.', true);
+    await db.config.bulkPut([{ chave: 'precoArroba', valor: a }, { chave: 'rendimento', valor: r / 100 }]);
+    setArroba(null); setRend(null);
+    aviso('Valores de mercado salvos.');
+  };
+  return (
+    <div className="cartao">
+      <h3>Mercado</h3>
+      <p className="mudo">Usados no custo da @ produzida. A cotação automática chega na Etapa 4.</p>
+      <div className="grade">
+        <CampoNumero rotulo="Preço da @" valor={vA} aoMudar={setArroba} unidade="R$" nome="precoArroba" />
+        <CampoNumero rotulo="Rendimento de carcaça" valor={vR} aoMudar={setRend} unidade="%" nome="rendimento" />
+      </div>
+      <button className="btn sec pequeno" onClick={salvar}>Salvar</button>
+    </div>
   );
 }

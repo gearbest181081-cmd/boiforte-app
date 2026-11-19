@@ -154,3 +154,16 @@ export function fmtData(iso: string | null | undefined): string {
   const [a, m, d] = iso.split('-');
   return `${d}/${m}/${a}`;
 }
+
+/**
+ * Peso estimado numa data: última pesagem + GMD (último período, senão médio, senão meta) × dias.
+ * Usado para ajustar o trato automaticamente entre uma pesagem e outra.
+ */
+export function pesoEstimado(pontos: PontoPeso[], data: string, gmdMeta?: number | null): number | null {
+  const r = resumo(pontos);
+  if (r.pesoAtual == null || r.dataUltima == null) return null;
+  const dias = diasEntre(r.dataUltima, data);
+  if (dias <= 0) return r.pesoAtual;
+  const g = r.gmdUltimo != null && r.gmdUltimo > 0 ? r.gmdUltimo : r.gmdTotal != null && r.gmdTotal > 0 ? r.gmdTotal : gmdMeta && gmdMeta > 0 ? gmdMeta : 0;
+  return r.pesoAtual + g * dias;
+}

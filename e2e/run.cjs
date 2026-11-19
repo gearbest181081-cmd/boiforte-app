@@ -61,7 +61,7 @@ function confere(cond, msg) {
     await page.locator('input[name=pesoEntrada]').fill('300');
     await page.locator('input[name=pesoAlvo]').fill('450');
     await page.locator('input[name=gmdMeta]').fill('0,9');
-    await page.locator('select').last().selectOption({ label: 'Retiro de cima › Piquete 3' });
+    await page.locator('select[name=piquete]').selectOption({ label: 'Retiro de cima › Piquete 3' });
     await page.getByRole('button', { name: 'Salvar lote' }).click();
     await page.getByRole('heading', { name: 'Lote 5' }).waitFor();
     confere(await page.getByText('300 kg').first().isVisible(), 'pesagem de entrada registrada (300 kg)');
@@ -174,7 +174,77 @@ function confere(cond, msg) {
     await page.getByText('Lotes ativos').waitFor();
     confere(true, 'cópia restaurada depois de apagar tudo');
 
-    console.log('10. Exemplo e tela escura');
+    console.log('10. Formulação (Etapa 2)');
+    await page.goto(URL + '#/nutricao/formula/nova');
+    await page.locator('input[name=formulaNome]').fill('RIP teste');
+    await page.locator('select[name=tipo]').selectOption('rip');
+    const receita = [['Milho grão moído', '575'], ['Farelo de soja', '275'], ['Núcleo TIP (preencha pelo rótulo)', '150']];
+    for (let i = 0; i < receita.length; i++) {
+      if (i > 0) await page.getByRole('button', { name: '+ Ingrediente' }).click();
+      await page.getByLabel(`Ingrediente ${i + 1}`, { exact: true }).selectOption({ label: receita[i][0] });
+      await page.getByLabel(`Quantidade ${i + 1}`, { exact: true }).fill(receita[i][1]);
+    }
+    confere((await page.getByTestId('custoKg').innerText()).includes('1,874'), 'custo da RIP = R$ 1,874/kg (igual à planilha)');
+    confere(await page.getByText('Fórmula dentro das faixas de referência.').isVisible(), 'RIP dentro das faixas');
+    await foto('10-formula');
+    await page.getByRole('button', { name: 'Salvar fórmula' }).click();
+    await page.getByRole('link', { name: /RIP teste/ }).waitFor();
+
+    await page.goto(URL + '#/nutricao/formula/nova');
+    await page.locator('input[name=formulaNome]').fill('Só milho');
+    await page.locator('select[name=tipo]').selectOption('tip');
+    await page.getByLabel('Ingrediente 1', { exact: true }).selectOption({ label: 'Milho grão moído' });
+    await page.getByLabel('Quantidade 1', { exact: true }).fill('100');
+    const txtF = await page.locator('main').innerText();
+    confere(txtF.includes('cálculo urinário'), 'só milho avisa risco de cálculo urinário');
+    confere(txtF.includes('PB (proteína) muito baixo'), 'só milho avisa proteína baixa');
+
+    console.log('11. Dieta no lote, estoque e trato');
+    await page.goto(URL + '#/lotes');
+    await page.getByRole('link', { name: /Lote 5/ }).click();
+    await page.getByRole('link', { name: 'Editar lote' }).click();
+    await page.locator('select[name=formula]').selectOption({ label: 'RIP teste' });
+    await page.getByRole('button', { name: 'Salvar lote' }).click();
+    await page.getByRole('heading', { name: 'Lote 5' }).waitFor();
+    confere((await page.locator('main').innerText()).includes('RIP teste'), 'dieta aparece no lote');
+
+    await page.goto(URL + '#/estoque');
+    await page.getByRole('button', { name: 'Entrada (compra)' }).click();
+    await page.locator('select[name=insumo]').selectOption({ label: 'Milho grão moído' });
+    await page.locator('input[name=compraKg]').fill('1000');
+    await page.locator('input[name=compraValor]').fill('1200');
+    await page.getByRole('button', { name: 'Lançar compra' }).click();
+    await page.getByRole('heading', { name: 'Milho grão moído' }).waitFor();
+    await page.getByRole('button', { name: 'Bater ração' }).click();
+    await page.locator('select[name=mistura]').selectOption({ label: 'RIP teste' });
+    await page.locator('input[name=batidaKg]').fill('500');
+    await page.getByRole('button', { name: 'Lançar batida' }).click();
+    await page.getByRole('heading', { name: 'RIP teste' }).waitFor();
+    await page.waitForFunction(() => /RIP teste[\s\S]*?500 kg/.test(document.querySelector('main').innerText), null, { timeout: 5000 }).catch(() => {});
+    const est = await page.locator('main').innerText();
+    confere(/RIP teste[\s\S]*?500 kg/.test(est), 'mistura batida entrou no estoque (500 kg)');
+    confere(/Milho grão moído[\s\S]*?713 kg/.test(est), 'milho baixou 287,5 kg na batida (sobrou 713 kg)');
+
+    await page.goto(URL + '#/trato');
+    await page.getByRole('heading', { name: 'Lote 5' }).waitFor();
+    const kgTrato = await page.getByLabel('kg para Lote 5', { exact: true }).inputValue();
+    confere(kgTrato === '102,5', `trato ajustado pelo peso: 366 kg × 0,7% × 40 cab = 102,5 kg (deu ${kgTrato})`);
+    await page.getByRole('checkbox', { name: 'Trato Lote 5' }).click();
+    await page.getByText('Fornecido: 102,5 kg').waitFor();
+    confere(true, 'checkbox do vaqueiro marca o trato');
+    await foto('11-trato');
+    await page.goto(URL + '#/estoque');
+    await page.getByRole('heading', { name: 'RIP teste' }).waitFor();
+    confere(/RIP teste[\s\S]*?398 kg/.test(await page.locator('main').innerText()), 'mistura baixou depois do trato (398 kg)');
+    await foto('12-estoque');
+    await page.goto(URL + '#/lotes');
+    await page.getByRole('link', { name: /Lote 5/ }).click();
+    await page.getByText('Gasto com trato').waitFor();
+    const nutri = await page.locator('main').innerText();
+    confere(/R\$\s192,/.test(nutri), 'custo do trato aparece no lote (R$ 192,…)');
+    await foto('13-lote-nutricao');
+
+    console.log('12. Exemplo e tela escura');
     await page.getByRole('link', { name: 'Mais' }).click();
     await page.getByRole('button', { name: 'Carregar exemplo' }).click();
     await page.getByText('Fêmea — 4º lote').waitFor();
