@@ -115,3 +115,81 @@ export function useEstoque(hoje = hojeISO()): ItemEstoque[] | undefined {
     return out.sort((a, b) => ordem[a.situacao.nivel] - ordem[b.situacao.nivel] || a.nome.localeCompare(b.nome, 'pt-BR'));
   }, [hoje]);
 }
+
+// ---------- Financeiro e análise dos lotes ----------
+import { dreLote, ratear, variacao, type DreLote } from './financeiro';
+import { emCarencia, pendenciasSanidade, liberacaoAbate } from './sanidade';
+import { lerConfigFin, lerConfig as lerConfigMercado } from './db';
+import type { Lancamento, CustoFixo, Venda, EventoSanitario, Lembrete, Animal } from './db';
+
+export interface Tudo {
+  lotes: Lote[]; pesagens: Pesagem[]; formulas: Formula[]; ingredientes: Ingrediente[]; fornecimentos: Fornecimento[];
+  lancamentos: Lancamento[]; custosFixos: CustoFixo[]; vendas: Venda[]; sanidade: EventoSanitario[]; lembretes: Lembrete[];
+  movimentos: { data: string; valor?: number; tipo: string; origem: string }[]; animais: Animal[];
+  precoArroba: number; rendimento: number; oportunidadeMes: number; comissaoVenda: number;
+}
+
+export async function carregarTudo(): Promise<Tudo> {
+  const [lotes, pesagens, formulas, ingredientes, fornecimentos, lancamentos, custosFixos, vendas, sanidade, lembretes, movimentos, animais, m, f] = await Promise.all([
+    db.lotes.toArray(), db.pesagens.toArray(), db.formulas.toArray(), db.ingredientes.toArray(), db.fornecimentos.toArray(),
+    db.lancamentos.toArray(), db.custosFixos.toArray(), db.vendas.toArray(), db.sanidade.toArray(), db.lembretes.toArray(), db.movimentos.toArray(), db.animais.toArray(),
+    lerConfigMercado(), lerConfigFin(),
+  ]);
+  return { lotes, pesagens, formulas, ingredientes, fornecimentos, lancamentos, custosFixos, vendas, sanidade, lembretes, movimentos, animais, ...m, ...f };
+}
+
+export function useTudo(): Tudo | undefined {
+  return useLiveQuery(carregarTudo);
+}
+
+export interface AnaliseLote { info: LoteInfo; dre: DreLote; liberacao: { data: string; produto: string } | null }
+
+/** DRE de todos os lotes até uma data (rateio dos indiretos incluído). */
+export function analisarLotes(t: Tudo, ate = hojeISO()): AnaliseLote[] {
+  const loteFin = t.lotes.map((l) => ({ id: l.id!, nome: l.nome, dataEntrada: l.dataEntrada, qtdCabecas: l.qtdCabecas, encerrado: l.encerrado, dataSaida: l.dataSaida }));
+  const rateio = ratear(loteFin, t.vendas, t.lancamentos, t.custosFixos, ate);
+  return t.lotes.map((l, i) => {
+    const pes = t.pesagens.filter((p) => p.loteId === l.id);
+    const dre = dreLote({
+      lote: loteFin[i], pontos: pontosDoLote(pes), gmdMeta: l.gmdMeta, saidas: t.vendas, lancamentos: t.lancamentos,
+      fornecimentos: t.fornecimentos, rateio: rateio.get(l.id!) ?? 0, precoArroba: t.precoArroba, rendimento: t.rendimento,
+      taxaOportunidadeMes: t.oportunidadeMes, ate,
+    });
+    return { info: montarInfo(l, pes, ate), dre, liberacao: liberacaoAbate(t.sanidade, l.id!) };
+  });
+}
+
+/** Alertas que cruzam financeiro, sanidade e desempenho. */
+export function alertasInteligentes(t: Tudo, hoje = hojeISO()): Alerta[] {
+  const out: Alerta[] = [];
+  const atual = analisarLotes(t, hoje);
+  const fimMesPassado = somaDiasLocal(hoje.slice(0, 8) + '01', -1);
+  const passado = analisarLotes(t, fimMesPassado);
+  for (const a of atual) {
+    const l = a.info.lote;
+    if (l.encerrado) continue;
+    const antes = passado.find((p) => p.info.lote.id === l.id);
+    const v = variacao(antes?.dre.custoArrobaProduzida ?? null, a.dre.custoArrobaProduzida);
+    // só compara depois de 45 dias de lote: no começo a @ produzida é pequena e qualquer gasto muda muito o custo
+    if (v != null && v >= 0.05 && antes && antes.dre.dias >= 45) {
+      out.push({ nivel: 'atencao', titulo: `${l.nome}: custo da @ subiu ${Math.round(v * 100)}% este mês`, texto: `Passou de ${moeda(antes!.dre.custoArrobaProduzida)} para ${moeda(a.dre.custoArrobaProduzida)} por @ produzida. Confira o consumo do trato e o GMD.` });
+    }
+    if (a.dre.custoArrobaProduzida != null && a.dre.custoArrobaProduzida > t.precoArroba) {
+      out.push({ nivel: 'ruim', titulo: `${l.nome}: a @ produzida custa mais que a @ vendida`, texto: `Custo de ${moeda(a.dre.custoArrobaProduzida)} por @ contra ${moeda(t.precoArroba)} do mercado. Cada @ a mais dá prejuízo.` });
+    }
+    const car = emCarencia(t.sanidade, l.id!, hoje);
+    if (car) {
+      const prev = a.info.projecao?.dataPrevista;
+      if (prev && prev < car.data) out.push({ nivel: 'ruim', titulo: `${l.nome}: carência atrapalha a venda`, texto: `A previsão de saída (${prev.split('-').reverse().join('/')}) é antes do fim da carência de ${car.produto} (${car.data.split('-').reverse().join('/')}). Não mande para o abate antes.` });
+      else if (diasEntre(hoje, car.data) <= 30 || (a.info.projecao && diasEntre(hoje, a.info.projecao.dataPrevista) <= 45)) out.push({ nivel: 'atencao', titulo: `${l.nome} em carência até ${car.data.split('-').reverse().join('/')}`, texto: `Por causa de ${car.produto}. Só libere para abate depois dessa data.` });
+    }
+  }
+  const nomes = new Map(t.lotes.map((l) => [l.id!, l.nome]));
+  for (const p of pendenciasSanidade(t.sanidade.filter((e) => !t.lotes.find((l) => l.id === e.loteId)?.encerrado).map((e) => ({ ...e, nomeLote: nomes.get(e.loteId) })), t.lembretes, hoje)) {
+    out.push({ nivel: p.nivel, titulo: p.titulo, texto: p.texto });
+  }
+  return out;
+}
+
+import { diasEntre, somaDias as somaDiasLocal } from './calc';
+const moeda = (v: number | null | undefined) => (v == null ? '—' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));

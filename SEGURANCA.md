@@ -3,7 +3,7 @@
 Regra do projeto: **o servidor nunca confia no aplicativo**. Tudo que o celular mandar pode ter sido
 alterado, então toda regra de acesso, validação e cálculo que importa é feita (de novo) no servidor.
 
-## Situação hoje (Etapas 1 e 2)
+## Situação hoje (Etapas 1 a 3)
 
 O BoiForte ainda **não tem servidor**. Os dados ficam só no celular do produtor (IndexedDB) e não
 saem dele, a não ser pela cópia de segurança que o próprio produtor gera.
@@ -17,7 +17,14 @@ O que já está protegido:
 | Texto malicioso (XSS) | A interface usa React, que escapa todo texto. Não há `innerHTML` nem `eval`. Caracteres de controle são removidos na gravação. |
 | Código de terceiros | Nenhum script externo é carregado. O app é servido como arquivos estáticos e o service worker só guarda arquivos do próprio site. |
 | Estoque e custo inconsistentes | Compra, batida, trato e seus estornos são transações atômicas: ou grava tudo, ou nada. |
+| Fórmula maliciosa no Excel exportado | Todo texto vai como texto puro (`inlineStr`), que o Excel não executa; números vão como número. |
+| PDF/Excel com dados de terceiros | Os arquivos são gerados no próprio celular, sem enviar nada para servidor; o resumo do WhatsApp só sai se o produtor tocar no botão. |
+| Dinheiro e sanidade inconsistentes | Compra, venda/baixa (com volta das cabeças ao desfazer) e aplicação com custo são transações atômicas; valores e datas passam pela validação do banco. |
 | Perda de dados | Pedido de armazenamento persistente ao navegador e cópia de segurança em arquivo. |
+
+### Dependências
+
+As versões são fixas (sem `^`). O `npm audit` aponta dois avisos no `react-router` (redirecionamento com barra invertida em `<Link>` e desserialização de erros no SSR). Nenhum se aplica: o app só usa caminhos internos fixos e não tem SSR. Serão eliminados ao migrar para a versão 7 junto com a Etapa 4.
 
 ## Plano para o servidor (Etapa 4: nuvem, sincronização e multiusuário)
 
@@ -31,7 +38,9 @@ O que já está protegido:
 4. **Validação no servidor**: os mesmos esquemas de `src/validar.ts` (compartilhados) rodam no
    servidor antes de qualquer gravação. Limites de tamanho de requisição e de quantidade de registros.
 5. **Cálculos que valem dinheiro são refeitos no servidor**: custo de batida, custo do trato,
-   saldo de estoque, preço médio e DRE. O app pode mostrar uma prévia, mas o número oficial é o do servidor.
+   saldo de estoque, preço médio, valor de compra e de venda do lote (a partir de cabeças, peso, preço,
+   comissão e frete, nunca do total que o app mandar), rateio, DRE e carência. O app pode mostrar uma
+   prévia, mas o número oficial é o do servidor. Relatórios compartilhados pela nuvem são gerados lá.
 6. **Sincronização offline**: o celular grava localmente e envia uma fila de operações. O servidor
    aplica cada operação validando dono, papel e regras; conflitos são resolvidos no servidor com
    registro de quem alterou o quê (auditoria).

@@ -12,6 +12,10 @@ import { FormulaForm } from './pages/FormulaForm';
 import { IngredienteForm } from './pages/IngredienteForm';
 import { Estoque } from './pages/Estoque';
 import { Trato } from './pages/Trato';
+import { Financeiro } from './pages/Financeiro';
+import { Sanidade } from './pages/Sanidade';
+import { Simular } from './pages/Simular';
+import { Relatorios } from './pages/Relatorios';
 
 export function App() {
   return (
@@ -32,6 +36,10 @@ export function App() {
           <Route path="/nutricao/ingrediente/:id" element={<IngredienteForm />} />
           <Route path="/estoque" element={<Estoque />} />
           <Route path="/trato" element={<Trato />} />
+          <Route path="/financeiro" element={<Financeiro />} />
+          <Route path="/sanidade" element={<Sanidade />} />
+          <Route path="/simular" element={<Simular />} />
+          <Route path="/relatorios" element={<Relatorios />} />
           <Route path="*" element={<Inicio />} />
         </Routes>
         <nav className="baixo" aria-label="Menu principal">

@@ -1,7 +1,8 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, FASES } from '../db';
-import { useEscala, useEstoque, useLotesInfo, type LoteInfo } from '../hooks';
+import { db, FASES, garantirLembretesPadrao } from '../db';
+import { alertasInteligentes, useEscala, useEstoque, useLotesInfo, useTudo, type LoteInfo } from '../hooks';
 import { ordenarAlertas } from '../alertas';
 import { fmtData, fmtGmd, fmtKg, fmtNum, hojeISO } from '../calc';
 import { Indicador, Topo } from '../components/ui';
@@ -11,6 +12,9 @@ export function Inicio() {
   const infos = useLotesInfo();
   const escala = useEscala(hojeISO());
   const estoque = useEstoque();
+  const tudo = useTudo();
+  const [todos, setTodos] = useState(false);
+  useEffect(() => { if (props?.length) garantirLembretesPadrao().catch(() => {}); }, [props?.length]);
   if (!props || !infos) return <Topo titulo="BoiForte" />;
 
   if (props.length === 0) {
@@ -35,7 +39,7 @@ export function Inicio() {
   const cabecas = infos.reduce((s, i) => s + (i.lote.qtdCabecas || 0), 0);
   const alertasEstoque = (estoque ?? []).filter((e) => e.situacao.nivel === 'ruim' || e.situacao.nivel === 'atencao')
     .map((e) => ({ nivel: e.situacao.nivel as 'ruim' | 'atencao', titulo: `Estoque: ${e.nome}`, texto: `${e.situacao.texto} Saldo de ${fmtNum(e.situacao.saldoKg, 0)} kg.${e.tipo === 'mistura' ? ' Hora de bater nova ração.' : ''}` }));
-  const alertas = ordenarAlertas([...infos.flatMap((i) => i.alertas), ...alertasEstoque]);
+  const alertas = ordenarAlertas([...infos.flatMap((i) => i.alertas), ...alertasEstoque, ...(tudo ? alertasInteligentes(tudo) : [])]);
   const tratos = (escala ?? []).filter((l) => l.formula);
   const tratosFeitos = tratos.filter((l) => l.fornecimento).length;
   const comPeso = infos.filter((i) => i.resumo.pesoAtual != null);
@@ -68,12 +72,13 @@ export function Inicio() {
         {alertas.length > 0 && (
           <>
             <h2>Avisos</h2>
-            {alertas.slice(0, 6).map((a, i) => (
+            {alertas.slice(0, todos ? alertas.length : 6).map((a, i) => (
               <div key={i} className={`alerta ${a.nivel}`}>
                 <span className="ic">{a.nivel === 'ruim' ? '⚠️' : a.nivel === 'atencao' ? '🔔' : '✅'}</span>
                 <div><b>{a.titulo}</b>{a.texto}</div>
               </div>
             ))}
+            {alertas.length > 6 && !todos && <button className="btn sec largo" onClick={() => setTodos(true)}>Ver todos os {alertas.length} avisos</button>}
           </>
         )}
 

@@ -1,5 +1,5 @@
 // Dados de exemplo baseados na planilha de recria/TIP. Os pesos são ilustrativos.
-import { comprarInsumo, criarLote, db, garantirIngredientesPadrao, registrarBatida, registrarFornecimento, registrarPesagemIndividual } from './db';
+import { comprarInsumo, criarLote, db, garantirLembretesPadrao, registrarCompraLote, salvarEventoSanitario, garantirIngredientesPadrao, registrarBatida, registrarFornecimento, registrarPesagemIndividual } from './db';
 import { hojeISO, pesoEstimado, somaDias } from './calc';
 import { pontosDoLote } from './db';
 
@@ -50,5 +50,20 @@ export async function carregarExemplo() {
       if (lote.dataEntrada <= dia) await registrarFornecimento({ loteId, data: dia, kgFornecido: kg, kgPrevisto: kg, cabecas: n, pesoRef: Math.round(peso * 10) / 10 });
     }
   }
+
+  // Financeiro: compra dos lotes (planilha), custos fixos e uma despesa rateada
+  await registrarCompraLote(machos, { data: '2026-09-28', precoCab: 3260, comissaoPct: 0.02, frete: 1200, nfGta: 210 });
+  await registrarCompraLote(femeas, { data: '2026-09-30', precoCab: 2610, comissaoPct: 0.02, frete: 450, nfGta: 90 });
+  await db.custosFixos.bulkAdd([
+    { nome: 'Vaqueiro (salário e encargos)', valorMensal: 3200, desde: '2026-09-01', criadoEm: Date.now() },
+    { nome: 'Arrendamento do pasto', valorMensal: 1500, desde: '2026-09-01', criadoEm: Date.now() },
+  ]);
+  await db.lancamentos.add({ data: '2026-10-15', tipo: 'despesa', categoria: 'manutencao', descricao: 'Conserto da cerca', valor: 640, loteId: null, origem: 'manual', criadoEm: Date.now() });
+
+  // Sanidade: vermífugo na entrada, reforço agendado e um carrapaticida com carência
+  await salvarEventoSanitario({ loteId: machos, data: '2026-09-28', feito: true, tipo: 'vermifugo', produto: 'Ivermectina 1%', dose: '1 ml / 50 kg', qtdAnimais: 30, custo: 186, carenciaDias: 35 });
+  await salvarEventoSanitario({ loteId: machos, data: somaDias(hoje, 5), feito: false, tipo: 'vacina', produto: 'Clostridiose (reforço)', qtdAnimais: 30, custo: 96 });
+  await salvarEventoSanitario({ loteId: femeas, data: somaDias(hoje, -3), feito: true, tipo: 'carrapaticida', produto: 'Fluazuron pour-on', qtdAnimais: 8, custo: 72, carenciaDias: 42 });
+  await garantirLembretesPadrao();
   return pid;
 }

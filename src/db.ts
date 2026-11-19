@@ -4,6 +4,9 @@ import { media, ordenar, type PontoPeso } from './calc';
 import { calcularFormula, INGREDIENTES_PADRAO, type IngredienteNut, type ItemFormula, type TipoFormula } from './nutricao';
 import { precoMedioAposCompra, saldo, type TipoMov } from './estoque';
 import { ErroValidacao, MAX_BACKUP_BYTES, MAX_LINHAS_TABELA, validarRegistro } from './validar';
+import { calcularVenda, custoCompra, type Categoria } from './financeiro';
+import { LEMBRETES_PADRAO, type TipoSanidade } from './sanidade';
+import { somaDias } from './calc';
 
 export type Fase = 'cria' | 'recria' | 'engorda_pasto' | 'tip' | 'confinamento';
 export type Sexo = 'macho' | 'femea' | 'misto';
@@ -36,6 +39,7 @@ export interface Lote {
   formulaId?: number | null; // dieta/suplemento do lote
   consumoPctPV?: number | null; // consumo do lote (se vazio, usa o da fórmula)
   encerrado?: boolean;
+  dataSaida?: string | null; // quando o lote acabou (última venda/baixa)
   obs?: string;
   criadoEm: number;
 }
@@ -94,8 +98,23 @@ export interface Fornecimento {
   criadoEm: number;
 }
 export interface Config { chave: string; valor: number }
+export interface Lancamento {
+  id?: number; data: string; tipo: 'despesa' | 'receita'; categoria: Categoria; descricao?: string; valor: number;
+  loteId?: number | null; // vazio = custo indireto, rateado entre os lotes
+  origem?: 'manual' | 'compra_lote' | 'sanidade'; refId?: number; criadoEm: number;
+}
+export interface CustoFixo { id?: number; nome: string; valorMensal: number; desde: string; ate?: string | null; criadoEm: number }
+export interface Venda {
+  id?: number; loteId: number; data: string; tipo: 'venda' | 'morte'; cabecas: number; pesoMedio?: number; modo?: 'arroba' | 'cabeca'; preco?: number;
+  rendimento?: number; comissaoPct?: number; frete?: number; outros?: number; valorBruto: number; valorLiquido: number; comprador?: string; obs?: string; criadoEm: number;
+}
+export interface EventoSanitario {
+  id?: number; loteId: number; data: string; feito: boolean; tipo: TipoSanidade; produto: string; dose?: string; qtdAnimais?: number; custo?: number;
+  carenciaDias?: number; repetirDias?: number; obs?: string; criadoEm: number;
+}
+export interface Lembrete { id?: number; titulo: string; mes: number; dia: number; antecedenciaDias: number; obs?: string; criadoEm: number }
 
-export const TABELAS = ['propriedades', 'modulos', 'piquetes', 'lotes', 'animais', 'pesagens', 'ingredientes', 'formulas', 'movimentos', 'batidas', 'fornecimentos', 'config'] as const;
+export const TABELAS = ['propriedades', 'modulos', 'piquetes', 'lotes', 'animais', 'pesagens', 'ingredientes', 'formulas', 'movimentos', 'batidas', 'fornecimentos', 'config', 'lancamentos', 'custosFixos', 'vendas', 'sanidade', 'lembretes'] as const;
 
 export class BoiForteDB extends Dexie {
   propriedades!: Table<Propriedade, number>;
@@ -110,6 +129,11 @@ export class BoiForteDB extends Dexie {
   batidas!: Table<Batida, number>;
   fornecimentos!: Table<Fornecimento, number>;
   config!: Table<Config, string>;
+  lancamentos!: Table<Lancamento, number>;
+  custosFixos!: Table<CustoFixo, number>;
+  vendas!: Table<Venda, number>;
+  sanidade!: Table<EventoSanitario, number>;
+  lembretes!: Table<Lembrete, number>;
 
   constructor(nome = 'boiforte') {
     super(nome);
@@ -129,6 +153,13 @@ export class BoiForteDB extends Dexie {
       batidas: '++id, formulaId, data',
       fornecimentos: '++id, loteId, data, [loteId+data], formulaId',
       config: 'chave',
+    });
+    this.version(3).stores({
+      lancamentos: '++id, data, loteId, categoria, [origem+refId]',
+      custosFixos: '++id',
+      vendas: '++id, loteId, data',
+      sanidade: '++id, loteId, data, feito',
+      lembretes: '++id',
     });
     // Toda gravação passa pela validação, venha de onde vier.
     for (const t of TABELAS) {
@@ -211,7 +242,10 @@ export function pontosDoAnimal(pesagens: Pesagem[], animalId: number): PontoPeso
 }
 
 export async function excluirLote(id: number) {
-  await db.transaction('rw', [db.lotes, db.pesagens, db.animais, db.fornecimentos, db.movimentos], async () => {
+  await db.transaction('rw', [db.lotes, db.pesagens, db.animais, db.fornecimentos, db.movimentos, db.lancamentos, db.vendas, db.sanidade], async () => {
+    await db.lancamentos.where('loteId').equals(id).delete();
+    await db.vendas.where('loteId').equals(id).delete();
+    await db.sanidade.where('loteId').equals(id).delete();
     const fs = await db.fornecimentos.where('loteId').equals(id).primaryKeys();
     for (const f of fs) await db.movimentos.where('[origem+refId]').equals(['fornecimento', f]).delete();
     await db.fornecimentos.where('loteId').equals(id).delete();
@@ -222,7 +256,7 @@ export async function excluirLote(id: number) {
 }
 
 export async function excluirPropriedade(id: number) {
-  await db.transaction('rw', [db.propriedades, db.modulos, db.piquetes, db.lotes, db.pesagens, db.animais, db.fornecimentos, db.movimentos], async () => {
+  await db.transaction('rw', [db.propriedades, db.modulos, db.piquetes, db.lotes, db.pesagens, db.animais, db.fornecimentos, db.movimentos, db.lancamentos, db.vendas, db.sanidade], async () => {
     const mods = await db.modulos.where('propriedadeId').equals(id).toArray();
     for (const m of mods) await db.piquetes.where('moduloId').equals(m.id!).delete();
     await db.modulos.where('propriedadeId').equals(id).delete();
@@ -231,6 +265,9 @@ export async function excluirPropriedade(id: number) {
       const fs = await db.fornecimentos.where('loteId').equals(l.id!).primaryKeys();
       for (const f of fs) await db.movimentos.where('[origem+refId]').equals(['fornecimento', f]).delete();
       await db.fornecimentos.where('loteId').equals(l.id!).delete();
+      await db.lancamentos.where('loteId').equals(l.id!).delete();
+      await db.vendas.where('loteId').equals(l.id!).delete();
+      await db.sanidade.where('loteId').equals(l.id!).delete();
       await db.pesagens.where('loteId').equals(l.id!).delete();
       await db.animais.where('loteId').equals(l.id!).delete();
     }
@@ -420,5 +457,101 @@ export async function excluirIngrediente(id: number) {
   await db.transaction('rw', db.ingredientes, db.movimentos, async () => {
     await db.movimentos.where('ingredienteId').equals(id).delete();
     await db.ingredientes.delete(id);
+  });
+}
+
+// ---------- Financeiro ----------
+
+export const CONFIG_FIN_PADRAO = { oportunidadeMes: 0.01, comissaoVenda: 0.02 } as const;
+export async function lerConfigFin() {
+  const [o, c] = await Promise.all([db.config.get('oportunidadeMes'), db.config.get('comissaoVenda')]);
+  return { oportunidadeMes: o?.valor ?? CONFIG_FIN_PADRAO.oportunidadeMes, comissaoVenda: c?.valor ?? CONFIG_FIN_PADRAO.comissaoVenda };
+}
+
+/** Lança a compra do lote com a fórmula da planilha (comissão, frete e NF/GTA). */
+export async function registrarCompraLote(loteId: number, d: { data: string; precoCab: number; comissaoPct: number; frete: number; nfGta: number }) {
+  if (!(d.precoCab > 0)) throw new ErroValidacao('Informe o preço pago por cabeça.');
+  return db.transaction('rw', db.lotes, db.lancamentos, db.vendas, async () => {
+    const lote = await db.lotes.get(loteId);
+    if (!lote) throw new ErroValidacao('Lote não encontrado.');
+    const vendidas = await db.vendas.where('loteId').equals(loteId).toArray();
+    const qtd = lote.qtdCabecas + vendidas.reduce((t, v) => t + v.cabecas, 0);
+    const valor = custoCompra(qtd, d.precoCab, d.comissaoPct, d.frete, d.nfGta);
+    await db.lancamentos.where('[origem+refId]').equals(['compra_lote', loteId]).delete();
+    const desc = `${qtd} cab × R$ ${d.precoCab.toLocaleString('pt-BR')} + ${(d.comissaoPct * 100).toLocaleString('pt-BR')}% comissão + frete + NF/GTA`;
+    return db.lancamentos.add({ data: d.data, tipo: 'despesa', categoria: 'compra_animais', descricao: desc, valor: Math.round(valor * 100) / 100, loteId, origem: 'compra_lote', refId: loteId, criadoEm: Date.now() });
+  });
+}
+
+/** Venda (ou morte) de animais do lote: baixa as cabeças e encerra o lote se zerar. */
+export async function registrarSaida(loteId: number, d: { data: string; tipo: 'venda' | 'morte'; cabecas: number; pesoMedio?: number; modo?: 'arroba' | 'cabeca'; preco?: number; rendimento?: number; comissaoPct?: number; frete?: number; outros?: number; comprador?: string; obs?: string }) {
+  return db.transaction('rw', db.lotes, db.vendas, db.animais, async () => {
+    const lote = await db.lotes.get(loteId);
+    if (!lote) throw new ErroValidacao('Lote não encontrado.');
+    if (!Number.isInteger(d.cabecas) || d.cabecas < 1) throw new ErroValidacao('Informe quantas cabeças saíram.');
+    if (d.cabecas > lote.qtdCabecas) throw new ErroValidacao(`O lote só tem ${lote.qtdCabecas} cabeças.`);
+    if (d.data < lote.dataEntrada) throw new ErroValidacao('A data é antes da entrada do lote.');
+    let valorBruto = 0, valorLiquido = 0;
+    if (d.tipo === 'venda') {
+      if (!(d.preco! > 0)) throw new ErroValidacao('Informe o preço da venda.');
+      if (d.modo === 'arroba' && !(d.pesoMedio! > 0)) throw new ErroValidacao('Para vender por arroba, informe o peso médio de saída.');
+      const v = calcularVenda({ cabecas: d.cabecas, pesoMedio: d.pesoMedio ?? 0, rendimento: d.rendimento ?? 0.5, modo: d.modo ?? 'arroba', preco: d.preco!, comissaoPct: d.comissaoPct ?? 0, frete: d.frete ?? 0, outros: d.outros });
+      valorBruto = Math.round(v.bruto * 100) / 100; valorLiquido = Math.round(v.liquido * 100) / 100;
+    }
+    const id = await db.vendas.add({ loteId, ...d, valorBruto, valorLiquido, criadoEm: Date.now() });
+    const resto = lote.qtdCabecas - d.cabecas;
+    await db.lotes.update(loteId, resto === 0 ? { qtdCabecas: 0, encerrado: true, dataSaida: d.data } : { qtdCabecas: resto });
+    return id;
+  });
+}
+
+export async function desfazerSaida(vendaId: number) {
+  await db.transaction('rw', db.lotes, db.vendas, async () => {
+    const v = await db.vendas.get(vendaId);
+    if (!v) return;
+    const lote = await db.lotes.get(v.loteId);
+    if (lote) await db.lotes.update(v.loteId, { qtdCabecas: lote.qtdCabecas + v.cabecas, encerrado: false, dataSaida: null });
+    await db.vendas.delete(vendaId);
+  });
+}
+
+// ---------- Sanidade ----------
+
+/** Grava uma aplicação (feita ou agendada). O custo vira despesa de sanidade do lote. */
+export async function salvarEventoSanitario(ev: Omit<EventoSanitario, 'id' | 'criadoEm'>, id?: number) {
+  return db.transaction('rw', db.sanidade, db.lancamentos, async () => {
+    const eid = id ?? (await db.sanidade.add({ ...ev, criadoEm: Date.now() }));
+    if (id) await db.sanidade.update(id, ev);
+    await db.lancamentos.where('[origem+refId]').equals(['sanidade', eid]).delete();
+    if (ev.feito && ev.custo && ev.custo > 0) {
+      await db.lancamentos.add({ data: ev.data, tipo: 'despesa', categoria: 'sanidade', descricao: ev.produto, valor: ev.custo, loteId: ev.loteId, origem: 'sanidade', refId: eid, criadoEm: Date.now() });
+    }
+    return eid;
+  });
+}
+
+/** Marca uma aplicação agendada como feita e, se repetir, agenda a próxima. */
+export async function concluirEventoSanitario(id: number, data: string, custo?: number) {
+  return db.transaction('rw', db.sanidade, db.lancamentos, async () => {
+    const e = await db.sanidade.get(id);
+    if (!e) throw new ErroValidacao('Aplicação não encontrada.');
+    const { id: _i, criadoEm: _c, ...resto } = e;
+    await salvarEventoSanitario({ ...resto, feito: true, data, custo: custo ?? e.custo }, id);
+    if (e.repetirDias) await db.sanidade.add({ ...resto, feito: false, data: somaDias(data, e.repetirDias), custo: e.custo, criadoEm: Date.now() });
+  });
+}
+
+export async function excluirEventoSanitario(id: number) {
+  await db.transaction('rw', db.sanidade, db.lancamentos, async () => {
+    await db.lancamentos.where('[origem+refId]').equals(['sanidade', id]).delete();
+    await db.sanidade.delete(id);
+  });
+}
+
+export async function garantirLembretesPadrao() {
+  await db.transaction('rw', db.lembretes, db.config, async () => {
+    if (await db.config.get('lembretesPadrao')) return;
+    if ((await db.lembretes.count()) === 0) await db.lembretes.bulkAdd(LEMBRETES_PADRAO.map((l) => ({ ...l, criadoEm: Date.now() })));
+    await db.config.put({ chave: 'lembretesPadrao', valor: 1 });
   });
 }

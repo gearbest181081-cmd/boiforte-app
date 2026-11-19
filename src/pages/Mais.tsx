@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, exportarBackup, importarBackup, lerArquivoBackup, lerConfig, TABELAS } from '../db';
+import { db, exportarBackup, importarBackup, lerArquivoBackup, lerConfig, lerConfigFin, TABELAS } from '../db';
 import { carregarExemplo } from '../exemplo';
 import { CampoNumero, num, Topo, useAviso } from '../components/ui';
 
@@ -71,9 +71,14 @@ export function Mais() {
           <Link to="/fazenda" className="btn sec">Fazenda</Link>
           <Link to="/nutricao" className="btn sec">Nutrição</Link>
           <Link to="/estoque" className="btn sec">Estoque</Link>
+          <Link to="/financeiro" className="btn sec">Dinheiro</Link>
+          <Link to="/sanidade" className="btn sec">Sanidade</Link>
+          <Link to="/relatorios" className="btn sec">Relatórios</Link>
+          <Link to="/simular" className="btn sec">E se…</Link>
           <Link to="/lotes" className="btn sec">Lotes</Link>
         </div>
         <Mercado />
+        <ConfigFinanceira />
         {!instalado && (
           <div className="cartao">
             <h3>Instalar no celular</h3>
@@ -110,7 +115,7 @@ export function Mais() {
 
         <div className="cartao">
           <h3>Sobre</h3>
-          <p className="mudo">BoiForte versão 0.2. Etapa 1: rebanho, pesagens, GMD e projeção. Etapa 2: nutrição, trato do dia e estoque. Próximas: financeiro, sanidade e relatórios.</p>
+          <p className="mudo">BoiForte versão 0.3. Rebanho e pesagens, nutrição e estoque, financeiro, sanidade, relatórios e simulações. Próxima etapa: nuvem, vários usuários e cotações automáticas.</p>
           <button className="btn perigo pequeno" onClick={apagarTudo}>Apagar todos os dados</button>
         </div>
       </main>
@@ -141,6 +146,35 @@ function Mercado() {
       <div className="grade">
         <CampoNumero rotulo="Preço da @" valor={vA} aoMudar={setArroba} unidade="R$" nome="precoArroba" />
         <CampoNumero rotulo="Rendimento de carcaça" valor={vR} aoMudar={setRend} unidade="%" nome="rendimento" />
+      </div>
+      <button className="btn sec pequeno" onClick={salvar}>Salvar</button>
+    </div>
+  );
+}
+
+function ConfigFinanceira() {
+  const aviso = useAviso();
+  const cfg = useLiveQuery(() => lerConfigFin());
+  const [op, setOp] = useState<string | null>(null);
+  const [com, setCom] = useState<string | null>(null);
+  if (!cfg) return null;
+  const vO = op ?? String(+(cfg.oportunidadeMes * 100).toFixed(3)).replace('.', ',');
+  const vC = com ?? String(+(cfg.comissaoVenda * 100).toFixed(3)).replace('.', ',');
+  const salvar = async () => {
+    const o = num(vO), c = num(vC);
+    if (o == null || o < 0 || o > 10) return aviso('O custo do dinheiro fica entre 0% e 10% ao mês.', true);
+    if (c == null || c < 0 || c > 20) return aviso('A comissão fica entre 0% e 20%.', true);
+    await db.config.bulkPut([{ chave: 'oportunidadeMes', valor: o / 100 }, { chave: 'comissaoVenda', valor: c / 100 }]);
+    setOp(null); setCom(null);
+    aviso('Valores salvos.');
+  };
+  return (
+    <div className="cartao">
+      <h3>Dinheiro</h3>
+      <p className="mudo">O custo do dinheiro é quanto ele renderia aplicado (entra no resultado dos lotes). A comissão é o padrão das vendas.</p>
+      <div className="grade">
+        <CampoNumero rotulo="Custo do dinheiro" valor={vO} aoMudar={setOp} unidade="% ao mês" nome="oportunidadeMes" />
+        <CampoNumero rotulo="Comissão de venda" valor={vC} aoMudar={setCom} unidade="%" nome="comissaoVenda" />
       </div>
       <button className="btn sec pequeno" onClick={salvar}>Salvar</button>
     </div>

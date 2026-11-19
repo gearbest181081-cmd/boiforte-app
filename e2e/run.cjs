@@ -244,7 +244,94 @@ function confere(cond, msg) {
     confere(/R\$\s192,/.test(nutri), 'custo do trato aparece no lote (R$ 192,…)');
     await foto('13-lote-nutricao');
 
-    console.log('12. Exemplo e tela escura');
+    console.log('12. Dinheiro do lote: compra e venda (Etapa 3)');
+    await page.getByRole('radio', { name: 'Dinheiro' }).click();
+    await page.getByText('Falta lançar a compra do lote').waitFor();
+    await page.getByRole('button', { name: 'Lançar compra' }).click();
+    await page.locator('input[name=compraPreco]').fill('3000');
+    await page.locator('input[name=compraFrete]').fill('1000');
+    await page.getByRole('button', { name: 'Salvar compra' }).click();
+    await page.getByText('Falta lançar a compra do lote').waitFor({ state: 'detached' });
+    // 40 × 3.000 × 1,02 + 1.000 = 123.400
+    confere(/Compra de animais[\s\S]*?R\$\s123\.400,00/.test(await page.locator('main').innerText()), 'compra do lote = R$ 123.400,00 (comissão e frete)');
+    await page.getByRole('button', { name: 'Venda / baixa' }).click();
+    await page.locator('input[name=saidaCab]').fill('10');
+    await page.locator('input[name=saidaPeso]').fill('366');
+    await page.locator('input[name=saidaPreco]').fill('320');
+    // 10 × 366 × 50% ÷ 15 × 320 = 39.040 − 2% = 38.259,20
+    confere(/Líquido: R\$\s38\.259,20/.test(await page.locator('main').innerText()), 'prévia da venda líquida = R$ 38.259,20');
+    await page.getByRole('button', { name: 'Salvar', exact: true }).click();
+    await page.getByRole('heading', { name: 'Saídas' }).waitFor();
+    const fin = await page.locator('main').innerText();
+    confere(fin.includes('30 cab'), 'lote ficou com 30 cabeças depois da venda');
+    confere(/Vendas \(líquido\)[\s\S]*?R\$\s38\.259,20/.test(fin), 'venda entra no DRE do lote');
+    confere((await page.getByTestId('resultadoLote').innerText()).includes('R$'), 'resultado do lote calculado');
+    await foto('14-lote-dinheiro');
+
+    console.log('13. Saúde do lote: carência');
+    await page.getByRole('radio', { name: 'Saúde' }).click();
+    await page.getByRole('button', { name: '+ Aplicação ou agendamento' }).click();
+    await page.locator('select[name=sanTipo]').selectOption('vermifugo');
+    await page.locator('input[name=sanProduto]').fill('Ivermectina 1%');
+    await page.locator('input[name=sanCusto]').fill('240');
+    await page.locator('input[name=sanCarencia]').fill('35');
+    await page.locator('input[name=sanRepetir]').fill('90');
+    await page.getByRole('button', { name: 'Salvar', exact: true }).click();
+    await page.getByText('Em carência até').waitFor();
+    const sau = await page.locator('main').innerText();
+    confere(/Agendado[\s\S]*Ivermectina 1%/.test(sau), 'próxima dose agendada (repete em 90 dias)');
+    confere(/Histórico[\s\S]*Ivermectina 1%[\s\S]*35 d/.test(sau), 'aplicação no histórico com 35 dias de carência');
+    await foto('15-lote-saude');
+
+    console.log('14. Financeiro da fazenda');
+    await page.goto(URL + '#/financeiro');
+    await page.getByRole('radio', { name: 'Tudo' }).click();
+    await page.getByTestId('resultadoPeriodo').waitFor();
+    const fz = await page.locator('main').innerText();
+    confere(/Venda de animais/.test(fz) && /Sanidade/.test(fz), 'DRE da fazenda mostra venda e sanidade');
+    await page.getByRole('radio', { name: 'Custos fixos' }).click();
+    await page.locator('input[name=fixoNome]').fill('Vaqueiro');
+    await page.locator('input[name=fixoValor]').fill('3000');
+    await page.getByRole('button', { name: 'Salvar custo fixo' }).click();
+    await page.getByText('Vaqueiro').first().waitFor();
+    confere(true, 'custo fixo cadastrado');
+    await foto('16-financeiro');
+
+    console.log('15. Simulações "E se"');
+    await page.goto(URL + '#/simular');
+    await page.locator('input[name=simPeso]').fill('300');
+    await page.locator('input[name=simAlvo]').fill('450');
+    await page.locator('input[name=simGmd1]').fill('0,600');
+    await page.locator('input[name=simGmd2]').fill('0,800');
+    confere((await page.getByTestId('resultadoGmd').innerText()).includes('Antecipa a saída em 62 dias'), 'GMD 0,600 → 0,800 antecipa 62 dias');
+    await page.getByRole('radio', { name: 'Segurar lote' }).click();
+    await page.locator('input[name=segPeso]').fill('450');
+    await page.locator('input[name=segGmd]').fill('0,8');
+    await page.locator('input[name=segCusto]').fill('5');
+    await page.locator('input[name=segArrobaTravada]').fill('340');
+    // hoje: 15 @ × 320 = 4.800; em 30 dias: 474 kg = 15,8 @ × 340 = 5.372; − 150 = 422
+    confere(/Ganha R\$\s422,00/.test(await page.getByTestId('resultadoSegurar').innerText()), 'segurar 30 dias com @ travada a R$ 340 = + R$ 422,00/cab');
+    await page.getByRole('radio', { name: 'Comprar gado' }).click();
+    confere(/Prejuízo de R\$\s608,53/.test(await page.getByTestId('resultadoCompra').innerText()), 'simulador de compra igual à planilha (− R$ 608,53/cab)');
+    await foto('17-simular');
+
+    console.log('16. Relatórios em PDF e Excel');
+    await page.goto(URL + '#/relatorios');
+    await page.getByRole('heading', { name: 'Desempenho dos lotes' }).waitFor();
+    const fs = require('node:fs');
+    const [dPdf] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'PDF' }).click()]);
+    const cPdf = path.join(FOTOS, 'relatorio.pdf');
+    await dPdf.saveAs(cPdf);
+    confere(fs.readFileSync(cPdf).subarray(0, 5).toString() === '%PDF-', 'PDF gerado');
+    const [dX] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Excel' }).click()]);
+    const cX = path.join(FOTOS, 'relatorio.xlsx');
+    await dX.saveAs(cX);
+    confere(fs.readFileSync(cX).subarray(0, 2).toString() === 'PK', 'Excel gerado');
+    const wa = await page.getByRole('link', { name: 'Mandar resumo no WhatsApp' }).getAttribute('href');
+    confere(wa.startsWith('https://wa.me/?text=') && decodeURIComponent(wa).includes('Fazenda Boa Vista'), 'link do WhatsApp com o resumo');
+    await foto('18-relatorios');
+
+    console.log('17. Exemplo e tela escura');
     await page.getByRole('link', { name: 'Mais' }).click();
     await page.getByRole('button', { name: 'Carregar exemplo' }).click();
     await page.getByText('Fêmea — 4º lote').waitFor();

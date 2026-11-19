@@ -8,13 +8,15 @@ import { calcularFormula, custoArrobaNutricao, kgCabDia } from '../nutricao';
 import { rs } from './Nutricao';
 import { GraficoCrescimento } from '../components/Grafico';
 import { Indicador, Opcoes, Topo, useAviso } from '../components/ui';
+import { LoteFinanceiro } from './LoteFinanceiro';
+import { LoteSanidade } from './Sanidade';
 
 export function LoteDetalhe() {
   const { id } = useParams();
   const loteId = Number(id);
   const nav = useNavigate();
   const aviso = useAviso();
-  const [aba, setAba] = useState<'resumo' | 'pesagens' | 'animais'>('resumo');
+  const [aba, setAba] = useState<'resumo' | 'pesagens' | 'animais' | 'dinheiro' | 'saude'>('resumo');
   const dados = useLiveQuery(async () => {
     const lote = await db.lotes.get(loteId);
     if (!lote) return null;
@@ -75,6 +77,8 @@ export function LoteDetalhe() {
           { valor: 'resumo', rotulo: 'Resumo' },
           { valor: 'pesagens', rotulo: `Pesagens (${pesagens.length})` },
           ...(lote.controle === 'individual' ? [{ valor: 'animais' as const, rotulo: `Animais (${animais.length})` }] : []),
+          { valor: 'dinheiro', rotulo: 'Dinheiro' },
+          { valor: 'saude', rotulo: 'Saúde' },
         ]} />
         <div style={{ height: 14 }} />
 
@@ -134,6 +138,8 @@ export function LoteDetalhe() {
           </div>
         )}
 
+        {aba === 'dinheiro' && <LoteFinanceiro lote={lote} />}
+        {aba === 'saude' && <LoteSanidade lote={lote} />}
         {aba === 'animais' && <ListaAnimais animais={animais} pesagens={pesagens} gmdMeta={lote.gmdMeta} />}
       </main>
     </>

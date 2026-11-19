@@ -24,7 +24,18 @@ Aplicativo de gestão de **cria, recria e engorda** (a pasto, TIP e confinamento
 - Estoque de insumos e misturas: compras com preço médio, baixa automática no trato e na batida, contagem e aviso de reposição.
 - Custo de nutrição por lote.
 
-Próximas etapas: financeiro, sanidade, relatórios e recursos com internet. Veja o plano de segurança em [SEGURANCA.md](SEGURANCA.md).
+## Etapa 3
+
+- Compra do lote com a fórmula da planilha (preço × cabeças × (1 + comissão) + frete + NF/GTA).
+- Venda por @ ou por cabeça (comissão e frete descontados) e baixa por morte; o lote encerra sozinho quando zera.
+- Despesas e receitas por lote ou gerais da fazenda; as gerais e os custos fixos mensais são **rateados por cabeça-dia**.
+- DRE por lote (com custo de oportunidade, valor do gado no pasto, custo da @ produzida e custo por cabeça), DRE da fazenda por mês, ano ou safra e fluxo de caixa mensal.
+- Sanidade: aplicações e agendamentos por lote, próxima dose automática, **carência para abate** e calendário anual (declaração do rebanho, brucelose) editável.
+- Simulações "E se": mudar o GMD, segurar o lote com a @ travada e simulador de compra (igual à aba SIMULADOR da planilha).
+- Relatórios de desempenho, resultado e ranking em **PDF e Excel**, com envio pelo WhatsApp.
+- Avisos inteligentes: custo da @ subindo 5% no mês, @ produzida mais cara que a vendida, carência antes da data prevista de saída, doses atrasadas e prazos do calendário.
+
+Próxima etapa: recursos com internet (nuvem, vários usuários, cotações, balança). Veja o plano de segurança em [SEGURANCA.md](SEGURANCA.md).
 
 ## Para desenvolver
 
@@ -45,5 +56,7 @@ A cada envio para `main`, o GitHub Actions roda os testes e publica o app no Git
 - `src/voz.ts`: reconhecimento de voz e leitura de números falados.
 - `src/nutricao.ts` e `src/estoque.ts`: formulação, faixas de referência, estoque.
 - `src/validar.ts`: validação de tudo que é gravado.
+- `src/financeiro.ts`, `src/sanidade.ts`, `src/simulacao.ts`: dinheiro, saúde do rebanho e "E se".
+- `src/relatorios.ts` e `src/exportar.ts`: tabelas dos relatórios, Excel e PDF gerados no próprio celular.
 - `src/db.ts`: banco local (Dexie/IndexedDB), regras de estoque/trato e cópia de segurança.
 - `src/pages/`: telas.

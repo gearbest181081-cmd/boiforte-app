@@ -34,7 +34,7 @@ export const ESQUEMAS: Record<string, Record<string, Regra>> = {
   lotes: {
     id: ID(false), propriedadeId: ID(), piqueteId: ID(false), nome: TXT(80, true), fase: ENUM(FASES_V), sexo: ENUM(['macho', 'femea', 'misto']),
     controle: ENUM(['lote', 'individual']), qtdCabecas: NUM(0, 1_000_000, true, true), dataEntrada: DATA(), pesoAlvo: NUM(0, 2000), gmdMeta: NUM(0, 5),
-    formulaId: ID(false), consumoPctPV: NUM(0, 0.05), encerrado: BOOL, obs: TXT(1000), criadoEm: CRIADO,
+    formulaId: ID(false), consumoPctPV: NUM(0, 0.05), encerrado: BOOL, dataSaida: DATA(false), obs: TXT(1000), criadoEm: CRIADO,
   },
   animais: { id: ID(false), loteId: ID(), brinco: TXT(30, true), sexo: ENUM(['macho', 'femea', 'misto'], false), raca: TXT(40), ativo: BOOL, criadoEm: CRIADO },
   pesagens: {
@@ -64,6 +64,23 @@ export const ESQUEMAS: Record<string, Record<string, Regra>> = {
     kgPrevisto: NUM(0, 10_000_000, true), kgFornecido: NUM(0, 10_000_000, true), custo: NUM(0, 100_000_000, true), criadoEm: CRIADO,
   },
   config: { chave: TXT(40, true), valor: NUM(-1e12, 1e12, true) },
+  lancamentos: {
+    id: ID(false), data: DATA(), tipo: ENUM(['despesa', 'receita']),
+    categoria: ENUM(['compra_animais', 'pasto', 'sanidade', 'mao_obra', 'frete', 'impostos', 'manutencao', 'combustivel', 'outros', 'venda_animais', 'outras_receitas']),
+    descricao: TXT(120), valor: NUM(0, 1_000_000_000, true), loteId: ID(false), origem: ENUM(['manual', 'compra_lote', 'sanidade'], false), refId: ID(false), criadoEm: CRIADO,
+  },
+  custosFixos: { id: ID(false), nome: TXT(80, true), valorMensal: NUM(0, 100_000_000, true), desde: DATA(), ate: DATA(false), criadoEm: CRIADO },
+  vendas: {
+    id: ID(false), loteId: ID(), data: DATA(), tipo: ENUM(['venda', 'morte']), cabecas: NUM(1, 1_000_000, true, true), pesoMedio: NUM(0, 2000),
+    modo: ENUM(['arroba', 'cabeca'], false), preco: NUM(0, 10_000_000), rendimento: NUM(0, 1), comissaoPct: NUM(0, 1), frete: NUM(0, 100_000_000), outros: NUM(0, 100_000_000),
+    valorBruto: NUM(0, 1_000_000_000, true), valorLiquido: NUM(-100_000_000, 1_000_000_000, true), comprador: TXT(80), obs: TXT(300), criadoEm: CRIADO,
+  },
+  sanidade: {
+    id: ID(false), loteId: ID(), data: DATA(), feito: BOOL, tipo: ENUM(['vacina', 'vermifugo', 'carrapaticida', 'antibiotico', 'vitamina', 'exame', 'outro']),
+    produto: TXT(80, true), dose: TXT(40), qtdAnimais: NUM(0, 1_000_000, false, true), custo: NUM(0, 100_000_000), carenciaDias: NUM(0, 730, false, true),
+    repetirDias: NUM(0, 730, false, true), obs: TXT(300), criadoEm: CRIADO,
+  },
+  lembretes: { id: ID(false), titulo: TXT(100, true), mes: NUM(1, 12, true, true), dia: NUM(1, 31, true, true), antecedenciaDias: NUM(0, 365, true, true), obs: TXT(200), criadoEm: CRIADO },
 };
 
 function dataValida(s: unknown): boolean {
@@ -129,6 +146,7 @@ function limpar(esquema: Record<string, Regra>, obj: unknown, rotulo: string): R
 const ROTULOS: Record<string, string> = {
   propriedades: 'Fazenda', modulos: 'Módulo', piquetes: 'Piquete', lotes: 'Lote', animais: 'Animal', pesagens: 'Pesagem',
   ingredientes: 'Ingrediente', formulas: 'Fórmula', movimentos: 'Estoque', batidas: 'Batida', fornecimentos: 'Fornecimento', config: 'Configuração',
+  lancamentos: 'Lançamento', custosFixos: 'Custo fixo', vendas: 'Venda', sanidade: 'Sanidade', lembretes: 'Lembrete',
 };
 
 /** Valida e devolve uma cópia limpa do registro (sem campos desconhecidos). */
