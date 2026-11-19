@@ -8,7 +8,7 @@ export function Fazenda() {
   const [novo, setNovo] = useState(false);
   return (
     <>
-      <Topo titulo="Fazenda" />
+      <Topo titulo="Fazenda" voltar />
       <main>
         {props?.length === 0 && !novo && (
           <div className="dica">Comece cadastrando sua fazenda. Depois, se quiser, separe em módulos e piquetes.</div>
