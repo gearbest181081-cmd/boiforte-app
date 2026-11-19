@@ -1,6 +1,8 @@
 // Botão "ler pela foto": tira/escolhe a foto, diminui no próprio celular e manda para o servidor ler.
-// Só aparece quando o celular está ligado a uma fazenda na nuvem (a leitura acontece no servidor).
+// A leitura acontece no servidor: precisa da nuvem ligada e de internet. Com "sempre", o botão aparece
+// mesmo sem nuvem e explica o que falta.
 import { useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { lerFoto, nuvemConfigurada } from '../nuvem/cliente';
 import { useEstadoNuvem } from '../nuvem/useNuvem';
 import { useOnline } from './ui';
@@ -16,14 +18,31 @@ export async function prepararFoto(arquivo: File, lado = 1600): Promise<string> 
   return c.toDataURL('image/jpeg', 0.85).split(',')[1];
 }
 
-export function BotaoFoto<T>({ tipo, rotulo, aoLer, aoErro }: {
-  tipo: 'rotulo' | 'balanca'; rotulo: string; aoLer: (r: T) => void; aoErro: (m: string) => void;
+export function BotaoFoto<T>({ tipo, rotulo, aoLer, aoErro, sempre }: {
+  tipo: 'rotulo' | 'balanca'; rotulo: string; aoLer: (r: T) => void; aoErro: (m: string) => void; sempre?: boolean;
 }) {
+  const nav = useNavigate();
+  const [explicar, setExplicar] = useState(false);
   const est = useEstadoNuvem();
   const online = useOnline();
   const ref = useRef<HTMLInputElement>(null);
   const [lendo, setLendo] = useState(false);
-  if (!nuvemConfigurada() || !est?.fazenda) return null;
+  const ligada = nuvemConfigurada() && !!est?.fazenda;
+  if (!ligada) {
+    if (!sempre || est === undefined) return null;
+    return (
+      <>
+        <button className="btn sec largo" onClick={() => setExplicar(true)}>{rotulo}</button>
+        {explicar && (
+          <div className="alerta atencao" data-testid="fotoPrecisaNuvem"><span className="ic">☁️</span><div>
+            <b>A leitura por foto usa a internet</b>
+            {nuvemConfigurada() ? 'Ligue este celular a uma fazenda na nuvem para usar. Enquanto isso, digite os valores do rótulo.' : 'Ela ainda não está ligada nesta versão do app. Por enquanto, digite os valores do rótulo.'}
+            {nuvemConfigurada() && <button className="btn sec pequeno" style={{ marginTop: 8 }} onClick={() => nav('/nuvem')}>Ligar a nuvem</button>}
+          </div></div>
+        )}
+      </>
+    );
+  }
   const escolheu = async (a?: File) => {
     if (!a) return;
     setLendo(true);

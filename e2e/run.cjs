@@ -341,7 +341,21 @@ function confere(cond, msg) {
     confere(true, 'cotações pedem para entrar na nuvem');
     await page.goto(URL + '#/nutricao/ingrediente/novo');
     await page.getByRole('button', { name: 'Salvar ingrediente' }).waitFor();
-    confere(!(await page.getByRole('button', { name: /Ler o rótulo/ }).count()), 'sem nuvem, não oferece leitura por foto');
+    await page.getByRole('button', { name: /Tirar foto da tabela nutricional/ }).click();
+    await page.getByTestId('fotoPrecisaNuvem').waitFor();
+    confere(true, 'foto da tabela nutricional explica que precisa da nuvem');
+    await page.locator('select[name=ingCategoria]').selectOption('proteinado');
+    await page.locator('input[name=ingNome]').fill('Proteinado Águas');
+    await page.locator('input[name=ing_ms]').fill('92');
+    await page.locator('input[name=ing_pb]').fill('40');
+    await page.locator('input[name=ing_preco]').fill('3,2');
+    await page.locator('input[name=ingConsumo]').fill('1 g por kg de PV');
+    await page.locator('input[name=ing_consumoPct]').fill('0,1');
+    await page.getByRole('button', { name: 'Salvar ingrediente' }).click();
+    await page.getByText('Produto salvo e já pronto para usar no trato.').waitFor();
+    await page.goto(URL + '#/nutricao');
+    await page.getByText('Proteinado Águas').first().waitFor();
+    confere(true, 'proteinado pronto vira ingrediente e fórmula de uma vez');
     await foto('19-nuvem');
 
     console.log('18. Exemplo e tela escura');

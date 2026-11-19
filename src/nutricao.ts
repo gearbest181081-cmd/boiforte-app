@@ -2,7 +2,9 @@
 // Valores dos ingredientes são "na matéria natural" (como vêm no rótulo do saco), em %.
 
 export interface Nutrientes { ms: number; pb: number; ndt: number; ca: number; p: number }
-export interface IngredienteNut extends Nutrientes { id?: number; nome: string; preco: number; ureia?: boolean }
+export type CategoriaIngrediente = 'ingrediente' | 'nucleo' | 'sal_mineral' | 'sal_adensado' | 'proteinado' | 'proteico_energetico' | 'racao';
+/** ureia: é a própria ureia. ureiaTeor: % de ureia contida (núcleo, sal adensado, proteinado...). */
+export interface IngredienteNut extends Nutrientes { id?: number; nome: string; preco: number; ureia?: boolean; ureiaTeor?: number; categoria?: CategoriaIngrediente; consumo?: string }
 export interface ItemFormula { ingredienteId: number; qtd: number }
 
 export type TipoFormula = 'sal_mineral' | 'proteinado' | 'proteico_energetico' | 'rip' | 'tip' | 'creep' | 'confinamento' | 'outro';
@@ -55,7 +57,7 @@ export function calcularFormula(itens: ItemFormula[], ingredientes: IngredienteN
     if (!ing) { faltando.push(it.ingredienteId); return { ingredienteId: it.ingredienteId, pct: frac * 100, kgPorTon: frac * 1000, custo: 0 }; }
     mn.ms += frac * ing.ms; mn.pb += frac * ing.pb; mn.ndt += frac * ing.ndt; mn.ca += frac * ing.ca; mn.p += frac * ing.p;
     custoKg += frac * ing.preco;
-    if (ing.ureia) ureiaPct += frac * 100;
+    ureiaPct += frac * (ing.ureia ? 100 : ing.ureiaTeor ?? 0);
     return { ingredienteId: it.ingredienteId, pct: frac * 100, kgPorTon: frac * 1000, custo: frac * ing.preco };
   });
   const f = mn.ms > 0 ? 100 / mn.ms : 0;

@@ -14,9 +14,15 @@ describe('leitura por foto (regras do servidor)', () => {
   });
 
   it('só deixa passar números plausíveis do rótulo', () => {
-    const r = limparLeitura('rotulo', { legivel: true, nome: ' Núcleo <b>X</b> ', umidade: 10, pb: 40, ndt: 999, ca: 12.5, p: -1, nnp_pb: 20, observacao: null });
-    expect(r).toEqual({ legivel: true, nome: 'Núcleo bX/b', ms: 90, pb: 40, ndt: null, ca: 12.5, p: null, ureia: true, observacao: null });
-    expect(limparLeitura('rotulo', 'lixo')).toMatchObject({ legivel: false, pb: null, ureia: false });
+    const r = limparLeitura('rotulo', { legivel: true, categoria: 'nucleo', nome: ' Núcleo <b>X</b> ', umidade: 10, pb: 40, ndt: 999, ca: 12.5, p: -1, nnp_pb: 28.1, consumo_texto: null, consumo_pct_pv: null, observacao: null });
+    expect(r).toEqual({ legivel: true, categoria: 'nucleo', nome: 'Núcleo bX/b', ms: 90, pb: 40, ndt: null, ca: 12.5, p: null, ureia: false, ureiaTeor: 10, consumo: null, consumoPctPV: null, observacao: null });
+    expect(limparLeitura('rotulo', 'lixo')).toMatchObject({ legivel: false, categoria: null, pb: null, ureia: false, ureiaTeor: null });
+  });
+
+  it('produto pronto: tipo, consumo do rótulo e ureia pura', () => {
+    const r = limparLeitura('rotulo', { legivel: true, categoria: 'proteinado', nome: 'Proteinado Águas', umidade: 8, pb: 40, ndt: 50, ca: 5, p: 2, nnp_pb: 25, consumo_texto: '1 g por kg de peso vivo', consumo_pct_pv: 0.1, observacao: null });
+    expect(r).toMatchObject({ categoria: 'proteinado', consumo: '1 g por kg de peso vivo', consumoPctPV: 0.001, ureiaTeor: 8.9 });
+    expect(limparLeitura('rotulo', { legivel: true, categoria: 'foguete', pb: 281, consumo_pct_pv: 50 })).toMatchObject({ categoria: null, ureia: true, ureiaTeor: null, consumoPctPV: null });
   });
 
   it('balança: peso fora da faixa não vale', () => {
