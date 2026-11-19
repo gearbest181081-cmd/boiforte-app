@@ -278,6 +278,7 @@ function confere(cond, msg) {
     await page.locator('input[name=sanRepetir]').fill('90');
     await page.getByRole('button', { name: 'Salvar', exact: true }).click();
     await page.getByText('Em carência até').waitFor();
+    await page.getByRole('heading', { name: 'Agendado' }).waitFor({ timeout: 5000 }).catch(() => {});
     const sau = await page.locator('main').innerText();
     confere(/Agendado[\s\S]*Ivermectina 1%/.test(sau), 'próxima dose agendada (repete em 90 dias)');
     confere(/Histórico[\s\S]*Ivermectina 1%[\s\S]*35 d/.test(sau), 'aplicação no histórico com 35 dias de carência');
