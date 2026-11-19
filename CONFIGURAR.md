@@ -49,9 +49,10 @@ supabase secrets set CRON_SECRET=uma-senha-longa-e-aleatoria
 
 ## 5. Ligar o app à nuvem (GitHub)
 
-No repositório, em *Settings › Secrets and variables › Actions*:
-- aba **Variables**: `VITE_SUPABASE_URL` (Project URL) e `VITE_SUPABASE_ANON_KEY` (anon key).
-- aba **Secrets**: `CRON_SECRET` (a mesma senha do passo 4).
+O endereço e a chave pública ficam no arquivo `.env.production` do repositório (já preenchido com o projeto da BoiForte).
+Se trocar de projeto, edite esse arquivo. **Nunca** coloque nele a chave secreta.
+
+No repositório, em *Settings › Secrets and variables › Actions*, aba **Secrets**: `CRON_SECRET` (a mesma senha do passo 4).
 
 E em *Settings › Pages › Source*, escolha **GitHub Actions** (se ainda não fez).
 

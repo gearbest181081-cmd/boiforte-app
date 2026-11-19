@@ -332,10 +332,10 @@ function confere(cond, msg) {
     confere(wa.startsWith('https://wa.me/?text=') && decodeURIComponent(wa).includes('Fazenda Boa Vista'), 'link do WhatsApp com o resumo');
     await foto('18-relatorios');
 
-    console.log('17. Nuvem e cotações sem servidor configurado');
+    console.log('17. Nuvem e cotações sem estar logado');
     await page.goto(URL + '#/nuvem');
-    await page.getByRole('heading', { name: 'Nuvem ainda não ligada' }).waitFor();
-    confere(true, 'tela da nuvem explica que ainda não está ligada');
+    await page.getByRole('heading', { name: /Nuvem ainda não ligada|^Entrar$/ }).first().waitFor();
+    confere(true, 'tela da nuvem: pede para entrar (ou explica que não está ligada)');
     await page.goto(URL + '#/cotacoes');
     await page.getByText('Entre na nuvem para receber as cotações').waitFor();
     confere(true, 'cotações pedem para entrar na nuvem');
