@@ -1,0 +1,42 @@
+// Botão "ler pela foto": tira/escolhe a foto, diminui no próprio celular e manda para o servidor ler.
+// Só aparece quando o celular está ligado a uma fazenda na nuvem (a leitura acontece no servidor).
+import { useRef, useState } from 'react';
+import { lerFoto, nuvemConfigurada } from '../nuvem/cliente';
+import { useEstadoNuvem } from '../nuvem/useNuvem';
+import { useOnline } from './ui';
+
+/** Diminui a foto para no máximo 1600 px e devolve JPEG em base64 (sem o prefixo data:). */
+export async function prepararFoto(arquivo: File, lado = 1600): Promise<string> {
+  const bmp = await createImageBitmap(arquivo);
+  const f = Math.min(1, lado / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas');
+  c.width = Math.round(bmp.width * f); c.height = Math.round(bmp.height * f);
+  c.getContext('2d')!.drawImage(bmp, 0, 0, c.width, c.height);
+  bmp.close?.();
+  return c.toDataURL('image/jpeg', 0.85).split(',')[1];
+}
+
+export function BotaoFoto<T>({ tipo, rotulo, aoLer, aoErro }: {
+  tipo: 'rotulo' | 'balanca'; rotulo: string; aoLer: (r: T) => void; aoErro: (m: string) => void;
+}) {
+  const est = useEstadoNuvem();
+  const online = useOnline();
+  const ref = useRef<HTMLInputElement>(null);
+  const [lendo, setLendo] = useState(false);
+  if (!nuvemConfigurada() || !est?.fazenda) return null;
+  const escolheu = async (a?: File) => {
+    if (!a) return;
+    setLendo(true);
+    try { aoLer(await lerFoto<T>(tipo, await prepararFoto(a), 'image/jpeg')); }
+    catch (e) { aoErro((e as Error).message); }
+    finally { setLendo(false); if (ref.current) ref.current.value = ''; }
+  };
+  return (
+    <>
+      <input ref={ref} type="file" accept="image/*" capture="environment" hidden onChange={(e) => escolheu(e.target.files?.[0])} />
+      <button className="btn sec largo" disabled={lendo || !online} onClick={() => ref.current?.click()}>
+        {lendo ? 'Lendo a foto…' : online ? rotulo : `${rotulo} (precisa de internet)`}
+      </button>
+    </>
+  );
+}

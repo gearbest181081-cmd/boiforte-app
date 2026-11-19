@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, exportarBackup, importarBackup, lerArquivoBackup, lerConfig, lerConfigFin, TABELAS } from '../db';
 import { carregarExemplo } from '../exemplo';
+import { desligarFazenda, fazendaLigada } from '../nuvem/sinc';
+import { useEstadoNuvem, usePapel } from '../nuvem/useNuvem';
 import { CampoNumero, num, Topo, useAviso } from '../components/ui';
 
 export function Mais() {
@@ -12,6 +14,9 @@ export function Mais() {
   const [instalar, setInstalar] = useState<any>(null);
   const [instalado, setInstalado] = useState(false);
   const [espaco, setEspaco] = useState<string>('');
+  const nuvem = useEstadoNuvem();
+  const papel = usePapel();
+  const veDinheiro = papel !== 'vaqueiro';
 
   useEffect(() => {
     const h = (e: Event) => { e.preventDefault(); setInstalar(e); };
@@ -40,6 +45,7 @@ export function Mais() {
 
   const restaurar = async (f: File) => {
     try {
+      if (await fazendaLigada()) return aviso('Este celular está ligado à nuvem. Desligue em Nuvem e equipe antes de restaurar uma cópia.', true);
       const bk = lerArquivoBackup(await f.text());
       if (!window.confirm('Isto vai SUBSTITUIR tudo o que está no celular pelos dados da cópia. Continuar?')) return;
       await importarBackup(bk);
@@ -51,14 +57,18 @@ export function Mais() {
   };
 
   const exemplo = async () => {
+    if (await fazendaLigada()) return aviso('O exemplo é só para conhecer o app. Desligue da nuvem antes, para ele não ir para a fazenda.', true);
     await carregarExemplo();
     aviso('Exemplo carregado.');
     nav('/');
   };
 
   const apagarTudo = async () => {
-    if (!window.confirm('Apagar TODOS os dados do BoiForte deste celular? Faça uma cópia antes.')) return;
+    const ligada = await fazendaLigada();
+    if (!window.confirm(ligada ? 'Apagar os dados SÓ deste celular? Na nuvem continuam guardados, e o celular é desligado da fazenda.' : 'Apagar TODOS os dados do BoiForte deste celular? Faça uma cópia antes.')) return;
+    await desligarFazenda();
     await db.transaction('rw', TABELAS.map((t) => db.table(t)), async () => { for (const t of TABELAS) await db.table(t).clear(); });
+    await db.pendentes.clear();
     aviso('Dados apagados.');
     nav('/');
   };
@@ -67,14 +77,19 @@ export function Mais() {
     <>
       <Topo titulo="Mais" />
       <main>
+        <Link to="/nuvem" className={`alerta ${nuvem?.fazenda ? (nuvem.pendentes || nuvem.erros.length ? 'atencao' : 'bom') : 'atencao'}`} style={{ textDecoration: 'none' }}>
+          <span className="ic">☁️</span>
+          <div><b>Nuvem e equipe</b>{nuvem?.fazenda ? (nuvem.pendentes ? `${nuvem.pendentes} alteração(ões) para enviar.` : nuvem.erros.length ? 'Há registros recusados. Toque para ver.' : `Ligado à ${nuvem.fazenda.nome}.`) : 'Guarde os dados fora do celular e trabalhe com a equipe.'}</div>
+        </Link>
         <div className="grade" style={{ marginBottom: 12 }}>
           <Link to="/fazenda" className="btn sec">Fazenda</Link>
           <Link to="/nutricao" className="btn sec">Nutrição</Link>
           <Link to="/estoque" className="btn sec">Estoque</Link>
-          <Link to="/financeiro" className="btn sec">Dinheiro</Link>
+          {veDinheiro && <Link to="/financeiro" className="btn sec">Dinheiro</Link>}
           <Link to="/sanidade" className="btn sec">Sanidade</Link>
-          <Link to="/relatorios" className="btn sec">Relatórios</Link>
-          <Link to="/simular" className="btn sec">E se…</Link>
+          {veDinheiro && <Link to="/relatorios" className="btn sec">Relatórios</Link>}
+          {veDinheiro && <Link to="/simular" className="btn sec">E se…</Link>}
+          <Link to="/cotacoes" className="btn sec">Cotações</Link>
           <Link to="/lotes" className="btn sec">Lotes</Link>
         </div>
         <Mercado />
@@ -115,7 +130,7 @@ export function Mais() {
 
         <div className="cartao">
           <h3>Sobre</h3>
-          <p className="mudo">BoiForte versão 0.3. Rebanho e pesagens, nutrição e estoque, financeiro, sanidade, relatórios e simulações. Próxima etapa: nuvem, vários usuários e cotações automáticas.</p>
+          <p className="mudo">BoiForte versão 0.4. Rebanho e pesagens, nutrição e estoque, financeiro, sanidade, relatórios, simulações, nuvem com equipe, cotações, leitura por foto e balança Bluetooth.</p>
           <button className="btn perigo pequeno" onClick={apagarTudo}>Apagar todos os dados</button>
         </div>
       </main>
@@ -142,7 +157,7 @@ function Mercado() {
   return (
     <div className="cartao">
       <h3>Mercado</h3>
-      <p className="mudo">Usados no custo da @ produzida. A cotação automática chega na Etapa 4.</p>
+      <p className="mudo">Usados no custo da @ produzida. Veja a cotação do dia em <Link to="/cotacoes">Cotações</Link>.</p>
       <div className="grade">
         <CampoNumero rotulo="Preço da @" valor={vA} aoMudar={setArroba} unidade="R$" nome="precoArroba" />
         <CampoNumero rotulo="Rendimento de carcaça" valor={vR} aoMudar={setRend} unidade="%" nome="rendimento" />

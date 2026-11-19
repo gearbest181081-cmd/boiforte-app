@@ -14,6 +14,7 @@ type Regra =
   | { t: 'enum'; valores: readonly string[]; obrigatorio?: boolean }
   | { t: 'bool' }
   | { t: 'id'; obrigatorio?: boolean }
+  | { t: 'gid' }
   | { t: 'lista'; max: number; item: Record<string, Regra> };
 
 const TXT = (max = 120, obrigatorio = false): Regra => ({ t: 'texto', max, obrigatorio });
@@ -22,12 +23,15 @@ const ID = (obrigatorio = true): Regra => ({ t: 'id', obrigatorio });
 const DATA = (obrigatorio = true): Regra => ({ t: 'data', obrigatorio });
 const ENUM = (valores: readonly string[], obrigatorio = true): Regra => ({ t: 'enum', valores, obrigatorio });
 const BOOL: Regra = { t: 'bool' };
+/** Identificador global do registro (usado na sincronização com a nuvem). */
+const GID: Regra = { t: 'gid' };
+export const RE_GID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const CRIADO = NUM(0, 4102444800000, false, true);
 
 export const FASES_V = ['cria', 'recria', 'engorda_pasto', 'tip', 'confinamento'] as const;
 export const TIPOS_FORMULA_V = ['sal_mineral', 'proteinado', 'proteico_energetico', 'rip', 'tip', 'creep', 'confinamento', 'outro'] as const;
 
-export const ESQUEMAS: Record<string, Record<string, Regra>> = {
+const ESQUEMAS_BASE: Record<string, Record<string, Regra>> = {
   propriedades: { id: ID(false), nome: TXT(120, true), municipio: TXT(80), uf: TXT(2), areaHa: NUM(0, 10_000_000), criadoEm: CRIADO },
   modulos: { id: ID(false), propriedadeId: ID(), nome: TXT(80, true), criadoEm: CRIADO },
   piquetes: { id: ID(false), moduloId: ID(), nome: TXT(80, true), areaHa: NUM(0, 1_000_000), capim: TXT(60), criadoEm: CRIADO },
@@ -68,6 +72,8 @@ export const ESQUEMAS: Record<string, Record<string, Regra>> = {
     id: ID(false), data: DATA(), tipo: ENUM(['despesa', 'receita']),
     categoria: ENUM(['compra_animais', 'pasto', 'sanidade', 'mao_obra', 'frete', 'impostos', 'manutencao', 'combustivel', 'outros', 'venda_animais', 'outras_receitas']),
     descricao: TXT(120), valor: NUM(0, 1_000_000_000, true), loteId: ID(false), origem: ENUM(['manual', 'compra_lote', 'sanidade'], false), refId: ID(false), criadoEm: CRIADO,
+    // dados da compra do lote, para o servidor refazer a conta
+    compraQtd: NUM(0, 1_000_000, false, true), compraPreco: NUM(0, 10_000_000), compraComissao: NUM(0, 1), compraFrete: NUM(0, 100_000_000), compraNf: NUM(0, 100_000_000),
   },
   custosFixos: { id: ID(false), nome: TXT(80, true), valorMensal: NUM(0, 100_000_000, true), desde: DATA(), ate: DATA(false), criadoEm: CRIADO },
   vendas: {
@@ -82,6 +88,12 @@ export const ESQUEMAS: Record<string, Record<string, Regra>> = {
   },
   lembretes: { id: ID(false), titulo: TXT(100, true), mes: NUM(1, 12, true, true), dia: NUM(1, 31, true, true), antecedenciaDias: NUM(0, 365, true, true), obs: TXT(200), criadoEm: CRIADO },
 };
+
+/** Todas as tabelas (menos config, que usa a chave) ganham o identificador global "gid". */
+export const ESQUEMAS: Record<string, Record<string, Regra>> = Object.fromEntries(
+  Object.entries(ESQUEMAS_BASE).map(([t, e]) => [t, t === 'config' ? e : { ...e, gid: GID }]),
+);
+export type { Regra };
 
 function dataValida(s: unknown): boolean {
   if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
@@ -121,6 +133,9 @@ function checar(campo: string, regra: Regra, v: unknown, rotulo: string): unknow
     case 'enum':
       if (typeof v !== 'string' || !regra.valores.includes(v)) throw new ErroValidacao(`${rotulo}: valor de "${campo}" não permitido.`);
       return v;
+    case 'gid':
+      if (typeof v !== 'string' || !RE_GID.test(v)) throw new ErroValidacao(`${rotulo}: identificador inválido.`);
+      return v;
     case 'bool':
       if (typeof v !== 'boolean') throw new ErroValidacao(`${rotulo}: "${campo}" deve ser sim/não.`);
       return v;
@@ -143,7 +158,7 @@ function limpar(esquema: Record<string, Regra>, obj: unknown, rotulo: string): R
   return out; // campos desconhecidos são descartados
 }
 
-const ROTULOS: Record<string, string> = {
+export const ROTULOS: Record<string, string> = {
   propriedades: 'Fazenda', modulos: 'Módulo', piquetes: 'Piquete', lotes: 'Lote', animais: 'Animal', pesagens: 'Pesagem',
   ingredientes: 'Ingrediente', formulas: 'Fórmula', movimentos: 'Estoque', batidas: 'Batida', fornecimentos: 'Fornecimento', config: 'Configuração',
   lancamentos: 'Lançamento', custosFixos: 'Custo fixo', vendas: 'Venda', sanidade: 'Sanidade', lembretes: 'Lembrete',

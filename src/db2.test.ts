@@ -81,7 +81,7 @@ describe('nutrição e estoque no banco', () => {
   it('o banco recusa gravação inválida, venha de onde vier', async () => {
     await expect(db.pesagens.add({ loteId: 1, data: '2026-13-01', tipo: 'media', pesoMedio: 300, qtdPesada: 1, criadoEm: 0 })).rejects.toThrow('data');
     const id = await db.propriedades.add({ nome: 'X', criadoEm: 0, ...({ extra: 'lixo' } as any) });
-    expect(await db.propriedades.get(id)).toEqual({ id, nome: 'X', criadoEm: 0 });
+    expect(await db.propriedades.get(id)).toEqual({ id, nome: 'X', criadoEm: 0, gid: expect.stringMatching(/^[0-9a-f-]{36}$/) });
     await expect(db.propriedades.update(id, { nome: '' })).rejects.toThrow('obrigatório');
   });
 

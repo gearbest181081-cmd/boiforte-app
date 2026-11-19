@@ -6,6 +6,7 @@ import { alertasInteligentes, useEscala, useEstoque, useLotesInfo, useTudo, type
 import { ordenarAlertas } from '../alertas';
 import { fmtData, fmtGmd, fmtKg, fmtNum, hojeISO } from '../calc';
 import { Indicador, Topo } from '../components/ui';
+import { usePapel } from '../nuvem/useNuvem';
 
 export function Inicio() {
   const props = useLiveQuery(() => db.propriedades.toArray());
@@ -13,6 +14,7 @@ export function Inicio() {
   const escala = useEscala(hojeISO());
   const estoque = useEstoque();
   const tudo = useTudo();
+  const papel = usePapel();
   const [todos, setTodos] = useState(false);
   useEffect(() => { if (props?.length) garantirLembretesPadrao().catch(() => {}); }, [props?.length]);
   if (!props || !infos) return <Topo titulo="BoiForte" />;
@@ -56,6 +58,8 @@ export function Inicio() {
           <Indicador rotulo="Lotes ativos" valor={infos.length} />
           <Indicador rotulo="Peso médio" valor={pesoMedio == null ? '—' : <>{fmtNum(pesoMedio, 0)}<small> kg</small></>} />
         </div>
+
+        {papel === 'consultor' && <div className="dica">Você está como consultor: pode olhar tudo, mas o que mudar aqui não vai para a fazenda.</div>}
 
         <div className="botoes">
           <Link to="/pesar" className="btn">Pesar gado</Link>

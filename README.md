@@ -35,14 +35,24 @@ Aplicativo de gestão de **cria, recria e engorda** (a pasto, TIP e confinamento
 - Relatórios de desempenho, resultado e ranking em **PDF e Excel**, com envio pelo WhatsApp.
 - Avisos inteligentes: custo da @ subindo 5% no mês, @ produzida mais cara que a vendida, carência antes da data prevista de saída, doses atrasadas e prazos do calendário.
 
-Próxima etapa: recursos com internet (nuvem, vários usuários, cotações, balança). Veja o plano de segurança em [SEGURANCA.md](SEGURANCA.md).
+## Etapa 4
+
+- **Nuvem e equipe**: entrar com código no e-mail, criar a fazenda na nuvem ou entrar por convite. O celular continua funcionando sem sinal e sincroniza sozinho quando pega internet.
+- **Papéis**: dono, gerente, vaqueiro (pesa, trata e vacina, sem ver dinheiro) e consultor (só olha). Tudo conferido no servidor.
+- **Cálculos de dinheiro refeitos no servidor**: se um celular mandar valor errado, volta corrigido.
+- **Leitura por foto**: rótulo do núcleo/suplemento (preenche MS, PB, NDT, Ca, P e ureia) e visor da balança.
+- **Cotações** do boi gordo, bezerro, milho e soja (Cepea), atualizadas todo dia, com botão para usar como preço da @.
+- **Balança Bluetooth** (experimental): o peso parado entra sozinho na próxima linha da pesagem.
+- **Android**: arquivos e guia para publicar na Play Store em [android/LEIAME.md](android/LEIAME.md).
+
+Para ligar a nuvem, siga [CONFIGURAR.md](CONFIGURAR.md). Segurança em [SEGURANCA.md](SEGURANCA.md) e privacidade em [PRIVACIDADE.md](PRIVACIDADE.md).
 
 ## Para desenvolver
 
 ```bash
 npm install
 npm run dev        # abre em http://localhost:5173
-npm test           # testes dos cálculos, da voz e do banco local
+npm test           # testes dos cálculos, da voz, do banco local e do servidor (Postgres em memória)
 npm run build
 node e2e/run.cjs   # teste de ponta a ponta num celular simulado (precisa do Playwright)
 ```
@@ -59,4 +69,7 @@ A cada envio para `main`, o GitHub Actions roda os testes e publica o app no Git
 - `src/financeiro.ts`, `src/sanidade.ts`, `src/simulacao.ts`: dinheiro, saúde do rebanho e "E se".
 - `src/relatorios.ts` e `src/exportar.ts`: tabelas dos relatórios, Excel e PDF gerados no próprio celular.
 - `src/db.ts`: banco local (Dexie/IndexedDB), regras de estoque/trato e cópia de segurança.
+- `src/nuvem/`: sincronização, login e equipe (`sinc.ts`, `cliente.ts`) e os testes do servidor.
+- `src/balanca.ts`: balança Bluetooth.
+- `supabase/`: banco (migrações com todas as regras) e funções do servidor (foto e cotações).
 - `src/pages/`: telas.

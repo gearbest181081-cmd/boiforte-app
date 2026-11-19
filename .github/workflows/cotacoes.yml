@@ -1,0 +1,20 @@
+name: Atualizar cotações
+
+on:
+  schedule:
+    - cron: '30 21 * * 1-5' # 18h30 em Brasília, depois que o Cepea publica
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  atualizar:
+    runs-on: ubuntu-latest
+    if: vars.VITE_SUPABASE_URL != ''
+    steps:
+      - name: Chamar a função de cotações
+        env:
+          URL: ${{ vars.VITE_SUPABASE_URL }}
+          SEGREDO: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl -fsS -X POST "$URL/functions/v1/atualizar-cotacoes" -H "x-cron-secret: $SEGREDO" -H 'Content-Type: application/json' -d '{}'

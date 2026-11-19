@@ -5,6 +5,9 @@ import { db, pontosDoLote, registrarPesagemIndividual, type Animal, type Pesagem
 import { fmtGmd, fmtKg, gmd, hojeISO, media, resumo } from '../calc';
 import { lerPesagemFalada } from '../voz';
 import { BotaoMic, CampoNumero, num, Opcoes, Topo, useAviso } from '../components/ui';
+import { BotaoBalanca } from '../components/Balanca';
+import { BotaoFoto } from '../components/Foto';
+import type { LeituraBalanca } from '../../supabase/functions/_shared/foto';
 
 type Linha = { brinco: string; peso: string };
 
@@ -53,21 +56,22 @@ export function Pesagem() {
   const setLinha = (i: number, k: keyof Linha, v: string) => setLinhas((ls) => ls.map((l, j) => (j === i ? { ...l, [k]: v } : l)));
   const novaLinha = () => setLinhas((ls) => [...ls, { brinco: individual ? '' : String(ls.length + 1), peso: '' }]);
 
+  /** Põe um peso na lista: no brinco dito, ou na primeira linha sem peso. */
+  const colocarPeso = (brinco: string | null, kg: number) => {
+    const peso = String(kg).replace('.', ',');
+    setLinhas((ls) => {
+      const i = brinco ? ls.findIndex((l) => l.brinco.trim().toUpperCase() === brinco.toUpperCase()) : -1;
+      if (i >= 0) return ls.map((l, j) => (j === i ? { ...l, peso } : l));
+      const vazia = ls.findIndex((l) => (brinco ? !l.brinco && !l.peso : !l.peso));
+      if (vazia >= 0) return ls.map((l, j) => (j === vazia ? { brinco: brinco ?? l.brinco, peso } : l));
+      return [...ls, { brinco: brinco ?? (individual ? '' : String(ls.length + 1)), peso }];
+    });
+    aviso(brinco ? `Brinco ${brinco}: ${fmtKg(kg)}` : `Peso lido: ${fmtKg(kg)}`);
+  };
   const ouviuPesagem = (texto: string) => {
     for (const t of texto.split('|')) {
       const r = lerPesagemFalada(t);
-      if (r) {
-        setLinhas((ls) => {
-          const i = ls.findIndex((l) => l.brinco.trim().toUpperCase() === r.brinco.toUpperCase());
-          const peso = String(r.peso).replace('.', ',');
-          if (i >= 0) return ls.map((l, j) => (j === i ? { ...l, peso } : l));
-          const vazia = ls.findIndex((l) => !l.brinco && !l.peso);
-          if (vazia >= 0) return ls.map((l, j) => (j === vazia ? { brinco: r.brinco, peso } : l));
-          return [...ls, { brinco: r.brinco, peso }];
-        });
-        aviso(`Brinco ${r.brinco}: ${fmtKg(r.peso)}`);
-        return;
-      }
+      if (r) { colocarPeso(r.brinco, r.peso); return; }
     }
     aviso(`Não entendi. Fale assim: "brinco 12 peso 318".`, true);
   };
@@ -159,6 +163,11 @@ export function Pesagem() {
                     <BotaoMic rotulo="Falar brinco e peso" aoOuvir={ouviuPesagem} />
                     <span className="mudo" style={{ fontSize: 14 }}>“brinco 12 peso 318”</span>
                   </span>
+                </div>
+                <div style={{ marginTop: 10, display: 'grid', gap: 8 }}>
+                  <BotaoBalanca aoPesar={(kg) => colocarPeso(null, kg)} aoErro={(m) => aviso(m, true)} />
+                  <BotaoFoto<LeituraBalanca> tipo="balanca" rotulo="Ler o visor da balança pela foto" aoErro={(m) => aviso(m, true)}
+                    aoLer={(r) => (r.legivel && r.peso ? colocarPeso(r.brinco, r.peso) : aviso('Não deu para ler o peso. Tente de novo.', true))} />
                 </div>
               </div>
             )}

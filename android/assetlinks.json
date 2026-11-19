@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "br.com.boiforte.app",
+    "sha256_cert_fingerprints": ["COLE-AQUI-A-DIGITAL-SHA256-DA-CHAVE-DE-ASSINATURA-DO-PLAY"]
+  }
+}]

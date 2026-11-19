@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { db, excluirIngrediente } from '../db';
 import { CampoNumero, CampoTexto, num, Topo, useAviso } from '../components/ui';
+import { BotaoFoto } from '../components/Foto';
+import type { LeituraRotulo } from '../../supabase/functions/_shared/foto';
 
 const CAMPOS = [
   ['ms', 'Matéria seca (MS)', '%'], ['pb', 'Proteína bruta (PB)', '%'], ['ndt', 'NDT (energia)', '%'],
@@ -16,6 +18,15 @@ export function IngredienteForm() {
   const [nome, setNome] = useState('');
   const [v, setV] = useState<Record<string, string>>({ ms: '90', pb: '', ndt: '', ca: '', p: '', preco: '', diasAlerta: '7' });
   const [ureia, setUreia] = useState(false);
+  const [lida, setLida] = useState<string | null>(null);
+  const leu = (r: LeituraRotulo) => {
+    if (!r.legivel) return aviso('Não deu para ler o rótulo. Tente uma foto mais perto e com luz.', true);
+    const br = (x: number | null) => (x == null ? undefined : String(x).replace('.', ','));
+    if (r.nome && !nome.trim()) setNome(r.nome);
+    setV((s) => ({ ...s, ...Object.fromEntries((['ms', 'pb', 'ndt', 'ca', 'p'] as const).flatMap((k) => (br(r[k]) ? [[k, br(r[k])!]] : []))) }));
+    if (r.ureia) setUreia(true);
+    setLida(r.observacao ? `Lido da foto. ${r.observacao}` : 'Lido da foto.');
+  };
 
   useEffect(() => {
     if (!editando) return;
@@ -51,6 +62,8 @@ export function IngredienteForm() {
       <Topo titulo={editando ? 'Ingrediente' : 'Novo ingrediente'} voltar />
       <main>
         <CampoTexto rotulo="Nome" valor={nome} aoMudar={setNome} nome="ingNome" />
+        <BotaoFoto<LeituraRotulo> tipo="rotulo" rotulo="Ler o rótulo pela foto" aoLer={leu} aoErro={(m) => aviso(m, true)} />
+        {lida && <div className="alerta atencao" data-testid="lidoFoto"><span className="ic">📷</span><div><b>{lida}</b>Confira cada número com o rótulo antes de salvar.</div></div>}
         <div className="dica">Valores na matéria natural (como no rótulo do saco).</div>
         <div className="grade">
           {CAMPOS.map(([k, r, u]) => <CampoNumero key={k} rotulo={r} valor={v[k]} aoMudar={(x) => setV((s) => ({ ...s, [k]: x }))} unidade={u === 'R$/kg' ? 'R$' : u} nome={`ing_${k}`} />)}

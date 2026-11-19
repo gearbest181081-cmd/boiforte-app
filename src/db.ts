@@ -1,5 +1,5 @@
 // Banco de dados local (IndexedDB via Dexie). Tudo fica guardado no próprio celular.
-import Dexie, { type Table } from 'dexie';
+import Dexie, { type Transaction, type DBCore, type DBCoreMutateRequest, type DBCoreMutateResponse, type DBCoreTransaction, type Middleware, type Table } from 'dexie';
 import { media, ordenar, type PontoPeso } from './calc';
 import { calcularFormula, INGREDIENTES_PADRAO, type IngredienteNut, type ItemFormula, type TipoFormula } from './nutricao';
 import { precoMedioAposCompra, saldo, type TipoMov } from './estoque';
@@ -21,11 +21,12 @@ export const FASES: Record<Fase, string> = {
 };
 export const SEXOS: Record<Sexo, string> = { macho: 'Macho', femea: 'Fêmea', misto: 'Misto' };
 
-export interface Propriedade { id?: number; nome: string; municipio?: string; uf?: string; areaHa?: number; criadoEm: number }
-export interface Modulo { id?: number; propriedadeId: number; nome: string; criadoEm: number }
-export interface Piquete { id?: number; moduloId: number; nome: string; areaHa?: number; capim?: string; criadoEm: number }
+export interface Propriedade { id?: number; gid?: string; nome: string; municipio?: string; uf?: string; areaHa?: number; criadoEm: number }
+export interface Modulo { id?: number; gid?: string; propriedadeId: number; nome: string; criadoEm: number }
+export interface Piquete { id?: number; gid?: string; moduloId: number; nome: string; areaHa?: number; capim?: string; criadoEm: number }
 export interface Lote {
   id?: number;
+  gid?: string;
   propriedadeId: number;
   piqueteId?: number | null;
   nome: string;
@@ -43,10 +44,11 @@ export interface Lote {
   obs?: string;
   criadoEm: number;
 }
-export interface Animal { id?: number; loteId: number; brinco: string; sexo?: Sexo; raca?: string; ativo: boolean; criadoEm: number }
+export interface Animal { id?: number; gid?: string; loteId: number; brinco: string; sexo?: Sexo; raca?: string; ativo: boolean; criadoEm: number }
 export interface PesoAnimal { animalId: number; peso: number }
 export interface Pesagem {
   id?: number;
+  gid?: string;
   loteId: number;
   data: string;
   tipo: 'media' | 'individual';
@@ -57,9 +59,10 @@ export interface Pesagem {
   criadoEm: number;
 }
 
-export interface Ingrediente extends IngredienteNut { id?: number; diasAlerta?: number; ativo?: boolean; criadoEm: number }
+export interface Ingrediente extends IngredienteNut { id?: number; gid?: string; diasAlerta?: number; ativo?: boolean; criadoEm: number }
 export interface Formula {
   id?: number;
+  gid?: string;
   nome: string;
   tipo: TipoFormula;
   unidade: 'pct' | 'kg';
@@ -73,6 +76,7 @@ export interface Formula {
 }
 export interface Movimento {
   id?: number;
+  gid?: string;
   ingredienteId?: number; // estoque de um insumo...
   formulaId?: number; // ...ou de uma mistura batida
   data: string;
@@ -84,9 +88,10 @@ export interface Movimento {
   obs?: string;
   criadoEm: number;
 }
-export interface Batida { id?: number; formulaId: number; data: string; kg: number; custoTotal: number; itens: { ingredienteId: number; kg: number; custo: number }[]; criadoEm: number }
+export interface Batida { id?: number; gid?: string; formulaId: number; data: string; kg: number; custoTotal: number; itens: { ingredienteId: number; kg: number; custo: number }[]; criadoEm: number }
 export interface Fornecimento {
   id?: number;
+  gid?: string;
   loteId: number;
   formulaId: number;
   data: string;
@@ -99,20 +104,21 @@ export interface Fornecimento {
 }
 export interface Config { chave: string; valor: number }
 export interface Lancamento {
-  id?: number; data: string; tipo: 'despesa' | 'receita'; categoria: Categoria; descricao?: string; valor: number;
+  id?: number; gid?: string; data: string; tipo: 'despesa' | 'receita'; categoria: Categoria; descricao?: string; valor: number;
   loteId?: number | null; // vazio = custo indireto, rateado entre os lotes
   origem?: 'manual' | 'compra_lote' | 'sanidade'; refId?: number; criadoEm: number;
+  compraQtd?: number; compraPreco?: number; compraComissao?: number; compraFrete?: number; compraNf?: number;
 }
-export interface CustoFixo { id?: number; nome: string; valorMensal: number; desde: string; ate?: string | null; criadoEm: number }
+export interface CustoFixo { id?: number; gid?: string; nome: string; valorMensal: number; desde: string; ate?: string | null; criadoEm: number }
 export interface Venda {
-  id?: number; loteId: number; data: string; tipo: 'venda' | 'morte'; cabecas: number; pesoMedio?: number; modo?: 'arroba' | 'cabeca'; preco?: number;
+  id?: number; gid?: string; loteId: number; data: string; tipo: 'venda' | 'morte'; cabecas: number; pesoMedio?: number; modo?: 'arroba' | 'cabeca'; preco?: number;
   rendimento?: number; comissaoPct?: number; frete?: number; outros?: number; valorBruto: number; valorLiquido: number; comprador?: string; obs?: string; criadoEm: number;
 }
 export interface EventoSanitario {
-  id?: number; loteId: number; data: string; feito: boolean; tipo: TipoSanidade; produto: string; dose?: string; qtdAnimais?: number; custo?: number;
+  id?: number; gid?: string; loteId: number; data: string; feito: boolean; tipo: TipoSanidade; produto: string; dose?: string; qtdAnimais?: number; custo?: number;
   carenciaDias?: number; repetirDias?: number; obs?: string; criadoEm: number;
 }
-export interface Lembrete { id?: number; titulo: string; mes: number; dia: number; antecedenciaDias: number; obs?: string; criadoEm: number }
+export interface Lembrete { id?: number; gid?: string; titulo: string; mes: number; dia: number; antecedenciaDias: number; obs?: string; criadoEm: number }
 
 export const TABELAS = ['propriedades', 'modulos', 'piquetes', 'lotes', 'animais', 'pesagens', 'ingredientes', 'formulas', 'movimentos', 'batidas', 'fornecimentos', 'config', 'lancamentos', 'custosFixos', 'vendas', 'sanidade', 'lembretes'] as const;
 
@@ -134,6 +140,9 @@ export class BoiForteDB extends Dexie {
   vendas!: Table<Venda, number>;
   sanidade!: Table<EventoSanitario, number>;
   lembretes!: Table<Lembrete, number>;
+  pendentes!: Table<Pendente, [string, number | string]>;
+  sincEstado!: Table<{ chave: string; valor: unknown }, string>;
+  sincEspera!: Table<{ tabela: string; gid: string; linha: unknown }, [string, string]>;
 
   constructor(nome = 'boiforte') {
     super(nome);
@@ -161,10 +170,41 @@ export class BoiForteDB extends Dexie {
       sanidade: '++id, loteId, data, feito',
       lembretes: '++id',
     });
+    // Etapa 4: cada registro ganha um identificador global (gid) para a nuvem, e toda gravação
+    // fica anotada em "pendentes" (na mesma transação) até ser enviada.
+    this.version(4).stores({
+      propriedades: '++id, nome, &gid',
+      modulos: '++id, propriedadeId, &gid',
+      piquetes: '++id, moduloId, &gid',
+      lotes: '++id, propriedadeId, piqueteId, encerrado, formulaId, &gid',
+      animais: '++id, loteId, brinco, &gid',
+      pesagens: '++id, loteId, data, &gid',
+      ingredientes: '++id, nome, &gid',
+      formulas: '++id, tipo, &gid',
+      movimentos: '++id, ingredienteId, formulaId, data, [origem+refId], &gid',
+      batidas: '++id, formulaId, data, &gid',
+      fornecimentos: '++id, loteId, data, [loteId+data], formulaId, &gid',
+      lancamentos: '++id, data, loteId, categoria, [origem+refId], &gid',
+      custosFixos: '++id, &gid',
+      vendas: '++id, loteId, data, &gid',
+      sanidade: '++id, loteId, data, feito, &gid',
+      lembretes: '++id, &gid',
+      pendentes: '[tabela+chave], tabela',
+      sincEstado: 'chave',
+      sincEspera: '[tabela+gid]',
+    }).upgrade(async (tx) => {
+      (tx as Transaction & { __silencioso?: boolean }).__silencioso = true;
+      for (const t of TABELAS) {
+        if (t === 'config') continue;
+        await tx.table(t).toCollection().modify((r: { gid?: string }) => { if (!r.gid) r.gid = novoGid(); });
+      }
+    });
+    this.use(middlewarePendentes);
     // Toda gravação passa pela validação, venha de onde vier.
     for (const t of TABELAS) {
       const tabela = this.table(t);
       tabela.hook('creating', (_pk, obj) => {
+        if (t !== 'config' && !(obj as { gid?: string }).gid) (obj as { gid?: string }).gid = novoGid();
         const limpo = validarRegistro(t, obj);
         for (const k of Object.keys(obj)) if (!(k in limpo)) delete (obj as any)[k];
         Object.assign(obj, limpo);
@@ -180,6 +220,77 @@ export class BoiForteDB extends Dexie {
     }
   }
 }
+
+// ---------- Anotação das alterações para a nuvem ----------
+
+export function novoGid(): string {
+  const c = globalThis.crypto as Crypto & { randomUUID?: () => string };
+  if (c.randomUUID) return c.randomUUID();
+  const b = c.getRandomValues(new Uint8Array(16)); // navegadores antigos, sem randomUUID
+  b[6] = (b[6] & 0x0f) | 0x40; b[8] = (b[8] & 0x3f) | 0x80;
+  const h = [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
+export interface Pendente { tabela: string; chave: number | string; op: 'put' | 'del'; gid?: string; em: number; erro?: string }
+const SINC = new Set<string>(TABELAS);
+
+/** Marca a transação atual (e as de dentro dela) para NÃO irem para a nuvem. */
+function silenciosa(): boolean {
+  for (let t = Dexie.currentTransaction as (Transaction & { __silencioso?: boolean; parent?: unknown }) | null; t; t = t.parent as typeof t) if (t.__silencioso) return true;
+  return false;
+}
+
+/**
+ * Grava sem marcar para envio (apagar o celular, aplicar o que veio da nuvem).
+ * Tudo o que for feito dentro de fn, na mesma transação, fica de fora da fila.
+ */
+export function semAnotar<T>(tabelas: string[], fn: () => Promise<T>): Promise<T> {
+  return db.transaction('rw', tabelas, async (tx) => {
+    (tx as Transaction & { __silencioso?: boolean }).__silencioso = true;
+    return fn();
+  });
+}
+
+const middlewarePendentes: Middleware<DBCore> = {
+  stack: 'dbcore',
+  name: 'pendentes',
+  create(down) {
+    return {
+      ...down,
+      transaction(stores, mode, opts) {
+        const lista = mode === 'readwrite' && stores.some((s) => SINC.has(s)) && !stores.includes('pendentes') ? [...stores, 'pendentes'] : stores;
+        return down.transaction(lista, mode, opts);
+      },
+      table(nome) {
+        const t = down.table(nome);
+        if (!SINC.has(nome)) return t;
+        const anotar = (trans: DBCoreTransaction, lista: Pendente[]) =>
+          lista.length ? down.table('pendentes').mutate({ type: 'put', trans, values: lista }) : Promise.resolve();
+        return {
+          ...t,
+          async mutate(req: DBCoreMutateRequest): Promise<DBCoreMutateResponse> {
+            if (silenciosa()) return t.mutate(req);
+            const em = Date.now();
+            if (req.type === 'delete' || req.type === 'deleteRange') {
+              let chaves: unknown[];
+              if (req.type === 'delete') chaves = req.keys;
+              else chaves = (await t.query({ trans: req.trans, query: { index: t.schema.primaryKey, range: req.range }, values: false })).result;
+              const antes = nome === 'config' ? [] : await t.getMany({ trans: req.trans, keys: chaves });
+              const res = await t.mutate(req);
+              await anotar(req.trans, chaves.map((k, i) => ({ tabela: nome, chave: k as number | string, op: 'del', gid: nome === 'config' ? String(k) : (antes[i] as { gid?: string } | undefined)?.gid, em })));
+              return res;
+            }
+            const res = await t.mutate(req);
+            const chaves = (res.results ?? []).filter((_, i) => !res.failures?.[i]);
+            await anotar(req.trans, chaves.map((k) => ({ tabela: nome, chave: k as number | string, op: 'put', em })));
+            return res;
+          },
+        };
+      },
+    };
+  },
+};
 
 export let db = new BoiForteDB();
 /** Só para testes: troca o banco por outro isolado. */
@@ -479,7 +590,10 @@ export async function registrarCompraLote(loteId: number, d: { data: string; pre
     const valor = custoCompra(qtd, d.precoCab, d.comissaoPct, d.frete, d.nfGta);
     await db.lancamentos.where('[origem+refId]').equals(['compra_lote', loteId]).delete();
     const desc = `${qtd} cab × R$ ${d.precoCab.toLocaleString('pt-BR')} + ${(d.comissaoPct * 100).toLocaleString('pt-BR')}% comissão + frete + NF/GTA`;
-    return db.lancamentos.add({ data: d.data, tipo: 'despesa', categoria: 'compra_animais', descricao: desc, valor: Math.round(valor * 100) / 100, loteId, origem: 'compra_lote', refId: loteId, criadoEm: Date.now() });
+    return db.lancamentos.add({
+      data: d.data, tipo: 'despesa', categoria: 'compra_animais', descricao: desc, valor: Math.round(valor * 100) / 100, loteId, origem: 'compra_lote', refId: loteId,
+      compraQtd: qtd, compraPreco: d.precoCab, compraComissao: d.comissaoPct, compraFrete: d.frete, compraNf: d.nfGta, criadoEm: Date.now(),
+    });
   });
 }
 
@@ -535,7 +649,7 @@ export async function concluirEventoSanitario(id: number, data: string, custo?: 
   return db.transaction('rw', db.sanidade, db.lancamentos, async () => {
     const e = await db.sanidade.get(id);
     if (!e) throw new ErroValidacao('Aplicação não encontrada.');
-    const { id: _i, criadoEm: _c, ...resto } = e;
+    const { id: _i, criadoEm: _c, gid: _g, ...resto } = e;
     await salvarEventoSanitario({ ...resto, feito: true, data, custo: custo ?? e.custo }, id);
     if (e.repetirDias) await db.sanidade.add({ ...resto, feito: false, data: somaDias(data, e.repetirDias), custo: e.custo, criadoEm: Date.now() });
   });

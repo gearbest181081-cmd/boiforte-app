@@ -16,11 +16,15 @@ import { Financeiro } from './pages/Financeiro';
 import { Sanidade } from './pages/Sanidade';
 import { Simular } from './pages/Simular';
 import { Relatorios } from './pages/Relatorios';
+import { Cotacoes } from './pages/Cotacoes';
+import { Nuvem } from './pages/Nuvem';
+import { SincAutomatica } from './nuvem/useNuvem';
 
 export function App() {
   return (
     <HashRouter>
       <AvisoProvider>
+        <SincAutomatica />
         <Routes>
           <Route path="/" element={<Inicio />} />
           <Route path="/lotes" element={<Lotes />} />
@@ -40,6 +44,8 @@ export function App() {
           <Route path="/sanidade" element={<Sanidade />} />
           <Route path="/simular" element={<Simular />} />
           <Route path="/relatorios" element={<Relatorios />} />
+          <Route path="/nuvem" element={<Nuvem />} />
+          <Route path="/cotacoes" element={<Cotacoes />} />
           <Route path="*" element={<Inicio />} />
         </Routes>
         <nav className="baixo" aria-label="Menu principal">

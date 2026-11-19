@@ -10,12 +10,14 @@ import { GraficoCrescimento } from '../components/Grafico';
 import { Indicador, Opcoes, Topo, useAviso } from '../components/ui';
 import { LoteFinanceiro } from './LoteFinanceiro';
 import { LoteSanidade } from './Sanidade';
+import { usePapel } from '../nuvem/useNuvem';
 
 export function LoteDetalhe() {
   const { id } = useParams();
   const loteId = Number(id);
   const nav = useNavigate();
   const aviso = useAviso();
+  const papel = usePapel();
   const [aba, setAba] = useState<'resumo' | 'pesagens' | 'animais' | 'dinheiro' | 'saude'>('resumo');
   const dados = useLiveQuery(async () => {
     const lote = await db.lotes.get(loteId);
@@ -77,7 +79,7 @@ export function LoteDetalhe() {
           { valor: 'resumo', rotulo: 'Resumo' },
           { valor: 'pesagens', rotulo: `Pesagens (${pesagens.length})` },
           ...(lote.controle === 'individual' ? [{ valor: 'animais' as const, rotulo: `Animais (${animais.length})` }] : []),
-          { valor: 'dinheiro', rotulo: 'Dinheiro' },
+          ...(papel !== 'vaqueiro' ? [{ valor: 'dinheiro' as const, rotulo: 'Dinheiro' }] : []),
           { valor: 'saude', rotulo: 'Saúde' },
         ]} />
         <div style={{ height: 14 }} />

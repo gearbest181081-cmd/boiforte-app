@@ -1,0 +1,22 @@
+{
+  "packageId": "br.com.boiforte.app",
+  "host": "SEU-DOMINIO",
+  "name": "BoiForte - Gestão do Rebanho",
+  "launcherName": "BoiForte",
+  "display": "standalone",
+  "orientation": "portrait",
+  "themeColor": "#1f5130",
+  "navigationColor": "#1f5130",
+  "backgroundColor": "#f6f3ea",
+  "enableNotifications": false,
+  "startUrl": "/",
+  "iconUrl": "https://SEU-DOMINIO/icon-512.png",
+  "maskableIconUrl": "https://SEU-DOMINIO/icon-512.png",
+  "webManifestUrl": "https://SEU-DOMINIO/manifest.webmanifest",
+  "appVersionName": "0.4.0",
+  "appVersionCode": 4,
+  "signingKey": { "path": "./boiforte.keystore", "alias": "boiforte" },
+  "fallbackType": "customtabs",
+  "features": {},
+  "minSdkVersion": 24
+}
