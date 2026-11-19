@@ -15,7 +15,7 @@ let cliente: Promise<SupabaseClient> | null = null;
 export function sb(): Promise<SupabaseClient> {
   if (!nuvemConfigurada()) return Promise.reject(new Error('A nuvem ainda não foi configurada neste app.'));
   cliente ??= import('@supabase/supabase-js').then(({ createClient }) =>
-    createClient(URL_NUVEM!, CHAVE_PUBLICA!, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storageKey: 'boiforte-sessao' } }));
+    createClient(URL_NUVEM!, CHAVE_PUBLICA!, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: 'boiforte-sessao' } }));
   return cliente;
 }
 
