@@ -42,7 +42,7 @@ const RE_EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
 export async function pedirCodigo(email: string) {
   const e = email.trim().toLowerCase();
   if (!RE_EMAIL.test(e)) throw new Error('Confira o e-mail.');
-  const { error } = await (await sb()).auth.signInWithOtp({ email: e, options: { shouldCreateUser: true } });
+  const { error } = await (await sb()).auth.signInWithOtp({ email: e, options: { shouldCreateUser: true, emailRedirectTo: location.origin + location.pathname } });
   if (error) throw erro(error);
 }
 
