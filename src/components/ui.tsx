@@ -47,7 +47,7 @@ export function Topo({ titulo, voltar }: { titulo: string; voltar?: boolean }) {
   const online = useOnline();
   return (
     <header className="topo">
-      {voltar && <button className="voltar" aria-label="Voltar" onClick={() => nav(-1)}>‹</button>}
+      {voltar && <button className="voltar" aria-label="Voltar" onClick={() => ((window.history.state?.idx ?? 0) > 0 ? nav(-1) : nav('/', { replace: true }))}>‹</button>}
       <h1>{titulo}</h1>
       {!online && <span className="offline" title="Tudo continua sendo salvo no celular">Sem internet</span>}
     </header>

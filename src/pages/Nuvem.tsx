@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { useNavigate } from 'react-router-dom';
 import { db } from '../db';
 import { NOMES_TABELA } from '../nuvem/nomes';
 import {
@@ -154,6 +155,7 @@ function Escolher({ email, aoSair }: { email: string; aoSair: () => void }) {
 }
 
 function Ligado({ aoSair }: { aoSair: () => void }) {
+  const nav = useNavigate();
   const aviso = useAviso();
   const est = useEstadoNuvem();
   const [ocupado, setOcupado] = useState(false);
@@ -190,6 +192,7 @@ function Ligado({ aoSair }: { aoSair: () => void }) {
         </div>
       )}
       <Equipe fazendaId={f.id} souDono={f.papel === 'dono'} />
+      <button className="btn largo" style={{ marginTop: 16 }} onClick={() => nav('/', { replace: true })}>Concluir e voltar ao início</button>
       <div className="botoes" style={{ marginTop: 16 }}>
         <button className="btn sec" onClick={desligar}>Desligar este celular</button>
         <button className="btn sec" onClick={async () => { await sair(); aoSair(); }}>Sair da conta</button>
