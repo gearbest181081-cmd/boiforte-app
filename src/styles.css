@@ -199,3 +199,6 @@ table.tab td.n, table.tab th.n { text-align: right; }
 details.cartao summary { font-weight: 700; cursor: pointer; min-height: 32px; }
 hr { border: 0; border-top: 1px solid var(--borda); margin: 16px 0; }
 @media (max-width: 480px) { .grade > .campo { grid-column: 1 / -1; } }
+
+/* botão com cara de link (ex.: brinco na tabela que abre o relatório do animal) */
+button.link { background: none; border: 0; padding: 4px 0; color: var(--verde); text-decoration: underline; font: inherit; cursor: pointer; }

@@ -1,34 +1,18 @@
-import { diaNum, fmtData, type PontoPeso, type Projecao } from '../calc';
+import { diaNum, fmtData, fmtNum, type PontoPeso, type Projecao } from '../calc';
+import { escalaCurva, escalaGmd } from '../curva';
 
 /** Curva de crescimento: peso real, linha da meta e projeção até o peso alvo. */
 export function GraficoCrescimento({ pontos, gmdMeta, pesoAlvo, projecao }: {
   pontos: PontoPeso[]; gmdMeta?: number | null; pesoAlvo?: number | null; projecao?: Projecao | null;
 }) {
-  if (pontos.length === 0) return <p className="mudo">Sem pesagens ainda.</p>;
+  const e = escalaCurva(pontos, { gmdMeta, pesoAlvo, projecao });
+  if (!e) return <p className="mudo">Sem pesagens ainda.</p>;
   const W = 340, H = 220, m = { e: 42, d: 12, t: 12, b: 30 };
-  const x0 = diaNum(pontos[0].data);
+  const { x0, xFim, yMin, yMax, ys, proj, meta } = e;
   const ult = pontos[pontos.length - 1];
-  let xFim = diaNum(ult.data);
-  const proj = projecao && !projecao.jaAtingiu && projecao.diasFaltando <= 730 ? projecao : null;
-  if (proj) xFim = Math.max(xFim, diaNum(proj.dataPrevista));
-  if (xFim === x0) xFim = x0 + 30;
-
-  const pesos = pontos.map((p) => p.peso);
-  if (pesoAlvo) pesos.push(pesoAlvo);
-  const bruto = { min: Math.min(...pesos), max: Math.max(...pesos) };
-  const folga = Math.max(10, (bruto.max - bruto.min) * 0.1);
-  const passo = [5, 10, 20, 25, 50, 100, 200].find((p) => p * 4 >= bruto.max - bruto.min + 2 * folga) ?? 250;
-  const yMin = Math.max(0, Math.floor((bruto.min - folga) / passo) * passo);
-  const yMax = yMin + Math.ceil((bruto.max + folga - yMin) / passo) * passo;
-
   const sx = (d: number) => m.e + ((d - x0) / (xFim - x0)) * (W - m.e - m.d);
   const sy = (p: number) => H - m.b - ((p - yMin) / (yMax - yMin)) * (H - m.t - m.b);
   const linhaReal = pontos.map((p, i) => `${i ? 'L' : 'M'}${sx(diaNum(p.data)).toFixed(1)},${sy(p.peso).toFixed(1)}`).join(' ');
-
-  const ys: number[] = [];
-  for (let v = yMin; v <= yMax + 1e-9; v += passo) ys.push(v);
-  let meta = gmdMeta && gmdMeta > 0 ? { x1: x0, y1: pontos[0].peso, x2: xFim, y2: pontos[0].peso + gmdMeta * (xFim - x0) } : null;
-  if (meta && meta.y2 > yMax) meta = { ...meta, x2: x0 + (yMax - meta.y1) / gmdMeta!, y2: yMax };
 
   return (
     <figure style={{ margin: 0 }}>
@@ -67,6 +51,51 @@ export function GraficoCrescimento({ pontos, gmdMeta, pesoAlvo, projecao }: {
         {proj && <span><i style={{ background: 'repeating-linear-gradient(90deg,var(--verde) 0 5px,transparent 5px 9px)' }} />Projeção</span>}
         {meta && <span><i style={{ background: 'var(--texto-2)' }} />Meta de GMD</span>}
         {pesoAlvo ? <span><i style={{ background: 'var(--ouro)' }} />Peso alvo</span> : null}
+      </figcaption>
+    </figure>
+  );
+}
+
+/** GMD de cada período entre pesagens, em barras. Vermelho quando ficou abaixo da meta. */
+export function GraficoGmd({ periodos, gmdMeta }: { periodos: { ate: string; gmd: number | null }[]; gmdMeta?: number | null }) {
+  const ps = periodos.filter((p) => p.gmd != null) as { ate: string; gmd: number }[];
+  if (!ps.length) return <p className="mudo">O ganho por período aparece a partir da segunda pesagem.</p>;
+  const W = 340, H = 200, m = { e: 42, d: 8, t: 18, b: 28 };
+  const { min, max, ys } = escalaGmd(ps.map((p) => p.gmd), gmdMeta);
+  const sy = (v: number) => H - m.b - ((v - min) / (max - min)) * (H - m.t - m.b);
+  const larg = (W - m.e - m.d) / ps.length;
+  const barra = Math.min(46, larg * 0.62);
+  const meta = gmdMeta && gmdMeta > 0 ? gmdMeta : null;
+  return (
+    <figure style={{ margin: 0 }}>
+      <svg className="grafico" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Ganho de peso por dia em cada período">
+        {ys.map((v) => (
+          <g key={v}>
+            <line x1={m.e} x2={W - m.d} y1={sy(v)} y2={sy(v)} stroke="var(--borda)" strokeWidth={v === 0 ? 1.5 : 1} />
+            <text x={m.e - 6} y={sy(v) + 4} textAnchor="end" fontSize="11" fill="var(--texto-2)">{fmtNum(v, 2)}</text>
+          </g>
+        ))}
+        {ps.map((p, i) => {
+          const cx = m.e + larg * i + larg / 2;
+          const ruim = meta != null && p.gmd < meta * 0.9;
+          const y1 = sy(Math.max(0, p.gmd)), y2 = sy(Math.min(0, p.gmd));
+          return (
+            <g key={p.ate + i}>
+              <rect x={cx - barra / 2} y={y1} width={barra} height={Math.max(1, y2 - y1)} rx={3} fill={ruim ? 'var(--alerta)' : 'var(--verde)'}>
+                <title>{`até ${fmtData(p.ate)}: ${fmtNum(p.gmd, 3)} kg/dia`}</title>
+              </rect>
+              {ps.length <= 8 && <text x={cx} y={p.gmd >= 0 ? y1 - 4 : y2 + 12} textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--texto)">{p.gmd.toFixed(3).replace('.', ',')}</text>}
+              {(ps.length <= 8 || i === 0 || i === ps.length - 1) && <text x={cx} y={H - 10} textAnchor="middle" fontSize="11" fill="var(--texto-2)">{fmtData(p.ate).slice(0, 5)}</text>}
+            </g>
+          );
+        })}
+        {meta != null && (
+          <line x1={m.e} x2={W - m.d} y1={sy(meta)} y2={sy(meta)} stroke="var(--texto-2)" strokeWidth={1.5} strokeDasharray="6 4" />
+        )}
+      </svg>
+      <figcaption className="legenda">
+        <span><i style={{ background: 'var(--verde)' }} />GMD do período (kg/dia)</span>
+        {meta != null && <><span><i style={{ background: 'var(--alerta)' }} />Mais de 10% abaixo da meta</span><span><i style={{ background: 'var(--texto-2)' }} />Meta {meta.toFixed(3).replace('.', ',')}</span></>}
       </figcaption>
     </figure>
   );

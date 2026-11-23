@@ -7,7 +7,7 @@ import { lerPesagemFalada } from '../voz';
 import { BotaoMic, CampoNumero, num, Opcoes, Topo, useAviso } from '../components/ui';
 import { BotaoBalanca } from '../components/Balanca';
 import { BotaoFoto } from '../components/Foto';
-import type { LeituraBalanca } from '../../supabase/functions/_shared/foto';
+import type { LeituraBalanca, LeituraBalancaLote } from '../../supabase/functions/_shared/foto';
 
 type Linha = { brinco: string; peso: string };
 
@@ -22,8 +22,10 @@ export function Pesagem() {
   const animais = useLiveQuery(() => (sel ? db.animais.where('loteId').equals(sel).toArray() : Promise.resolve([] as Animal[])), [sel]);
 
   const [data, setData] = useState(hojeISO());
-  const [modo, setModo] = useState<'media' | 'um_a_um'>('media');
+  // media: já tem o peso médio; total: o lote (ou um grupo) subiu todo na balança e o app divide; um_a_um: cada animal.
+  const [modo, setModo] = useState<'media' | 'total' | 'um_a_um'>('media');
   const [pesoMedio, setPesoMedio] = useState('');
+  const [pesoTotal, setPesoTotal] = useState('');
   const [qtd, setQtd] = useState('');
   const [linhas, setLinhas] = useState<Linha[]>([{ brinco: '', peso: '' }]);
   const [obs, setObs] = useState('');
@@ -47,7 +49,10 @@ export function Pesagem() {
 
   const anterior = useMemo(() => (pesagens ? resumo(pontosDoLote(pesagens)) : null), [pesagens]);
   const pesosValidos = linhas.map((l) => num(l.peso)).filter((x): x is number => x != null && x > 0);
-  const mediaAtual = modo === 'media' ? num(pesoMedio) : media(pesosValidos);
+  const qtdNum = num(qtd);
+  const mediaAtual = modo === 'media' ? num(pesoMedio)
+    : modo === 'total' ? (num(pesoTotal) && qtdNum && qtdNum > 0 ? num(pesoTotal)! / qtdNum : null)
+    : media(pesosValidos);
   const gmdPrevia = anterior?.pesoAtual != null && anterior.dataUltima && mediaAtual
     ? gmd({ data: anterior.dataUltima, peso: anterior.pesoAtual }, { data, peso: mediaAtual }) : null;
 
@@ -68,6 +73,21 @@ export function Pesagem() {
     });
     aviso(brinco ? `Brinco ${brinco}: ${fmtKg(kg)}` : `Peso lido: ${fmtKg(kg)}`);
   };
+  /** Foto do visor com o lote todo: preenche o total (o app divide) ou a média, se a balança já mostrar. */
+  const leuLote = (r: LeituraBalancaLote) => {
+    if (!r.legivel) { aviso('Não deu para ler o peso. Chegue mais perto do visor e tente de novo.', true); return; }
+    if (r.quantidade) setQtd(String(r.quantidade));
+    const cab = r.quantidade ?? qtdNum;
+    if (r.pesoTotal != null && (r.pesoMedio == null || modo === 'total')) {
+      setModo('total');
+      setPesoTotal(String(r.pesoTotal).replace('.', ','));
+      aviso(cab ? `Peso do lote: ${fmtKg(r.pesoTotal, 0)} ÷ ${cab} cab = ${fmtKg(r.pesoTotal / cab)} por cabeça. Confira.` : `Peso do lote: ${fmtKg(r.pesoTotal, 0)}. Informe as cabeças pesadas.`);
+    } else if (r.pesoMedio != null) {
+      setModo('media');
+      setPesoMedio(String(r.pesoMedio).replace('.', ','));
+      aviso(`Peso médio lido: ${fmtKg(r.pesoMedio)}. Confira.`);
+    }
+  };
   const ouviuPesagem = (texto: string) => {
     for (const t of texto.split('|')) {
       const r = lerPesagemFalada(t);
@@ -80,23 +100,34 @@ export function Pesagem() {
     if (!lote) return aviso('Escolha o lote.', true);
     if (lote.dataEntrada && data < lote.dataEntrada) return aviso('A data da pesagem é antes da entrada do lote.', true);
     setSalvando(true);
+    let pesagemId: number;
     try {
       if (individual) {
         const itens = linhas.map((l) => ({ brinco: l.brinco, peso: num(l.peso) ?? 0 }));
         if (itens.some((i) => i.peso > 0 && !i.brinco.trim())) { aviso('Tem peso sem brinco. Preencha o brinco.', true); return; }
-        await registrarPesagemIndividual(lote.id!, data, itens, obs.trim() || undefined);
+        pesagemId = await registrarPesagemIndividual(lote.id!, data, itens, obs.trim() || undefined);
       } else if (modo === 'media') {
         const p = num(pesoMedio);
         const q = num(qtd);
         if (!p || p <= 0) { aviso('Informe o peso médio.', true); return; }
         if (p > 1500) { aviso('Peso muito alto. Confira o valor (em kg por cabeça).', true); return; }
-        await db.pesagens.add({ loteId: lote.id!, data, tipo: 'media', pesoMedio: p, qtdPesada: Math.round(q || lote.qtdCabecas), obs: obs.trim() || undefined, criadoEm: Date.now() });
+        pesagemId = await db.pesagens.add({ loteId: lote.id!, data, tipo: 'media', pesoMedio: p, qtdPesada: Math.round(q || lote.qtdCabecas), obs: obs.trim() || undefined, criadoEm: Date.now() });
+      } else if (modo === 'total') {
+        const t = num(pesoTotal);
+        const q = qtdNum;
+        if (!t || t <= 0) { aviso('Informe o peso total que a balança mostrou.', true); return; }
+        if (!q || q <= 0 || !Number.isInteger(q)) { aviso('Informe quantas cabeças subiram na balança.', true); return; }
+        const p = t / q;
+        if (p < 20 || p > 1500) { aviso(`Deu ${fmtKg(p)} por cabeça. Confira o peso total e o número de cabeças.`, true); return; }
+        const nota = `peso total ${fmtKg(t, 0)} ÷ ${q} cab`;
+        pesagemId = await db.pesagens.add({ loteId: lote.id!, data, tipo: 'media', pesoMedio: p, qtdPesada: q, obs: (obs.trim() ? `${obs.trim()} · ${nota}` : nota).slice(0, 300), criadoEm: Date.now() });
       } else {
         if (!pesosValidos.length) { aviso('Lance ao menos um peso.', true); return; }
-        await db.pesagens.add({ loteId: lote.id!, data, tipo: 'media', pesoMedio: media(pesosValidos)!, qtdPesada: pesosValidos.length, obs: (obs.trim() ? obs.trim() + ' · ' : '') + `média de ${pesosValidos.length} animais`, criadoEm: Date.now() });
+        pesagemId = await db.pesagens.add({ loteId: lote.id!, data, tipo: 'media', pesoMedio: media(pesosValidos)!, qtdPesada: pesosValidos.length, obs: ((obs.trim() ? obs.trim() + ' · ' : '') + `média de ${pesosValidos.length} animais`).slice(0, 300), criadoEm: Date.now() });
       }
       aviso('Pesagem salva no celular.');
-      nav(`/lotes/${lote.id}`, { replace: true });
+      // Logo depois de salvar, abre o relatório da pesagem para mandar no WhatsApp.
+      nav(`/lotes/${lote.id}/relatorio?nova=${pesagemId}`, { replace: true });
     } catch (e) {
       aviso((e as Error).message, true);
     } finally {
@@ -128,17 +159,26 @@ export function Pesagem() {
 
             {!individual && (
               <div className="campo">
-                <Opcoes valor={modo} aoMudar={setModo} opcoes={[
+                <Opcoes tres valor={modo} aoMudar={setModo} opcoes={[
                   { valor: 'media', rotulo: 'Peso médio', dica: 'já tenho a média' },
+                  { valor: 'total', rotulo: 'Lote todo', dica: 'o app divide' },
                   { valor: 'um_a_um', rotulo: 'Um a um', dica: 'o app tira a média' },
                 ]} />
               </div>
             )}
 
-            {modo === 'media' && !individual ? (
+            {(modo === 'media' || modo === 'total') && !individual ? (
               <>
-                <CampoNumero rotulo="Peso médio por cabeça" valor={pesoMedio} aoMudar={setPesoMedio} unidade="kg" nome="pesoMedio" />
+                {modo === 'media'
+                  ? <CampoNumero rotulo="Peso médio por cabeça" valor={pesoMedio} aoMudar={setPesoMedio} unidade="kg" nome="pesoMedio" />
+                  : <CampoNumero rotulo="Peso total na balança" valor={pesoTotal} aoMudar={setPesoTotal} unidade="kg" nome="pesoTotal" dica="O peso de todos os animais que subiram juntos." />}
                 <CampoNumero rotulo="Cabeças pesadas" valor={qtd} aoMudar={setQtd} unidade="cab" nome="qtdPesada" />
+                {modo === 'total' && mediaAtual ? (
+                  <div className="dica" data-testid="contaMedia">{fmtKg(num(pesoTotal), 0)} ÷ {qtdNum} cab = <b>{fmtKg(mediaAtual)} por cabeça</b></div>
+                ) : null}
+                <div style={{ marginBottom: 14 }}>
+                  <BotaoFoto<LeituraBalancaLote> tipo="balanca_lote" sempre rotulo="📷 Ler o peso pela foto da balança" aoErro={(m) => aviso(m, true)} aoLer={leuLote} />
+                </div>
               </>
             ) : (
               <div className="cartao">
@@ -166,8 +206,10 @@ export function Pesagem() {
                 </div>
                 <div style={{ marginTop: 10, display: 'grid', gap: 8 }}>
                   <BotaoBalanca aoPesar={(kg) => colocarPeso(null, kg)} aoErro={(m) => aviso(m, true)} />
-                  <BotaoFoto<LeituraBalanca> tipo="balanca" rotulo="Ler o visor da balança pela foto" aoErro={(m) => aviso(m, true)}
-                    aoLer={(r) => (r.legivel && r.peso ? colocarPeso(r.brinco, r.peso) : aviso('Não deu para ler o peso. Tente de novo.', true))} />
+                  <BotaoFoto<LeituraBalanca> tipo="balanca" sempre rotulo="📷 Ler o peso pela foto da balança" aoErro={(m) => aviso(m, true)}
+                    aoLer={(r) => (!r.legivel || !r.peso ? aviso('Não deu para ler o peso. Chegue mais perto do visor e tente de novo.', true)
+                      : r.peso > 1500 ? aviso(`A foto mostrou ${fmtKg(r.peso, 0)}: parece o peso de mais de um animal. Use "Lote todo" ou confira.`, true)
+                      : colocarPeso(r.brinco, r.peso))} />
                 </div>
               </div>
             )}

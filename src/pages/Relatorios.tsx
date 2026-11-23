@@ -3,12 +3,12 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { useTudo } from '../hooks';
 import { CRITERIOS, montarRelatorio, type Criterio } from '../relatorios';
-import { compartilharArquivo, fmtNumeroCelula, gerarPdf, gerarXlsx, linkWhatsApp, type Celula } from '../exportar';
+import { compartilharArquivo, fmtCelula, gerarPdf, gerarXlsx, linkWhatsApp, type Celula } from '../exportar';
 import { hojeISO } from '../calc';
 import { Opcoes, Topo, useAviso } from '../components/ui';
 import { periodoDatas, type Periodo } from './Financeiro';
 
-const fmt = (c: Celula) => (c == null ? '—' : typeof c === 'number' ? fmtNumeroCelula(c) : c);
+const fmt = (c: Celula) => (c == null ? '—' : fmtCelula(c));
 
 export function Relatorios() {
   const tudo = useTudo();
