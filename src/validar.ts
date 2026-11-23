@@ -90,6 +90,12 @@ const ESQUEMAS_BASE: Record<string, Record<string, Regra>> = {
     repetirDias: NUM(0, 730, false, true), obs: TXT(300), criadoEm: CRIADO,
   },
   lembretes: { id: ID(false), titulo: TXT(100, true), mes: NUM(1, 12, true, true), dia: NUM(1, 31, true, true), antecedenciaDias: NUM(0, 365, true, true), obs: TXT(200), criadoEm: CRIADO },
+  // Funcionários: o salário entra no custo da fazenda e da @. "usuarioId" liga à conta do app (pessoa da equipe na nuvem);
+  // no servidor, só o dono liga, e só a quem é da equipe. O vaqueiro não recebe esta tabela.
+  funcionarios: {
+    id: ID(false), nome: TXT(80, true), funcao: TXT(60, true), salario: NUM(0, 1_000_000, true), encargos: NUM(0, 1_000_000),
+    admissao: DATA(), saida: DATA(false), telefone: TXT(20), usuarioId: TXT(36), obs: TXT(300), criadoEm: CRIADO,
+  },
 };
 
 /** Todas as tabelas (menos config, que usa a chave) ganham o identificador global "gid". */
@@ -164,7 +170,7 @@ function limpar(esquema: Record<string, Regra>, obj: unknown, rotulo: string): R
 export const ROTULOS: Record<string, string> = {
   propriedades: 'Fazenda', modulos: 'Módulo', piquetes: 'Piquete', lotes: 'Lote', animais: 'Animal', pesagens: 'Pesagem',
   ingredientes: 'Ingrediente', formulas: 'Fórmula', movimentos: 'Estoque', batidas: 'Batida', fornecimentos: 'Fornecimento', config: 'Configuração',
-  lancamentos: 'Lançamento', custosFixos: 'Custo fixo', vendas: 'Venda', sanidade: 'Sanidade', lembretes: 'Lembrete',
+  lancamentos: 'Lançamento', custosFixos: 'Custo fixo', vendas: 'Venda', sanidade: 'Sanidade', lembretes: 'Lembrete', funcionarios: 'Funcionário',
 };
 
 /** Valida e devolve uma cópia limpa do registro (sem campos desconhecidos). */

@@ -369,12 +369,36 @@ function confere(cond, msg) {
     const fz = await page.locator('main').innerText();
     confere(/Venda de animais/.test(fz) && /Sanidade/.test(fz), 'DRE da fazenda mostra venda e sanidade');
     await page.getByRole('radio', { name: 'Custos fixos' }).click();
-    await page.locator('input[name=fixoNome]').fill('Vaqueiro');
-    await page.locator('input[name=fixoValor]').fill('3000');
+    await page.locator('input[name=fixoNome]').fill('Energia');
+    await page.locator('input[name=fixoValor]').fill('300');
     await page.getByRole('button', { name: 'Salvar custo fixo' }).click();
-    await page.getByText('Vaqueiro').first().waitFor();
+    await page.getByText('Energia').first().waitFor();
     confere(true, 'custo fixo cadastrado');
     await foto('16-financeiro');
+
+    console.log('14b. Funcionários com salário');
+    await page.goto(URL + '#/mais');
+    await page.getByRole('link', { name: 'Funcionários' }).click();
+    await page.getByRole('link', { name: '+ Cadastrar funcionário' }).click();
+    await page.locator('input[name=funcNome]').fill('João');
+    await page.getByRole('button', { name: 'Vaqueiro', exact: true }).click();
+    await page.locator('input[name=funcSalario]').fill('2400');
+    await page.getByRole('button', { name: /Somar 13º e férias/ }).click();
+    confere(/Total: R\$\s2\.866,67 por mês/.test(await page.getByTestId('funcCusto').innerText()), 'salário + 13º e férias = R$ 2.866,67 por mês');
+    await page.locator('input[name=funcAdmissao]').fill('2026-09-01');
+    confere((await page.getByTestId('acessoApp').innerText()).includes('Nuvem e equipe'), 'sem nuvem, explica como chamar o funcionário para o app');
+    await foto('16b-funcionario');
+    await page.getByRole('button', { name: 'Salvar', exact: true }).click();
+    await page.getByTestId('cartaoFuncionario').waitFor();
+    confere(/Folha deste mês: R\$\s2\.866,67/.test(await page.getByTestId('folhaTotal').innerText()), 'folha do mês na lista');
+    await foto('16c-funcionarios');
+    await page.getByRole('button', { name: 'Voltar' }).click();
+    await page.getByRole('button', { name: 'Carregar exemplo' }).waitFor();
+    confere(true, 'botão voltar sai dos funcionários');
+    await page.goto(URL + '#/financeiro');
+    await page.getByRole('radio', { name: 'Tudo' }).click();
+    await page.getByTestId('resultadoPeriodo').waitFor();
+    confere((await page.locator('main').innerText()).includes('Salários dos funcionários'), 'salário entra no DRE da fazenda');
 
     console.log('15. Simulação');
     await page.goto(URL + '#/simular');
@@ -506,7 +530,7 @@ function confere(cond, msg) {
       const loteId = await p2.evaluate(() => new Promise((ok) => { const r = indexedDB.open('boiforte'); r.onsuccess = () => { const t = r.result.transaction('lotes').objectStore('lotes').getAll(); t.onsuccess = () => ok(t.result[0].id); }; }));
       const formulaId = await p2.evaluate(() => new Promise((ok) => { const r = indexedDB.open('boiforte'); r.onsuccess = () => { const t = r.result.transaction('formulas').objectStore('formulas').getAll(); t.onsuccess = () => ok(t.result[0]?.id ?? 'nova'); }; }));
       const telas = ['/lotes', '/lotes/novo', `/lotes/${loteId}`, `/lotes/${loteId}/editar`, `/lotes/${loteId}/relatorio`, '/pesar', `/pesar/${loteId}`, '/fazenda', '/mais', '/nutricao',
-        `/nutricao/formula/${formulaId}`, '/nutricao/formula/nova', '/nutricao/ingrediente/novo', '/estoque', '/trato', '/financeiro', '/sanidade', '/simular', '/relatorios', '/nuvem', '/cotacoes'];
+        `/nutricao/formula/${formulaId}`, '/nutricao/formula/nova', '/nutricao/ingrediente/novo', '/estoque', '/trato', '/financeiro', '/sanidade', '/simular', '/relatorios', '/nuvem', '/cotacoes', '/funcionarios', '/funcionarios/novo'];
       const semVoltar = [], semMic = [];
       for (const t of telas) {
         await p2.goto(URL + '#' + t);

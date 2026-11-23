@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { useTudo } from '../hooks';
-import { CATEGORIAS_DESPESA, CATEGORIAS_RECEITA, drePeriodo, fluxoCaixa, mesNome, NOMES_CATEGORIA, type Categoria } from '../financeiro';
+import { CATEGORIAS_DESPESA, CATEGORIAS_RECEITA, drePeriodo, fluxoCaixa, folhaComoFixos, mesNome, NOMES_CATEGORIA, type Categoria } from '../financeiro';
 import { fmtData, hojeISO } from '../calc';
 import { CampoData, CampoEscolha, CampoNumero, CampoTexto, num, Opcoes, Topo, useAviso } from '../components/ui';
 import { rs } from './Nutricao';
@@ -40,7 +41,7 @@ function Resumo() {
     if (!t) return null;
     const ini = p === 'tudo' ? [...t.lotes.map((l) => l.dataEntrada), ...t.lancamentos.map((l) => l.data)].sort()[0] ?? ate : de;
     const compras = t.movimentos.filter((m) => m.origem === 'compra' && m.valor).map((m) => ({ data: m.data, valor: m.valor! }));
-    return { dre: drePeriodo(ini, ate, t.lancamentos, t.vendas, t.fornecimentos, t.custosFixos), fluxo: fluxoCaixa(ini, ate, t.lancamentos, t.vendas, compras, t.custosFixos) };
+    return { dre: drePeriodo(ini, ate, t.lancamentos, t.vendas, t.fornecimentos, t.custosFixos, folhaComoFixos(t.funcionarios)), fluxo: fluxoCaixa(ini, ate, t.lancamentos, t.vendas, compras, t.custosFixos, folhaComoFixos(t.funcionarios)) };
   }, [t, p, de, ate]);
   if (!calc) return null;
   const { dre, fluxo } = calc;
@@ -163,7 +164,7 @@ function Fixos() {
   const [desde, setDesde] = useState(hojeISO().slice(0, 8) + '01');
   const salvar = async () => {
     const v = num(valor);
-    if (!nome.trim()) return aviso('Dê um nome. Ex.: "Salário do vaqueiro".', true);
+    if (!nome.trim()) return aviso('Dê um nome. Ex.: "Arrendamento do pasto".', true);
     if (!v || v <= 0) return aviso('Informe o valor por mês.', true);
     await db.custosFixos.add({ nome: nome.trim(), valorMensal: v, desde, criadoEm: Date.now() });
     setNome(''); setValor('');
@@ -172,7 +173,7 @@ function Fixos() {
   const total = (fixos ?? []).filter((f) => !f.ate || f.ate >= hojeISO()).reduce((t, f) => t + f.valorMensal, 0);
   return (
     <>
-      <div className="dica">Custos que existem todo mês, como salário do vaqueiro, arrendamento ou energia. O app divide pelo número de cabeças de cada lote, dia a dia, como a planilha fazia com o vaqueiro.</div>
+      <div className="dica">Custos que existem todo mês, como arrendamento ou energia. O app divide pelo número de cabeças de cada lote, dia a dia, como a planilha fazia com o vaqueiro. Salários: cadastre em <Link to="/funcionarios">Funcionários</Link> (não lance aqui de novo).</div>
       {fixos?.map((f) => (
         <div key={f.id} className="cartao linha-lote">
           <div><b>{f.nome}</b><div className="mudo">desde {fmtData(f.desde)}{f.ate ? ` até ${fmtData(f.ate)}` : ''}</div></div>

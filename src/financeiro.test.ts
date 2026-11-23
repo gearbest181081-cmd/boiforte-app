@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { cabecaDias, cabecasNoDia, calcularVenda, custoCompra, drePeriodo, dreLote, fluxoCaixa, ratear, variacao, type LoteFin, type VendaFin } from './financeiro';
+import { cabecaDias, cabecasNoDia, calcularVenda, custoCompra, custoMensalFuncionario, drePeriodo, dreLote, fluxoCaixa, folhaAtiva, folhaComoFixos, NOMES_CATEGORIA, ratear, variacao, type LoteFin, type VendaFin } from './financeiro';
 
 describe('compra e venda (planilha)', () => {
   it('custo de compra do Macho 1º lote: 30 × 3.260 × 1,02 + 850 = R$ 100.606', () => {
@@ -98,5 +98,45 @@ describe('DRE do período e fluxo de caixa', () => {
   it('variação percentual', () => {
     expect(variacao(100, 105)).toBeCloseTo(0.05, 9);
     expect(variacao(null, 105)).toBeNull();
+  });
+});
+
+describe('funcionários: salário no custo da fazenda e da @', () => {
+  const joao = { salario: 2400, encargos: 800, admissao: '2026-10-01' };
+  const ze = { salario: 1800, admissao: '2026-09-01', saida: '2026-10-31' };
+  it('custo por mês = salário + encargos; folha de hoje só conta quem está trabalhando', () => {
+    expect(custoMensalFuncionario(joao)).toBe(3200);
+    expect(custoMensalFuncionario(ze)).toBe(1800);
+    expect(folhaAtiva([joao, ze], '2026-11-15')).toBe(3200);
+    expect(folhaAtiva([joao, ze], '2026-10-15')).toBe(5000);
+    expect(folhaAtiva([{ ...joao, admissao: '2026-12-01' }], '2026-11-15')).toBe(0);
+  });
+  it('vira custo fixo da admissão até a saída (sem custo, fica de fora)', () => {
+    expect(folhaComoFixos([joao, ze, { salario: 0, admissao: '2026-01-01' }])).toEqual([
+      { nome: 'folha', valorMensal: 3200, desde: '2026-10-01', ate: null },
+      { nome: 'folha', valorMensal: 1800, desde: '2026-09-01', ate: '2026-10-31' },
+    ]);
+  });
+  it('DRE e fluxo de caixa ganham a linha de salários, separada dos custos fixos', () => {
+    const folha = folhaComoFixos([joao, ze]);
+    const d = drePeriodo('2026-11-01', '2026-11-30', [], [], [], [{ nome: 'x', valorMensal: 365 / 12, desde: '2026-01-01' }], folha);
+    expect(d.despesas.fixos).toBeCloseTo(30, 6);
+    expect(d.despesas.folha).toBeCloseTo((3200 * 12 / 365) * 30, 6); // o Zé saiu em outubro
+    expect(NOMES_CATEGORIA.folha).toBe('Salários dos funcionários');
+    const f = fluxoCaixa('2026-10-01', '2026-11-30', [], [], [], [], folha);
+    expect(f.map((m) => m.saidas)).toEqual([5000, 3200]);
+  });
+  it('rateado entre os lotes pelas cabeças, entra no custo da @ produzida do lote', () => {
+    const rat = ratear([A, B], [], [], folhaComoFixos([joao]), '2026-11-30');
+    // 16 a 30/11: A tem 30 cab e B 10 cab; antes do dia 16 só A
+    const dia = 3200 * 12 / 365;
+    expect(rat.get(1)! + rat.get(2)!).toBeCloseTo(dia * 30, 6);
+    expect(rat.get(2)).toBeCloseTo(dia * 15 * 10 / 40, 6);
+    const pontos = [{ data: '2026-11-01', peso: 200 }, { data: '2026-11-30', peso: 230 }];
+    const semFolha = dreLote({ lote: A, pontos, saidas: [], lancamentos: [], fornecimentos: [], rateio: 0, precoArroba: 320, rendimento: 0.5, taxaOportunidadeMes: 0, ate: '2026-11-30' });
+    const comFolha = dreLote({ lote: A, pontos, saidas: [], lancamentos: [], fornecimentos: [], rateio: 0, rateioFolha: rat.get(1), precoArroba: 320, rendimento: 0.5, taxaOportunidadeMes: 0, ate: '2026-11-30' });
+    expect(semFolha.custoArrobaProduzida).toBe(0);
+    expect(comFolha.custos.folha).toBeCloseTo(rat.get(1)!, 6);
+    expect(comFolha.custoArrobaProduzida).toBeCloseTo(rat.get(1)! / comFolha.arrobasProduzidas, 6);
   });
 });
