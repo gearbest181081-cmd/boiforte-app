@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { confirmarCodigo, pedirCodigo } from '../nuvem/cliente';
-import { useAviso } from './ui';
+import { CampoTexto, useAviso } from './ui';
 
 /** Entrada por e-mail, sem senha: chega um e-mail com um botão (e, quando o servidor mandar, um código). */
 export function Entrar({ aoEntrar }: { aoEntrar?: () => void }) {
@@ -25,14 +25,14 @@ export function Entrar({ aoEntrar }: { aoEntrar?: () => void }) {
       {!enviado ? (
         <>
           <p className="mudo">Sem senha: digite seu e-mail e mandamos uma mensagem para você entrar.</p>
-          <label className="campo"><span>Seu e-mail</span><input name="email" type="email" inputMode="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') pedir(); }} /></label>
+          <CampoTexto rotulo="Seu e-mail" nome="email" tipo="email" inputMode="email" autoComplete="email" valor={email} aoMudar={setEmail} aoEnter={pedir} />
           <button className="btn largo" disabled={ocupado || !email.trim()} onClick={pedir}>Mandar e-mail de entrada</button>
         </>
       ) : (
         <>
           <p data-testid="emailEnviado">Mandamos um e-mail para <b>{email.trim().toLowerCase()}</b>.</p>
           <p className="mudo">Abra o e-mail <b>neste celular</b> e toque no botão para entrar. Se no e-mail vier um código de 6 números, digite aqui embaixo. Não achou? Olhe também no lixo eletrônico (spam).</p>
-          <label className="campo"><span>Código do e-mail (se tiver)</span><input name="codigo" inputMode="numeric" autoComplete="one-time-code" maxLength={8} value={codigo} onChange={(e) => setCodigo(e.target.value.replace(/\D/g, ''))} /></label>
+          <CampoTexto rotulo="Código do e-mail (se tiver)" nome="codigo" formato="digitos" inputMode="numeric" autoComplete="one-time-code" maxLength={8} valor={codigo} aoMudar={(v) => setCodigo(v.replace(/\D/g, '').slice(0, 8))} />
           <div className="botoes">
             <button className="btn" disabled={ocupado || codigo.length < 6} onClick={confirmar}>Entrar</button>
             <button className="btn sec" onClick={() => { setEnviado(false); setCodigo(''); }}>Trocar e-mail</button>

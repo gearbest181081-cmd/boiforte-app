@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { analisarLotes, useTudo, type AnaliseLote } from '../hooks';
 import { seMudarGmd, seSegurar, simularCompra } from '../simulacao';
 import { fmtData, fmtNum, hojeISO, somaDias } from '../calc';
-import { CampoNumero, num, Opcoes, Topo } from '../components/ui';
+import { CampoEscolha, CampoNumero, num, Opcoes, Topo } from '../components/ui';
 import { rs } from './Nutricao';
 import { SimComparar } from './Comparar';
 
@@ -36,12 +36,10 @@ export function Simular() {
         ]} />
         <div style={{ height: 14 }} />
         {(aba === 'gmd' || aba === 'segurar') && analise.length > 0 && (
-          <label className="campo"><span>Usar dados do lote</span>
-            <select name="simLote" value={loteId} onChange={(e) => setLoteId(e.target.value)}>
-              <option value="">Digitar os números</option>
-              {analise.map((a) => <option key={a.info.lote.id} value={a.info.lote.id}>{a.info.lote.nome}</option>)}
-            </select>
-          </label>
+          <CampoEscolha rotulo="Usar dados do lote" nome="simLote" valor={loteId} aoMudar={setLoteId}>
+            <option value="">Digitar os números</option>
+            {analise.map((a) => <option key={a.info.lote.id} value={a.info.lote.id}>{a.info.lote.nome}</option>)}
+          </CampoEscolha>
         )}
         {aba === 'gmd' && <SimGmd key={`g${loteId}`} a={sel} />}
         {aba === 'segurar' && <SimSegurar key={`s${loteId}`} a={sel} precoArroba={tudo.precoArroba} rendimento={tudo.rendimento} />}

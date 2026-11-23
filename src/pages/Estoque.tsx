@@ -4,7 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { ajustarEstoque, comprarInsumo, db, desfazerBatida, garantirIngredientesPadrao, registrarBatida } from '../db';
 import { useEstoque, type ItemEstoque } from '../hooks';
 import { fmtData, fmtNum, hojeISO } from '../calc';
-import { CampoNumero, num, Opcoes, Topo, useAviso } from '../components/ui';
+import { CampoData, CampoEscolha, CampoNumero, Entrada, num, Opcoes, Topo, useAviso } from '../components/ui';
 import { rs } from './Nutricao';
 import { useVeDinheiro } from '../nuvem/useNuvem';
 
@@ -84,10 +84,13 @@ function CartaoEstoque({ item }: { item: ItemEstoque }) {
       </p>
       {s.saldoKg < 0 && <p style={{ color: 'var(--alerta)', fontSize: 15 }}>Saldo negativo: falta lançar uma compra ou batida.</p>}
       {contando ? (
-        <div className="com-mic">
-          <input inputMode="decimal" placeholder="kg contados" value={kg} onChange={(e) => setKg(e.target.value.replace(/[^\d.,]/g, ''))} aria-label={`Contagem de ${item.nome}`} />
-          <button className="btn pequeno" onClick={salvarContagem}>Salvar</button>
-        </div>
+        <>
+          <Entrada voz="numero" placeholder="kg contados" valor={kg} aoMudar={setKg} aria-label={`Contagem de ${item.nome}`} rotuloVoz="kg contados" unidade="kg" />
+          <div className="botoes">
+            <button className="btn pequeno" onClick={salvarContagem}>Salvar contagem</button>
+            <button className="btn sec pequeno" onClick={() => { setContando(false); setKg(''); }}>Cancelar</button>
+          </div>
+        </>
       ) : (
         <button className="btn sec pequeno" onClick={() => setContando(true)}>Contei o estoque</button>
       )}
@@ -118,14 +121,12 @@ function FormCompra({ aoTerminar }: { aoTerminar: () => void }) {
   return (
     <div className="cartao">
       <h3>Entrada de insumo</h3>
-      <label className="campo"><span>Insumo</span>
-        <select value={id} onChange={(e) => setId(Number(e.target.value))} name="insumo">
-          <option value={0}>Escolha…</option>
-          {ings?.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map((i) => <option key={i.id} value={i.id}>{i.nome}</option>)}
-        </select>
-        <small>Não está na lista? Cadastre em <Link to="/nutricao/ingrediente/novo">Nutrição › Ingredientes</Link>.</small>
-      </label>
-      <label className="campo"><span>Data</span><input type="date" value={data} onChange={(e) => setData(e.target.value)} /></label>
+      <CampoEscolha rotulo="Insumo" nome="insumo" valor={id} aoMudar={(v) => setId(Number(v))}
+        dica={<>Não está na lista? Cadastre em <Link to="/nutricao/ingrediente/novo">Nutrição › Ingredientes</Link>.</>}>
+        <option value={0}>Escolha…</option>
+        {ings?.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map((i) => <option key={i.id} value={i.id}>{i.nome}</option>)}
+      </CampoEscolha>
+      <CampoData rotulo="Data" valor={data} aoMudar={setData} nome="compraData" />
       <CampoNumero rotulo="Quantidade" valor={kg} aoMudar={setKg} unidade="kg" nome="compraKg" dica="Ex.: 10 sacos de 30 kg = 300 kg" />
       {veDinheiro && <>
         <div className="campo"><Opcoes valor={modoValor} aoMudar={setModoValor} opcoes={[{ valor: 'total', rotulo: 'Valor total' }, { valor: 'kg', rotulo: 'Preço por kg' }]} /></div>
@@ -157,13 +158,11 @@ function FormBatida({ aoTerminar }: { aoTerminar: () => void }) {
   return (
     <div className="cartao">
       <h3>Bater ração</h3>
-      <label className="campo"><span>Mistura</span>
-        <select value={id} onChange={(e) => setId(Number(e.target.value))} name="mistura">
-          <option value={0}>Escolha…</option>
-          {formulas?.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
-        </select>
-      </label>
-      <label className="campo"><span>Data</span><input type="date" value={data} onChange={(e) => setData(e.target.value)} /></label>
+      <CampoEscolha rotulo="Mistura" nome="mistura" valor={id} aoMudar={(v) => setId(Number(v))}>
+        <option value={0}>Escolha…</option>
+        {formulas?.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
+      </CampoEscolha>
+      <CampoData rotulo="Data" valor={data} aoMudar={setData} nome="batidaData" />
       <CampoNumero rotulo="Quantos kg foram batidos" valor={kg} aoMudar={setKg} unidade="kg" nome="batidaKg" />
       <div className="botoes"><button className="btn" onClick={salvar}>Lançar batida</button><button className="btn sec" onClick={aoTerminar}>Cancelar</button></div>
     </div>

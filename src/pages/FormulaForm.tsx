@@ -4,7 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db, excluirFormula, garantirIngredientesPadrao, lerConfig } from '../db';
 import { avaliarFormula, batida, calcularFormula, custoArrobaNutricao, kgCabDia, TIPOS, type TipoFormula } from '../nutricao';
 import { fmtNum } from '../calc';
-import { CampoNumero, CampoTexto, num, Opcoes, Topo, useAviso } from '../components/ui';
+import { CampoEscolha, CampoNumero, CampoTexto, Entrada, Escolha, num, Opcoes, Topo, useAviso } from '../components/ui';
 import { rs } from './Nutricao';
 import { avaliarNutrientes } from '../faixas';
 import { GradeNutrientes } from '../components/Nutrientes';
@@ -89,12 +89,9 @@ export function FormulaForm() {
       <Topo titulo={editando ? nome || 'Fórmula' : 'Nova fórmula'} voltar />
       <main>
         <CampoTexto rotulo="Nome da fórmula" valor={nome} aoMudar={setNome} nome="formulaNome" />
-        <label className="campo"><span>Tipo</span>
-          <select value={tipo} onChange={(e) => trocarTipo(e.target.value as TipoFormula)} name="tipo">
-            {(Object.keys(TIPOS) as TipoFormula[]).map((t) => <option key={t} value={t}>{TIPOS[t].nome}</option>)}
-          </select>
-          <small>{perfil.descricao}</small>
-        </label>
+        <CampoEscolha rotulo="Tipo" nome="tipo" valor={tipo} aoMudar={(v) => trocarTipo(v as TipoFormula)} dica={perfil.descricao}>
+          {(Object.keys(TIPOS) as TipoFormula[]).map((t) => <option key={t} value={t}>{TIPOS[t].nome}</option>)}
+        </CampoEscolha>
         <div className="campo"><span style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Montar em</span>
           <Opcoes valor={unidade} aoMudar={setUnidade} opcoes={[{ valor: 'kg', rotulo: 'kg', dica: 'ex.: 575 kg de milho' }, { valor: 'pct', rotulo: '%', dica: 'precisa fechar 100%' }]} />
         </div>
@@ -104,14 +101,14 @@ export function FormulaForm() {
           {linhas.map((l, i) => {
             const inc = r.inclusao.find((x) => x.ingredienteId === l.ingredienteId);
             return (
-              <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 96px 36px', gap: 8, marginBottom: 8, alignItems: 'center' }}>
-                <select aria-label={`Ingrediente ${i + 1}`} value={l.ingredienteId} onChange={(e) => setLinha(i, 'ingredienteId', Number(e.target.value))} style={{ fontSize: 16 }}>
+              <div key={i} className="linha-ingrediente">
+                <Escolha aria-label={`Ingrediente ${i + 1}`} rotuloVoz={`ingrediente ${i + 1}`} valor={l.ingredienteId} aoMudar={(v) => setLinha(i, 'ingredienteId', Number(v))} style={{ fontSize: 16 }}>
                   <option value={0}>Escolha…</option>
                   {ingsOrdenados.map((g) => <option key={g.id} value={g.id}>{g.nome}</option>)}
-                </select>
-                <input aria-label={`Quantidade ${i + 1}`} inputMode="decimal" value={l.qtd} placeholder={unidade === 'kg' ? 'kg' : '%'} onChange={(e) => setLinha(i, 'qtd', e.target.value.replace(/[^\d.,]/g, ''))} />
+                </Escolha>
                 <button className="remover" aria-label="Remover ingrediente" onClick={() => setLinhas((ls) => (ls.length > 1 ? ls.filter((_, j) => j !== i) : [{ ingredienteId: 0, qtd: '' }]))}>×</button>
-                {unidade === 'kg' && inc && <small className="mudo" style={{ gridColumn: '1 / -1', marginTop: -6 }}>{br(inc.pct, 1)}% da mistura</small>}
+                <Entrada voz="numero" aria-label={`Quantidade ${i + 1}`} rotuloVoz={`quantidade ${i + 1}`} valor={l.qtd} placeholder={unidade === 'kg' ? 'kg' : '%'} unidade={unidade === 'kg' ? 'kg' : '%'} aoMudar={(v) => setLinha(i, 'qtd', v)} />
+                {unidade === 'kg' && inc && <small className="mudo">{br(inc.pct, 1)}% da mistura</small>}
               </div>
             );
           })}
@@ -187,7 +184,7 @@ export function FormulaForm() {
           </div>
         )}
 
-        <label className="campo"><span>Observações</span><textarea value={obs} onChange={(e) => setObs(e.target.value)} /></label>
+        <CampoTexto rotulo="Observações" valor={obs} aoMudar={setObs} nome="formulaObs" multilinha />
         <button className="btn largo" onClick={salvar}>Salvar fórmula</button>
         {editando && (
           <div className="botoes">

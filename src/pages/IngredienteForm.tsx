@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { db, excluirIngrediente } from '../db';
-import { CampoNumero, CampoTexto, num, Topo, useAviso } from '../components/ui';
+import { CampoEscolha, CampoNumero, CampoTexto, num, Topo, useAviso } from '../components/ui';
 import { BotaoFoto } from '../components/Foto';
 import { useVeDinheiro } from '../nuvem/useNuvem';
 import { TIPOS, valorExtra, type CategoriaIngrediente, type TipoFormula } from '../nutricao';
@@ -109,11 +109,9 @@ export function IngredienteForm() {
         <p className="mudo" style={{ fontSize: 14, marginTop: 6 }}>Serve para núcleo e para produto pronto (sal mineral, sal adensado, proteinado, proteico energético, ração).</p>
         {lida && <div className="alerta atencao" data-testid="lidoFoto"><span className="ic">📷</span><div><b>{lida}</b>Confira cada número com o rótulo antes de salvar.</div></div>}
 
-        <label className="campo"><span>Tipo do produto</span>
-          <select name="ingCategoria" value={categoria} onChange={(e) => setCategoria(e.target.value as CategoriaIngrediente)}>
-            {CATEGORIAS.map((c) => <option key={c.valor} value={c.valor}>{c.rotulo}</option>)}
-          </select>
-        </label>
+        <CampoEscolha rotulo="Tipo do produto" nome="ingCategoria" valor={categoria} aoMudar={(v) => setCategoria(v as CategoriaIngrediente)}>
+          {CATEGORIAS.map((c) => <option key={c.valor} value={c.valor}>{c.rotulo}</option>)}
+        </CampoEscolha>
         <CampoTexto rotulo="Nome" valor={nome} aoMudar={setNome} nome="ingNome" />
         <div className="dica">Valores na matéria natural (como no rótulo do saco). Cobre e manganês em mg/kg (= ppm). Deixe vazio o que o rótulo não traz.</div>
         <div className="grade">
@@ -130,7 +128,7 @@ export function IngredienteForm() {
         )}
         {pronto && (
           <>
-            <CampoTexto rotulo="Consumo indicado no rótulo" valor={consumo} aoMudar={setConsumo} nome="ingConsumo" voz={false} dica="Ex.: 1 g por kg de peso vivo, ou 100 a 200 g/cab/dia" />
+            <CampoTexto rotulo="Consumo indicado no rótulo" valor={consumo} aoMudar={setConsumo} nome="ingConsumo" dica="Ex.: 1 g por kg de peso vivo, ou 100 a 200 g/cab/dia" />
             {!editando && (
               <>
                 <label className="campo" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>

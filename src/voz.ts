@@ -154,3 +154,137 @@ export function melhorNumero(alternativas: string): number | null {
   }
   return null;
 }
+
+// ---------- Texto, datas e escolhas faladas ----------
+
+export type FormatoTexto = 'texto' | 'email' | 'codigo' | 'digitos';
+
+function digitosFalados(s: string): string {
+  return s.split(/\s+/).map((t) => (/^\d+$/.test(t) ? t : t in UNIDADES && UNIDADES[t] < 100 ? String(UNIDADES[t]) : '')).join('');
+}
+
+/** Ajusta o que foi falado ao tipo do campo: texto livre, e-mail ("joao arroba gmail ponto com"), código ou só números. */
+export function textoFalado(alternativas: string, formato: FormatoTexto = 'texto'): string {
+  const t = (alternativas.split('|')[0] ?? '').trim();
+  if (formato === 'texto') return t.charAt(0).toUpperCase() + t.slice(1);
+  const s = semAcento(t);
+  if (formato === 'email') {
+    return s.replace(/\s*\barroba\b\s*/g, '@').replace(/\s*\bponto\b\s*/g, '.').replace(/\s*\b(traco|hifen)\b\s*/g, '-')
+      .replace(/\s*\b(underline|sublinhado)\b\s*/g, '_').replace(/\s+/g, '');
+  }
+  if (formato === 'digitos') return digitosFalados(s.replace(/[^a-z0-9 ]/g, ' '));
+  // código: letras e números juntos, em maiúsculas
+  return s.replace(/\s*\b(traco|hifen)\b\s*/g, '-').split(/\s+/)
+    .map((w) => (w in UNIDADES && UNIDADES[w] < 10 ? String(UNIDADES[w]) : w)).join('').toUpperCase();
+}
+
+const MESES = ['janeiro', 'fevereiro', 'marco', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+
+function isoValida(a: number, m: number, d: number): string | null {
+  if (!Number.isInteger(a) || !Number.isInteger(m) || !Number.isInteger(d)) return null;
+  if (a < 100) a += 2000;
+  if (a < 1990 || a > 2100 || m < 1 || m > 12 || d < 1) return null;
+  const ult = new Date(Date.UTC(a, m, 0)).getUTCDate();
+  if (d > ult) return null;
+  return `${a}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+function somarDias(iso: string, n: number): string {
+  const [a, m, d] = iso.split('-').map(Number);
+  return new Date(Date.UTC(a, m - 1, d) + n * 86_400_000).toISOString().slice(0, 10);
+}
+
+function numeroOuPrimeiro(s: string): number | null {
+  const t = s.replace(/\bdia\b/g, ' ').trim();
+  if (/^(primeiro|1o|1º)$/.test(t)) return 1;
+  return lerNumeroFalado(t);
+}
+
+/**
+ * Lê uma data falada e devolve no formato AAAA-MM-DD.
+ * Entende: "hoje", "ontem", "anteontem", "amanhã", "daqui a 30 dias", "há 5 dias", "15 de março",
+ * "primeiro de abril de 2026", "dia 15", "15/03", "15/03/2026", "15 do 3".
+ */
+export function lerDataFalada(texto: string, hoje: string): string | null {
+  const s = semAcento(texto).replace(/[^a-z0-9/ .-]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!s) return null;
+  const [ah, mh] = hoje.split('-').map(Number);
+  if (/\banteontem\b/.test(s)) return somarDias(hoje, -2);
+  if (/\bontem\b/.test(s)) return somarDias(hoje, -1);
+  if (/\bdepois de amanha\b/.test(s)) return somarDias(hoje, 2);
+  if (/\bamanha\b/.test(s)) return somarDias(hoje, 1);
+  if (/\bhoje\b/.test(s)) return hoje;
+  let m = s.match(/^(?:daqui a|daqui|dentro de|em)\s+(.+?)\s+(dias?|semanas?)$/);
+  if (m) { const n = lerNumeroFalado(m[1]); if (n != null) return somarDias(hoje, Math.round(n * (m[2].startsWith('semana') ? 7 : 1))); }
+  m = s.match(/^(?:ha|faz)\s+(.+?)\s+(dias?|semanas?)(?: atras)?$/) ?? s.match(/^(.+?)\s+(dias?|semanas?) atras$/);
+  if (m) { const n = lerNumeroFalado(m[1]); if (n != null) return somarDias(hoje, -Math.round(n * (m[2].startsWith('semana') ? 7 : 1))); }
+  m = s.match(/(\d{1,2})\s*[/.-]\s*(\d{1,2})(?:\s*[/.-]\s*(\d{2,4}))?/);
+  if (m) return isoValida(m[3] ? Number(m[3]) : ah, Number(m[2]), Number(m[1]));
+  // "15 de março (de 2026)"
+  const iMes = MESES.findIndex((nome) => new RegExp(`\\b${nome}\\b`).test(s));
+  if (iMes >= 0) {
+    const [antes, depois] = s.split(MESES[iMes]);
+    const d = numeroOuPrimeiro(antes.replace(/\bde\s*$/, '').trim());
+    const anoTxt = depois.replace(/^\s*de\s*/, '').trim();
+    const a = anoTxt ? lerNumeroFalado(anoTxt) : ah;
+    if (d == null || a == null) return null;
+    return isoValida(a, iMes + 1, d);
+  }
+  // "15 do 3 (de 2026)"
+  m = s.match(/^(?:dia\s+)?(.+?)\s+do\s+(.+?)(?:\s+de\s+(.+))?$/);
+  if (m) {
+    const d = numeroOuPrimeiro(m[1]), mes = lerNumeroFalado(m[2]), a = m[3] ? lerNumeroFalado(m[3]) : ah;
+    if (d != null && mes != null && a != null) return isoValida(a, mes, d);
+  }
+  // "dia 15": este mês
+  m = s.match(/^dia\s+(.+)$/);
+  if (m) { const d = numeroOuPrimeiro(m[1]); if (d != null) return isoValida(ah, mh, d); }
+  return null;
+}
+
+/** Das alternativas faladas, a primeira que vira data. */
+export function melhorData(alternativas: string, hoje: string): string | null {
+  for (const t of alternativas.split('|')) {
+    const d = lerDataFalada(t, hoje);
+    if (d) return d;
+  }
+  return null;
+}
+
+const PALAVRAS_VAZIAS = new Set(['de', 'do', 'da', 'dos', 'das', 'o', 'a', 'os', 'as', 'e', 'para', 'pra', 'com', 'no', 'na', 'quero', 'escolher', 'escolhe', 'opcao', 'cab']);
+
+function palavras(s: string): string[] {
+  return semAcento(s).replace(/[^a-z0-9 ]/g, ' ').split(/\s+/)
+    .filter((t) => t && !PALAVRAS_VAZIAS.has(t))
+    .map((t) => (t in UNIDADES ? String(UNIDADES[t]) : t));
+}
+
+/**
+ * Escolhe numa lista a opção que mais parece com o que foi falado.
+ * Ex.: "milho" → "Milho moído"; "lote cinco" → "Lote 5 (40 cab)". Devolve o valor da opção ou null.
+ */
+export function escolherOpcaoFalada(alternativas: string, opcoes: { valor: string; texto: string }[]): string | null {
+  let melhor: { valor: string; nota: number } | null = null;
+  for (const alt of alternativas.split('|')) {
+    const fala = palavras(alt);
+    if (!fala.length) continue;
+    const frase = fala.join(' ');
+    for (const o of opcoes) {
+      const op = palavras(o.texto);
+      if (!op.length) continue;
+      const opFrase = op.join(' ');
+      let nota: number;
+      if (opFrase === frase) nota = 100;
+      else if (` ${opFrase} `.includes(` ${frase} `)) nota = 80 + 10 * (fala.length / op.length);
+      else if (` ${frase} `.includes(` ${opFrase} `)) nota = 70;
+      else {
+        const bate = (t: string) => op.some((w) => w === t || (t.length >= 4 && (w.startsWith(t) || t.startsWith(w)) && w.length >= 4));
+        const acertos = fala.filter(bate).length;
+        if (!acertos) continue;
+        nota = 50 * (acertos / fala.length) + 10 * (acertos / op.length);
+      }
+      if (!melhor || nota > melhor.nota) melhor = { valor: o.valor, nota };
+    }
+  }
+  return melhor && melhor.nota >= 30 ? melhor.valor : null;
+}

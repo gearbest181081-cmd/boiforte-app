@@ -438,6 +438,100 @@ function confere(cond, msg) {
       confere(true, 'pode voltar sem apagar nada');
     }
 
+    console.log('20. Voltar em todas as telas e microfone em todos os campos');
+    {
+      const ctx2 = await browser.newContext({ ...devices['Pixel 7'], locale: 'pt-BR' });
+      await ctx2.route(/supabase\.co/, (r) => r.abort());
+      // Reconhecimento de voz de mentira: devolve o que estiver em window.__fala.
+      await ctx2.addInitScript(() => {
+        class Falso {
+          start() { setTimeout(() => { const t = window.__fala || ''; this.onresult && this.onresult({ results: [[{ transcript: t }]] }); this.onend && this.onend(); }, 30); }
+          stop() { this.onend && this.onend(); }
+        }
+        window.SpeechRecognition = Falso; window.webkitSpeechRecognition = Falso;
+      });
+      const p2 = await ctx2.newPage();
+      p2.on('pageerror', (e) => erros.push(e.message));
+      p2.on('dialog', (d) => d.accept());
+      await p2.goto(URL);
+      if (nuvemNoBuild) { await p2.evaluate((v) => localStorage.setItem('boiforte-sessao', v), sessaoFalsa('11111111-1111-4111-8111-111111111111', 'produtor@exemplo.com')); await p2.reload(); }
+      await p2.getByRole('link', { name: 'Mais' }).click();
+      await p2.getByRole('button', { name: 'Carregar exemplo' }).click();
+      await p2.getByText('Fêmea — 4º lote').waitFor();
+      const loteId = await p2.evaluate(() => new Promise((ok) => { const r = indexedDB.open('boiforte'); r.onsuccess = () => { const t = r.result.transaction('lotes').objectStore('lotes').getAll(); t.onsuccess = () => ok(t.result[0].id); }; }));
+      const formulaId = await p2.evaluate(() => new Promise((ok) => { const r = indexedDB.open('boiforte'); r.onsuccess = () => { const t = r.result.transaction('formulas').objectStore('formulas').getAll(); t.onsuccess = () => ok(t.result[0]?.id ?? 'nova'); }; }));
+      const telas = ['/lotes', '/lotes/novo', `/lotes/${loteId}`, `/lotes/${loteId}/editar`, '/pesar', `/pesar/${loteId}`, '/fazenda', '/mais', '/nutricao',
+        `/nutricao/formula/${formulaId}`, '/nutricao/formula/nova', '/nutricao/ingrediente/novo', '/estoque', '/trato', '/financeiro', '/sanidade', '/simular', '/relatorios', '/nuvem', '/cotacoes'];
+      const semVoltar = [], semMic = [];
+      for (const t of telas) {
+        await p2.goto(URL + '#' + t);
+        await p2.locator('header.topo h1').waitFor();
+        await p2.waitForTimeout(250);
+        if (!(await p2.getByRole('button', { name: 'Voltar', exact: true }).count())) semVoltar.push(t);
+        const faltam = await p2.evaluate(() => [...document.querySelectorAll('main input, main select, main textarea')]
+          .filter((e) => !['checkbox', 'file', 'hidden', 'radio'].includes(e.type) && e.offsetParent !== null && !e.closest('.lista-pesos'))
+          .filter((e) => !e.closest('.com-mic')?.querySelector(':scope > .mic'))
+          .map((e) => e.name || e.getAttribute('aria-label') || e.id));
+        if (faltam.length) semMic.push(`${t}: ${faltam.join(', ')}`);
+      }
+      confere(semVoltar.length === 0, 'botão Voltar em todas as telas' + (semVoltar.length ? ' (falta em ' + semVoltar.join(', ') + ')' : ''));
+      confere(semMic.length === 0, 'microfone em todos os campos de escrever' + (semMic.length ? ' (falta em ' + semMic.join(' | ') + ')' : ''));
+      await p2.goto(URL + '#/simular');
+      await p2.getByRole('radio', { name: /Comparar produtos/ }).click();
+      await p2.getByRole('radio', { name: /Dois rótulos/ }).click();
+      const semMicCmp = await p2.evaluate(() => [...document.querySelectorAll('main input, main select, main textarea')]
+        .filter((e) => !['checkbox', 'file', 'hidden', 'radio'].includes(e.type) && e.offsetParent !== null)
+        .filter((e) => !e.closest('.com-mic')?.querySelector(':scope > .mic'))
+        .map((e) => e.name || e.getAttribute('aria-label') || e.id));
+      confere(semMicCmp.length === 0, 'Simulação › Comparar produtos: microfone em todos os campos' + (semMicCmp.length ? ' (falta em ' + semMicCmp.join(', ') + ')' : ''));
+      await p2.goto(URL);
+      confere(!(await p2.getByRole('button', { name: 'Voltar', exact: true }).count()), 'Início não tem Voltar');
+      await p2.goto(URL + '#/fazenda');
+      await p2.getByRole('button', { name: 'Voltar', exact: true }).click();
+      await p2.getByRole('button', { name: 'Carregar exemplo' }).waitFor();
+      confere(true, 'aberto direto na Fazenda, o Voltar leva ao Mais');
+      await p2.getByRole('link', { name: 'Mais' }).click();
+      await p2.getByRole('link', { name: 'Fazenda' }).click();
+      await p2.getByRole('button', { name: '+ Outra fazenda' }).click();
+      await p2.getByRole('button', { name: 'Cancelar' }).click();
+      confere(await p2.getByRole('button', { name: '+ Outra fazenda' }).isVisible(), 'cadastro de outra fazenda tem Cancelar');
+      await p2.getByRole('button', { name: 'Voltar', exact: true }).click();
+      await p2.getByRole('button', { name: 'Carregar exemplo' }).waitFor();
+      confere(true, 'Voltar da Fazenda volta para o Mais');
+
+      // Microfone: explicação nas 3 primeiras vezes
+      await p2.goto(URL + `#/pesar/${loteId}`);
+      await p2.evaluate(() => { window.__fala = 'ontem'; });
+      await p2.getByRole('button', { name: 'Falar data da pesagem' }).click();
+      await p2.getByTestId('dicaMic').waitFor();
+      confere((await p2.getByTestId('dicaMic').innerText()).includes('1 de 3'), 'primeiro toque no microfone mostra a explicação (1 de 3)');
+      await foto('22-dica-microfone');
+      await p2.getByRole('button', { name: 'Entendi, falar agora' }).click();
+      const ontem = await p2.evaluate(() => { const d = new Date(Date.now() - 86400000); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); });
+      await p2.waitForFunction((v) => document.querySelector('input[name=pesagemData]').value === v, ontem);
+      confere(true, 'falar "ontem" preenche a data');
+      await p2.evaluate(() => { window.__fala = 'trezentos e vinte vírgula cinco'; });
+      const mic = p2.locator('.com-mic').filter({ has: p2.locator('input[name=pesoMedio]') }).locator('.mic');
+      if (await mic.count()) {
+        await mic.click();
+        await p2.getByTestId('dicaMic').waitFor();
+        confere((await p2.getByTestId('dicaMic').innerText()).includes('2 de 3'), 'segundo toque: explicação 2 de 3');
+        await p2.getByRole('button', { name: 'Entendi, falar agora' }).click();
+        await p2.waitForFunction(() => document.querySelector('input[name=pesoMedio]').value === '320,5');
+        confere(true, 'falar número preenche o peso');
+        await mic.click(); await p2.getByRole('button', { name: 'Entendi, falar agora' }).click();
+        await p2.waitForTimeout(200);
+        await mic.click(); await p2.waitForTimeout(200);
+        confere(!(await p2.getByTestId('dicaMic').count()), 'do quarto uso em diante a explicação não aparece');
+      }
+      await p2.evaluate(() => { window.__fala = 'fêmea'; });
+      await p2.getByRole('button', { name: 'Falar lote' }).click();
+      await p2.waitForTimeout(300);
+      const loteSel = await p2.locator('select[name=lote]').evaluate((s) => s.options[s.selectedIndex].text);
+      confere(/fêmea/i.test(loteSel), `falar o nome escolhe na lista (${loteSel})`);
+      await ctx2.close();
+    }
+
     confere(erros.length === 0, 'nenhum erro de JavaScript' + (erros.length ? ': ' + erros.join(' | ') : ''));
   } catch (e) {
     console.log('ERRO: ' + e.message);

@@ -7,7 +7,7 @@ import { calcularFormula, TIPOS, type TipoFormula } from '../nutricao';
 import { compararProdutos, NUTRIENTE_CHAVE, produtoAvulso, type ProdutoComp, type ResultadoComp } from '../comparar';
 import { fmtValor, nivelStatus, ROTULO_STATUS } from '../faixas';
 import { fmtNum } from '../calc';
-import { CampoNumero, CampoTexto, num, Opcoes, useAviso } from '../components/ui';
+import { CampoEscolha, CampoNumero, CampoTexto, num, Opcoes, useAviso } from '../components/ui';
 import { BotaoFoto } from '../components/Foto';
 import { CATEGORIAS } from './IngredienteForm';
 import { rs } from './Nutricao';
@@ -115,11 +115,9 @@ function CartaoRotulo({ i, x, pesoKg, muda }: { i: number; x: Rotulo; pesoKg: nu
       <BotaoFoto<LeituraRotulo> tipo="rotulo" rotulo="📷 Foto da tabela nutricional" sempre aoLer={leu} aoErro={(m) => aviso(m, true)} />
       {x.lido && <div className="alerta atencao" style={{ marginTop: 8 }}><span className="ic">📷</span><div><b>Lido da foto.</b>Confira os números com o rótulo.{x.consumoRotulo ? ` Consumo no rótulo: ${x.consumoRotulo}.` : ''}</div></div>}
       <CampoTexto rotulo="Nome" valor={x.v.nome} aoMudar={set('nome')} nome={`cmpNome${i}`} />
-      <label className="campo"><span>Tipo</span>
-        <select name={`cmpTipo${i}`} value={x.tipo} onChange={(e) => muda({ tipo: e.target.value as TipoFormula })}>
-          {TIPOS_LISTA.map((t) => <option key={t} value={t}>{TIPOS[t].nome}</option>)}
-        </select>
-      </label>
+      <CampoEscolha rotulo="Tipo" nome={`cmpTipo${i}`} valor={x.tipo} aoMudar={(t) => muda({ tipo: t as TipoFormula })}>
+        {TIPOS_LISTA.map((t) => <option key={t} value={t}>{TIPOS[t].nome}</option>)}
+      </CampoEscolha>
       <div className="grade">
         <CampoNumero rotulo="Preço por kg" valor={x.v.preco} aoMudar={set('preco')} unidade="R$" nome={`cmpPreco${i}`} dica="Preço do saco ÷ kg do saco" />
         <CampoNumero rotulo="Consumo" valor={x.v.consumo} aoMudar={set('consumo')} unidade="% PV" nome={`cmpConsumo${i}`}
