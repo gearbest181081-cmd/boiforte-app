@@ -1,6 +1,6 @@
 // Menu "Anotações e tarefas": o funcionário anota na ronda o que precisa ser corrigido, com foto,
 // módulo e piquete. Funciona sem sinal; com a nuvem ligada, a equipe toda vê e marca como feito.
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type Anotacao, type CategoriaAnotacao, type Modulo, type Piquete } from '../db';
@@ -8,7 +8,7 @@ import {
   caminhoFoto, CATEGORIAS, comprimirFoto, excluirAnotacao, lerFoto, marcarFeita, MAX_FOTOS_ANOTACAO, novaFotoId, salvarAnotacao, type FotoNova,
 } from '../anotacoes';
 import { fmtData } from '../calc';
-import { BotaoMic, Opcoes, Topo, useAviso, useOnline } from '../components/ui';
+import { CampoEscolha, CampoTexto, Opcoes, Topo, useAviso, useOnline } from '../components/ui';
 import { armazemNuvem, nuvemConfigurada } from '../nuvem/cliente';
 import { useEstadoNuvem, usePapel } from '../nuvem/useNuvem';
 import { nomeParaMostrar, useSessao } from '../nuvem/sessao';
@@ -108,12 +108,12 @@ export function Anotacoes() {
           { valor: 'feitas', rotulo: `Feitas (${lista.length - abertas.length})` },
         ]} />
         {!!lugares?.modulos.length && (
-          <label className="campo" style={{ marginTop: 12 }}><span>Módulo</span>
-            <select name="filtroModulo" value={modulo} onChange={(e) => setModulo(e.target.value)}>
+          <div style={{ marginTop: 12 }}>
+            <CampoEscolha rotulo="Módulo" nome="filtroModulo" valor={modulo} aoMudar={setModulo}>
               <option value="">Todos</option>
               {lugares.modulos.map((m) => <option key={m.id} value={m.id}>{m.nome}</option>)}
-            </select>
-          </label>
+            </CampoEscolha>
+          </div>
         )}
         <div style={{ height: 8 }} />
         {mostrar.length === 0 && (
@@ -222,7 +222,6 @@ export function AnotacaoForm() {
   const [carregado, setCarregado] = useState(!editando);
   const camera = useRef<HTMLInputElement>(null);
   const galeria = useRef<HTMLInputElement>(null);
-  const idTexto = useId();
 
   useEffect(() => {
     if (!editando || carregado || !original) return;
@@ -292,15 +291,9 @@ export function AnotacaoForm() {
     <>
       <Topo titulo={editando ? 'Editar anotação' : 'Nova anotação'} voltar />
       <main>
-        <div className="campo">
-          <label htmlFor={idTexto}>O que precisa ser corrigido?</label>
-          <div className="com-mic">
-            <textarea id={idTexto} name="anotTexto" value={texto} maxLength={1000} placeholder="Ex.: cerca caída perto da porteira, bebedouro vazando..."
-              onChange={(e) => setTexto(e.target.value)} style={{ flex: 1, minWidth: 0 }} />
-            <BotaoMic rotulo="Falar o que precisa ser corrigido" aoOuvir={(t) => setTexto((v) => (v.trim() ? v.trim() + ' ' : '') + t.split('|')[0])} />
-          </div>
-          <small>Toque no microfone e fale. Pode falar mais de uma vez: o texto vai sendo juntado.</small>
-        </div>
+        <CampoTexto rotulo="O que precisa ser corrigido?" valor={texto} aoMudar={setTexto} nome="anotTexto" multilinha maxLength={1000}
+          placeholder="Ex.: cerca caída perto da porteira, bebedouro vazando..."
+          dica="Toque no microfone e fale. Pode falar mais de uma vez: o texto vai sendo juntado." />
 
         <div className="campo">
           <span className="rotulo-campo">Fotos ({fotos.length} de {MAX_FOTOS_ANOTACAO})</span>
@@ -333,22 +326,18 @@ export function AnotacaoForm() {
             <div className="dica" style={{ margin: 0 }}>Para marcar módulo e piquete, cadastre-os em <Link to="/fazenda">Fazenda</Link>. Dá para anotar sem isso.</div>
           ) : (
             <div className="grade">
-              <label className="campo" style={{ margin: 0 }}><span>Módulo</span>
-                <select name="anotModulo" value={moduloId} onChange={(e) => { setModuloId(e.target.value); setPiqueteId(''); }}>
-                  <option value="">Não sei / geral</option>
-                  {lugares?.modulos.map((m) => <option key={m.id} value={m.id}>{m.nome}</option>)}
-                </select>
-              </label>
-              <label className="campo" style={{ margin: 0 }}><span>Piquete</span>
-                <select name="anotPiquete" value={piqueteId} onChange={(e) => {
-                  setPiqueteId(e.target.value);
-                  const p = lugares?.piquetes.find((x) => String(x.id) === e.target.value);
-                  if (p) setModuloId(String(p.moduloId));
-                }}>
-                  <option value="">Nenhum</option>
-                  {piquetes.map((p) => <option key={p.id} value={p.id}>{moduloId ? p.nome : `${p.nome} (${nomeModulo(p.moduloId)})`}</option>)}
-                </select>
-              </label>
+              <CampoEscolha rotulo="Módulo" nome="anotModulo" valor={moduloId} aoMudar={(v) => { setModuloId(v); setPiqueteId(''); }}>
+                <option value="">Não sei / geral</option>
+                {lugares?.modulos.map((m) => <option key={m.id} value={m.id}>{m.nome}</option>)}
+              </CampoEscolha>
+              <CampoEscolha rotulo="Piquete" nome="anotPiquete" valor={piqueteId} aoMudar={(v) => {
+                setPiqueteId(v);
+                const p = lugares?.piquetes.find((x) => String(x.id) === v);
+                if (p) setModuloId(String(p.moduloId));
+              }}>
+                <option value="">Nenhum</option>
+                {piquetes.map((p) => <option key={p.id} value={p.id}>{moduloId ? p.nome : `${p.nome} (${nomeModulo(p.moduloId)})`}</option>)}
+              </CampoEscolha>
             </div>
           )}
         </div>
@@ -370,7 +359,10 @@ export function AnotacaoForm() {
           <Opcoes valor={urgente} aoMudar={setUrgente} opcoes={[{ valor: 'nao', rotulo: 'Pode esperar' }, { valor: 'sim', rotulo: '⚠️ Urgente' }]} />
         </div>
 
-        <button className="btn largo" disabled={salvando || preparando} onClick={salvar}>{salvando ? 'Salvando…' : 'Salvar anotação'}</button>
+        <div className="botoes">
+          <button className="btn" disabled={salvando || preparando} onClick={salvar}>{salvando ? 'Salvando…' : 'Salvar anotação'}</button>
+          <button className="btn sec" onClick={() => nav(editando ? `/anotacoes/${editando}` : '/anotacoes', { replace: true })}>Cancelar</button>
+        </div>
         {!editando && !nuvemConfigurada() && <p className="mudo" style={{ marginTop: 10 }}>Fica guardada neste celular.</p>}
       </main>
     </>

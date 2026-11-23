@@ -3,8 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, pontosDoLote, registrarPesagemIndividual, type Animal, type Pesagem as PesagemT } from '../db';
 import { fmtGmd, fmtKg, gmd, hojeISO, media, resumo } from '../calc';
-import { lerPesagemFalada } from '../voz';
-import { BotaoMic, CampoNumero, num, Opcoes, Topo, useAviso } from '../components/ui';
+import { lerPesagemFalada, melhorNumero } from '../voz';
+import { BotaoMic, CampoData, CampoEscolha, CampoNumero, CampoTexto, num, Opcoes, Topo, useAviso } from '../components/ui';
 import { BotaoBalanca } from '../components/Balanca';
 import { BotaoFoto } from '../components/Foto';
 import type { LeituraBalanca } from '../../supabase/functions/_shared/foto';
@@ -73,6 +73,9 @@ export function Pesagem() {
       const r = lerPesagemFalada(t);
       if (r) { colocarPeso(r.brinco, r.peso); return; }
     }
+    // Só o peso ("trezentos e dezoito"): vai para a primeira linha sem peso.
+    const kg = melhorNumero(texto);
+    if (kg != null && kg > 0) { colocarPeso(null, kg); return; }
     aviso(`Não entendi. Fale assim: "brinco 12 peso 318".`, true);
   };
 
@@ -110,21 +113,19 @@ export function Pesagem() {
 
   return (
     <>
-      <Topo titulo="Pesagem" voltar={!!loteId} />
+      <Topo titulo="Pesagem" />
       <main>
-        <label className="campo"><span>Lote</span>
-          <select value={sel} onChange={(e) => setSel(Number(e.target.value))} name="lote">
-            <option value={0}>Escolha o lote…</option>
-            {lotes?.map((l) => <option key={l.id} value={l.id}>{l.nome} ({l.qtdCabecas} cab)</option>)}
-          </select>
-        </label>
+        <CampoEscolha rotulo="Lote" nome="lote" valor={sel} aoMudar={(v) => setSel(Number(v))}>
+          <option value={0}>Escolha o lote…</option>
+          {lotes?.map((l) => <option key={l.id} value={l.id}>{l.nome} ({l.qtdCabecas} cab)</option>)}
+        </CampoEscolha>
 
         {lote && (
           <>
             {anterior?.pesoAtual != null && (
               <div className="dica">Última pesagem: <b>{fmtKg(anterior.pesoAtual)}</b> em {anterior.dataUltima!.split('-').reverse().join('/')}</div>
             )}
-            <label className="campo"><span>Data da pesagem</span><input type="date" value={data} onChange={(e) => setData(e.target.value)} /></label>
+            <CampoData rotulo="Data da pesagem" valor={data} aoMudar={setData} nome="pesagemData" />
 
             {!individual && (
               <div className="campo">
@@ -146,6 +147,8 @@ export function Pesagem() {
                   <b>{individual ? 'Brinco e peso' : 'Pesos (kg)'}</b>
                   <span className="mudo">{pesosValidos.length} pesados</span>
                 </div>
+                <BotaoMic tipo="pesagem" rotulo="Falar brinco e peso" grande={individual ? 'Falar brinco e peso' : 'Falar o peso'} aoOuvir={ouviuPesagem} />
+                <p className="mudo" style={{ fontSize: 14, margin: '6px 0 12px' }}>{individual ? 'Fale “brinco 12 peso 318”.' : 'Fale “trezentos e dezoito” ou “brinco 12 peso 318”.'} O peso vai para a primeira linha vazia.</p>
                 <div className="lista-pesos">
                   <div className="item mudo" style={{ fontSize: 14 }}><span>{individual ? 'Brinco' : 'Nº'}</span><span>Peso (kg)</span><span /></div>
                   {linhas.map((l, i) => (
@@ -159,10 +162,6 @@ export function Pesagem() {
                 </div>
                 <div className="botoes" style={{ marginBottom: 0 }}>
                   <button className="btn sec pequeno" onClick={novaLinha}>+ Animal</button>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <BotaoMic rotulo="Falar brinco e peso" aoOuvir={ouviuPesagem} />
-                    <span className="mudo" style={{ fontSize: 14 }}>“brinco 12 peso 318”</span>
-                  </span>
                 </div>
                 <div style={{ marginTop: 10, display: 'grid', gap: 8 }}>
                   <BotaoBalanca aoPesar={(kg) => colocarPeso(null, kg)} aoErro={(m) => aviso(m, true)} />
@@ -172,7 +171,7 @@ export function Pesagem() {
               </div>
             )}
 
-            <label className="campo"><span>Observação (opcional)</span><input value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Ex.: chuva, troca de pasto" /></label>
+            <CampoTexto rotulo="Observação (opcional)" valor={obs} aoMudar={setObs} nome="pesagemObs" placeholder="Ex.: chuva, troca de pasto" />
 
             {mediaAtual ? (
               <div className="cartao">

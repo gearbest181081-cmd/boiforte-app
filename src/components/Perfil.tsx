@@ -36,10 +36,11 @@ export function Perfil() {
           <div className="perfil" role="dialog" aria-label="Seu perfil" onClick={(e) => e.stopPropagation()}>
             <div className="perfil-cab">
               <span className="avatar grande" aria-hidden="true">{inicial}</span>
-              <div style={{ minWidth: 0 }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
                 <b className="perfil-nome">{nome}</b>
                 <div className="mudo perfil-email">{conta.email}</div>
               </div>
+              <button className="fechar" aria-label="Fechar" onClick={() => setAberto(false)}>×</button>
             </div>
             <div className="perfil-linha">
               {f ? (

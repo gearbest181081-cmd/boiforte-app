@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { concluirEventoSanitario, db, excluirEventoSanitario, garantirLembretesPadrao, salvarEventoSanitario, type Lote } from '../db';
 import { emCarencia, pendenciasSanidade, proximaData, TIPOS_SANIDADE, type TipoSanidade } from '../sanidade';
 import { fmtData, hojeISO } from '../calc';
-import { CampoNumero, CampoTexto, num, Opcoes, Topo, useAviso } from '../components/ui';
+import { CampoData, CampoEscolha, CampoNumero, CampoTexto, num, Opcoes, Topo, useAviso } from '../components/ui';
 import { rs } from './Nutricao';
 
 /** Aba "Saúde" dentro do lote. */
@@ -84,14 +84,12 @@ function FormEvento({ loteId, qtd, aoTerminar }: { loteId: number; qtd: number; 
     <div className="cartao">
       <Opcoes valor={feito} aoMudar={setFeito} opcoes={[{ valor: 'feito', rotulo: 'Já apliquei' }, { valor: 'agendar', rotulo: 'Agendar' }]} />
       <div style={{ height: 12 }} />
-      <label className="campo"><span>Tipo</span>
-        <select name="sanTipo" value={tipo} onChange={(e) => setTipo(e.target.value as TipoSanidade)}>
-          {Object.entries(TIPOS_SANIDADE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-        </select>
-      </label>
+      <CampoEscolha rotulo="Tipo" nome="sanTipo" valor={tipo} aoMudar={(v) => setTipo(v as TipoSanidade)}>
+        {Object.entries(TIPOS_SANIDADE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+      </CampoEscolha>
       <CampoTexto rotulo="Produto" valor={produto} aoMudar={setProduto} nome="sanProduto" />
-      <CampoTexto rotulo="Dose (opcional)" valor={dose} aoMudar={setDose} voz={false} />
-      <label className="campo"><span>{feito === 'feito' ? 'Data da aplicação' : 'Data marcada'}</span><input type="date" value={data} onChange={(e) => setData(e.target.value)} /></label>
+      <CampoTexto rotulo="Dose (opcional)" valor={dose} aoMudar={setDose} nome="sanDose" />
+      <CampoData rotulo={feito === 'feito' ? 'Data da aplicação' : 'Data marcada'} valor={data} aoMudar={setData} nome="sanData" />
       <CampoNumero rotulo="Custo total" valor={custo} aoMudar={setCusto} unidade="R$" nome="sanCusto" dica="Entra como despesa de sanidade do lote." />
       <CampoNumero rotulo="Carência para abate" valor={carencia} aoMudar={setCarencia} unidade="dias" nome="sanCarencia" dica="Está na bula. O app avisa até quando não pode abater." />
       <CampoNumero rotulo="Repetir a cada" valor={repetir} aoMudar={setRepetir} unidade="dias" nome="sanRepetir" dica="Ex.: reforço em 30 dias, vermífugo a cada 90. Deixe vazio se não repete." />
@@ -141,10 +139,10 @@ export function Sanidade() {
           <h3>Novo lembrete anual</h3>
           <CampoTexto rotulo="Lembrete" valor={titulo} aoMudar={setTitulo} nome="lembTitulo" />
           <div className="grade">
-            <label className="campo"><span>Dia</span><input inputMode="numeric" value={dia} onChange={(e) => setDia(e.target.value.replace(/\D/g, '').slice(0, 2))} /></label>
-            <label className="campo"><span>Mês</span>
-              <select value={mes} onChange={(e) => setMes(e.target.value)}>{['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'].map((m, i) => <option key={m} value={i + 1}>{m}</option>)}</select>
-            </label>
+            <CampoNumero rotulo="Dia" valor={dia} aoMudar={(v) => setDia(v.replace(/\D/g, '').slice(0, 2))} nome="lembDia" />
+            <CampoEscolha rotulo="Mês" valor={mes} aoMudar={setMes} nome="lembMes">
+              {['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'].map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+            </CampoEscolha>
           </div>
           <button className="btn sec largo" onClick={addLembrete}>Adicionar lembrete</button>
         </div>

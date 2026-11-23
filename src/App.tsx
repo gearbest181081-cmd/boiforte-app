@@ -1,5 +1,5 @@
 import { HashRouter, NavLink, Route, Routes } from 'react-router-dom';
-import { AvisoProvider, Icone } from './components/ui';
+import { AvisoProvider, Icone, VozProvider } from './components/ui';
 import { Inicio } from './pages/Inicio';
 import { Lotes } from './pages/Lotes';
 import { LoteForm } from './pages/LoteForm';
@@ -28,6 +28,7 @@ export function App() {
   return (
     <HashRouter>
       <AvisoProvider>
+        <VozProvider>
         <SessaoProvider>
           <Porta>
             <SincAutomatica />
@@ -69,6 +70,7 @@ export function App() {
             </nav>
           </Porta>
         </SessaoProvider>
+        </VozProvider>
       </AvisoProvider>
     </HashRouter>
   );

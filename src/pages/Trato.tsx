@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { desfazerFornecimento, registrarFornecimento } from '../db';
 import { useEscala, type LinhaEscala } from '../hooks';
 import { fmtData, fmtNum, hojeISO, somaDias } from '../calc';
-import { num, Topo, useAviso } from '../components/ui';
+import { CampoNumero, EntradaData, num, Topo, useAviso } from '../components/ui';
 import { rs } from './Nutricao';
 import { useVeDinheiro } from '../nuvem/useNuvem';
 
@@ -22,9 +22,9 @@ export function Trato() {
     <>
       <Topo titulo="Trato do dia" />
       <main>
-        <div style={{ display: 'grid', gridTemplateColumns: '56px 1fr 56px', gap: 8, marginBottom: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '48px 1fr 48px', gap: 8, marginBottom: 14 }}>
           <button className="btn sec pequeno" aria-label="Dia anterior" onClick={() => setData((d) => somaDias(d, -1))}>‹</button>
-          <input type="date" value={data} onChange={(e) => e.target.value && setData(e.target.value)} aria-label="Data do trato" />
+          <EntradaData valor={data} aoMudar={(v) => v && setData(v)} aria-label="Data do trato" rotuloVoz="data do trato" />
           <button className="btn sec pequeno" aria-label="Próximo dia" onClick={() => setData((d) => somaDias(d, 1))}>›</button>
         </div>
 
@@ -88,10 +88,7 @@ function CartaoTrato({ linha: l, data }: { linha: LinhaEscala; data: string }) {
       {feito ? (
         <p><b>Fornecido: {fmtNum(l.fornecimento!.kgFornecido, 1)} kg</b>{Math.abs(l.fornecimento!.kgFornecido - l.fornecimento!.kgPrevisto) > 0.5 ? <span className="mudo"> (previsto {fmtNum(l.fornecimento!.kgPrevisto, 1)} kg)</span> : null}</p>
       ) : (
-        <label className="campo" style={{ marginBottom: 10 }}>
-          <span>Total para o lote (kg)</span>
-          <input inputMode="decimal" value={kg} aria-label={`kg para ${l.lote.nome}`} onChange={(e) => setKg(e.target.value.replace(/[^\d.,]/g, ''))} />
-        </label>
+        <CampoNumero rotulo="Total para o lote" unidade="kg" valor={kg} aoMudar={setKg} rotuloAcessivel={`kg para ${l.lote.nome}`} />
       )}
       <button className={`btn largo ${feito ? 'sec' : ''}`} onClick={marcar} disabled={ocupado} role="checkbox" aria-checked={feito} aria-label={`Trato ${l.lote.nome}`}>
         <span style={{ fontSize: 24 }}>{feito ? '☑' : '☐'}</span> {feito ? 'Fornecido (tocar para desfazer)' : 'Marcar como fornecido'}

@@ -20,12 +20,12 @@ export function Inicio() {
   const tarefas = useLiveQuery(contarAnotacoes);
   const [todos, setTodos] = useState(false);
   useEffect(() => { if (props?.length) garantirLembretesPadrao().catch(() => {}); }, [props?.length]);
-  if (!props || !infos) return <Topo titulo="BoiForte" />;
+  if (!props || !infos) return <Topo titulo="BoiForte" voltar={false} />;
 
   if (props.length === 0) {
     return (
       <>
-        <Topo titulo="BoiForte" />
+        <Topo titulo="BoiForte" voltar={false} />
         <main>
           <div className="vazio">
             <div className="grande">🐂</div>
@@ -55,7 +55,7 @@ export function Inicio() {
 
   return (
     <>
-      <Topo titulo={props.length === 1 ? props[0].nome : 'BoiForte'} />
+      <Topo titulo={props.length === 1 ? props[0].nome : 'BoiForte'} voltar={false} />
       <main>
         <div className="grade tres">
           <Indicador rotulo="Cabeças" valor={fmtNum(cabecas, 0)} />

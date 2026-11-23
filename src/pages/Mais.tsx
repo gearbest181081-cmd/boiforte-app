@@ -5,7 +5,7 @@ import { db, exportarBackup, importarBackup, lerArquivoBackup, lerConfig, lerCon
 import { carregarExemplo } from '../exemplo';
 import { desligarFazenda, fazendaLigada } from '../nuvem/sinc';
 import { useEstadoNuvem, usePapel } from '../nuvem/useNuvem';
-import { CampoNumero, num, Topo, useAviso } from '../components/ui';
+import { CampoNumero, mostrarDicaMicDeNovo, num, Topo, useAviso } from '../components/ui';
 
 export function Mais() {
   const aviso = useAviso();
@@ -126,9 +126,16 @@ export function Mais() {
         </div>
 
         <details className="cartao">
-          <summary>Como usar a voz</summary>
-          <p style={{ marginTop: 10 }}>Toque no microfone ao lado de qualquer número e fale, por exemplo: “trezentos e vinte e meio”. Na pesagem por brinco, fale “brinco doze peso trezentos e dezoito”.</p>
+          <summary>Como escrever falando</summary>
+          <p style={{ marginTop: 10 }}>Todo campo de escrever tem um microfone verde ao lado. Toque nele, espere ficar vermelho e fale. Exemplos:</p>
+          <ul style={{ paddingLeft: 20, marginTop: 0 }}>
+            <li>Números: “trezentos e vinte e meio”.</li>
+            <li>Datas: “hoje”, “ontem”, “15 de março”.</li>
+            <li>Listas: fale o nome da opção, como “milho”.</li>
+            <li>Pesagem por brinco: “brinco doze peso trezentos e dezoito”.</li>
+          </ul>
           <p className="mudo">Em muitos celulares a voz precisa de internet. Sem sinal, digite: o app salva do mesmo jeito.</p>
+          <button className="btn sec largo" onClick={() => { mostrarDicaMicDeNovo(); aviso('Pronto. A explicação aparece de novo nas próximas 3 vezes que você tocar no microfone.'); }}>Ver a explicação do microfone de novo</button>
         </details>
 
         <div className="cartao">

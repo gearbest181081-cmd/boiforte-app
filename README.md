@@ -64,7 +64,7 @@ A cada envio para `main`, o GitHub Actions roda os testes e publica o app no Git
 
 - `src/calc.ts`: GMD, projeção, arrobas (mesmas fórmulas da planilha de recria/TIP).
 - `src/alertas.ts`: avisos do rebanho.
-- `src/voz.ts`: reconhecimento de voz e leitura de números falados.
+- `src/voz.ts`: reconhecimento de voz e leitura de números, datas, textos e escolhas faladas.
 - `src/nutricao.ts` e `src/estoque.ts`: formulação, faixas de referência, estoque.
 - `src/validar.ts`: validação de tudo que é gravado.
 - `src/financeiro.ts`, `src/sanidade.ts`, `src/simulacao.ts`: dinheiro, saúde do rebanho e "E se".
@@ -74,3 +74,12 @@ A cada envio para `main`, o GitHub Actions roda os testes e publica o app no Git
 - `src/balanca.ts`: balança Bluetooth.
 - `supabase/`: banco (migrações com todas as regras) e funções do servidor (foto e cotações).
 - `src/pages/`: telas.
+
+### Regras para telas novas
+
+- **Todo campo de escrever tem microfone.** Use os componentes de `src/components/ui.tsx` em vez de `<input>`, `<select>` ou `<textarea>` soltos:
+  `CampoTexto` (texto; `multilinha` para observações; `formato="email" | "codigo" | "digitos"`), `CampoNumero`, `CampoData`, `CampoEscolha`
+  e, quando não houver rótulo visível, `Entrada`, `EntradaData` e `Escolha`. Só caixa de marcar e arquivo ficam sem microfone.
+  Nas 3 primeiras vezes que a pessoa toca num microfone, aparece a explicação de como falar.
+- **Toda tela tem Voltar.** O `Topo` já mostra o botão "Voltar" (só o Início fica sem). Se a tela abrir um formulário dentro dela, ponha também um botão "Cancelar".
+- O teste de ponta a ponta (passo 20) confere as duas regras em todas as telas da lista `telas`: acrescente lá as telas novas.
