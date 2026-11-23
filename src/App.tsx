@@ -19,6 +19,7 @@ import { Relatorios } from './pages/Relatorios';
 import { Cotacoes } from './pages/Cotacoes';
 import { Nuvem } from './pages/Nuvem';
 import { FuncionarioForm, Funcionarios } from './pages/Funcionarios';
+import { AnotacaoDetalhe, AnotacaoForm, Anotacoes } from './pages/Anotacoes';
 import { SincAutomatica } from './nuvem/useNuvem';
 import { SessaoProvider } from './nuvem/sessao';
 import { Porta } from './pages/Login';
@@ -53,6 +54,10 @@ export function App() {
               <Route path="/funcionarios" element={<Funcionarios />} />
               <Route path="/funcionarios/:id" element={<FuncionarioForm />} />
               <Route path="/cotacoes" element={<Cotacoes />} />
+              <Route path="/anotacoes" element={<Anotacoes />} />
+              <Route path="/anotacoes/nova" element={<AnotacaoForm />} />
+              <Route path="/anotacoes/:id" element={<AnotacaoDetalhe />} />
+              <Route path="/anotacoes/:id/editar" element={<AnotacaoForm />} />
               <Route path="*" element={<Inicio />} />
             </Routes>
             <nav className="baixo" aria-label="Menu principal">

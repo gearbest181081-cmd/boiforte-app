@@ -199,3 +199,21 @@ table.tab td.n, table.tab th.n { text-align: right; }
 details.cartao summary { font-weight: 700; cursor: pointer; min-height: 32px; }
 hr { border: 0; border-top: 1px solid var(--borda); margin: 16px 0; }
 @media (max-width: 480px) { .grade > .campo { grid-column: 1 / -1; } }
+
+/* ---------- Anotações e tarefas ---------- */
+.anotacao.urgente { border-left: 5px solid var(--alerta); }
+.anotacao-corpo { display: flex; gap: 12px; align-items: flex-start; color: inherit; text-decoration: none; }
+.anotacao-ic { font-size: 26px; line-height: 1.2; }
+.anotacao-texto { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.anotacao-texto b { font-size: 17px; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.anotacao-texto .etiqueta { align-self: flex-start; }
+.foto-mini { flex: none; width: 64px; height: 64px; border-radius: 10px; overflow: hidden; border: 1px solid var(--borda); background: var(--verde-claro); padding: 0; display: flex; align-items: center; justify-content: center; font-size: 22px; cursor: pointer; }
+.foto-mini img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.foto-mini.grande { width: 100%; height: auto; aspect-ratio: 1; }
+.foto-mini.vazia { cursor: default; color: var(--texto-2); }
+.fotos-grade { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 12px; }
+.foto-com-x { position: relative; }
+.foto-x { position: absolute; top: 6px; right: 6px; width: 40px; height: 40px; border-radius: 99px; border: 0; background: rgba(0,0,0,.6); color: #fff; font-size: 24px; line-height: 1; cursor: pointer; }
+.foto-cheia { position: fixed; inset: 0; z-index: 30; background: rgba(0,0,0,.92); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 16px; }
+.foto-cheia img { max-width: 100%; max-height: 80vh; object-fit: contain; border-radius: 8px; }
+.foto-cheia .btn { color: #fff; border-color: #fff; }

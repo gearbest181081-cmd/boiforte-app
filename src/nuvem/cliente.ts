@@ -5,6 +5,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Papel } from './esquema';
 import type { LinhaRemota, OpEnvio, Resultado, Transporte } from './sinc';
+import { ErroFoto, type ArmazemFotos, type TipoErroFoto } from '../anotacoes';
 
 const URL_NUVEM = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim();
 const CHAVE_PUBLICA = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim();
@@ -101,7 +102,16 @@ export const equipe = (f: string) => rpc<Membro[]>('equipe', { f });
 /** Plano e vagas da fazenda. Só para mostrar: quem limita é o servidor. */
 export const planoDaFazenda = (f: string) => rpc<PlanoFazenda[]>('plano_da_fazenda', { f }).then((r) => r[0] ?? null);
 export const mudarPapel = (f: string, usuario: string, papel: Papel) => rpc<void>('mudar_papel', { f, usuario, p_papel: papel });
-export async function apagarMinhaConta() { await rpc<void>('apagar_minha_conta', { confirmar: 'APAGAR' }); await sair(); }
+export async function apagarMinhaConta() {
+  // As fazendas em que a pessoa está sozinha somem junto com a conta: antes, apaga as fotos delas do Storage.
+  try {
+    for (const f of (await minhasFazendas()).filter((x) => x.papel === 'dono' && !x.bloqueado)) {
+      if ((await equipe(f.fazenda_id)).length === 1) await apagarFotosDaFazenda(f.fazenda_id);
+    }
+  } catch { /* não impede de apagar a conta */ }
+  await rpc<void>('apagar_minha_conta', { confirmar: 'APAGAR' });
+  await sair();
+}
 export const removerMembro = (f: string, usuario: string) => rpc<void>('remover_membro', { f, usuario });
 
 export interface ConvitePendente { codigo: string; papel: Papel; expira_em: string }
@@ -139,4 +149,55 @@ export async function lerFoto<T>(fazenda: string, tipo: 'rotulo' | 'balanca', im
     throw erro({ message: corpo?.erro ?? error.message });
   }
   return data as T;
+}
+
+// ---------- fotos das anotações (Storage) ----------
+// Balde privado "anotacoes", uma pasta por fazenda: "<fazenda>/<foto>.jpg". Quem decide quem lê, envia e
+// apaga são as regras do servidor (20261123170000_anotacoes.sql); o app só leva e traz.
+
+export const BALDE_FOTOS = 'anotacoes';
+
+function erroFoto(e: unknown): ErroFoto {
+  const x = e as { status?: number; statusCode?: string; message?: string; name?: string };
+  const m = x?.message ?? '';
+  const cod = String(x?.statusCode ?? x?.status ?? '');
+  let tipo: TipoErroFoto = 'outro';
+  let msg = m || 'Não foi possível enviar a foto.';
+  if (x?.status == null || /Failed to fetch|NetworkError|network|fetch failed/i.test(m)) { tipo = 'rede'; msg = 'Sem internet agora.'; }
+  else if (/jwt|token/i.test(m)) { tipo = 'rede'; msg = 'Sua entrada venceu. Entre de novo.'; } // tenta de novo depois de entrar
+  else if (cod === '409' || /already exists|duplicate/i.test(m)) tipo = 'existe';
+  else if (cod === '404' || /not.?found/i.test(m)) tipo = 'nao_existe';
+  else if (cod === '403' || cod === '401' || /row-level security|unauthorized|permission/i.test(m)) { tipo = 'proibido'; msg = 'Seu papel na fazenda não permite mexer nesta foto.'; }
+  else if (cod === '413' || /too large|size/i.test(m)) msg = 'Foto grande demais.';
+  return new ErroFoto(tipo, msg);
+}
+
+export const armazemNuvem: ArmazemFotos = {
+  async enviar(caminho, dados) {
+    const { error } = await (await sb()).storage.from(BALDE_FOTOS).upload(caminho, dados, { contentType: 'image/jpeg', upsert: false, cacheControl: '31536000' });
+    if (error) throw erroFoto(error);
+  },
+  async baixar(caminho) {
+    const { data, error } = await (await sb()).storage.from(BALDE_FOTOS).download(caminho);
+    if (error || !data) throw erroFoto(error);
+    return data.arrayBuffer();
+  },
+  async apagar(caminho) {
+    const { data, error } = await (await sb()).storage.from(BALDE_FOTOS).remove([caminho]);
+    if (error) throw erroFoto(error);
+    if (!data?.length) throw new ErroFoto('nao_existe', 'A foto não estava lá (ou não é sua).');
+  },
+};
+
+/** Antes de apagar a fazenda da nuvem: apaga as fotos dela (o banco não consegue apagar arquivos do Storage). */
+export async function apagarFotosDaFazenda(f: string) {
+  const c = await sb();
+  for (let rodada = 0; rodada < 100; rodada++) {
+    const { data, error } = await c.storage.from(BALDE_FOTOS).list(f, { limit: 1000 });
+    if (error) throw erroFoto(error);
+    if (!data?.length) return;
+    const { data: foram, error: e2 } = await c.storage.from(BALDE_FOTOS).remove(data.map((o) => `${f}/${o.name}`));
+    if (e2) throw erroFoto(e2);
+    if (!foram?.length) return; // sem permissão para o resto
+  }
 }

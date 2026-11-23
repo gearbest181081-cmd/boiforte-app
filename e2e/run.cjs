@@ -408,6 +408,52 @@ function confere(cond, msg) {
     confere(true, 'proteinado pronto vira ingrediente e fórmula de uma vez');
     await foto('19-nuvem');
 
+    console.log('17b. Anotações e tarefas (sem internet, com foto, módulo e piquete)');
+    await page.goto(URL + '#/');
+    await page.getByTestId('cartaoAnotacoes').click();
+    await page.getByText('Nada para corrigir').waitFor();
+    await ctx.setOffline(true);
+    await page.getByRole('link', { name: '+ Anotar o que precisa corrigir' }).click();
+    await page.locator('textarea[name=anotTexto]').fill('Cerca caída perto da porteira');
+    await page.getByTestId('fotoCamera').setInputFiles(path.join(__dirname, '..', 'public', 'icon-512.png'));
+    await page.locator('.foto-com-x img').first().waitFor();
+    confere((await page.getByText('Fotos (1 de 4)').count()) === 1, 'foto tirada entra na anotação (diminuída no celular)');
+    await page.locator('select[name=anotPiquete]').selectOption({ label: 'Piquete 3 (Retiro de cima)' });
+    confere((await page.locator('select[name=anotModulo] option:checked').textContent()) === 'Retiro de cima', 'escolher o piquete já marca o módulo');
+    await page.getByRole('radio', { name: /Cerca/ }).click();
+    await page.getByRole('radio', { name: /Urgente/ }).click();
+    await foto('20-anotacao-nova');
+    await page.getByRole('button', { name: 'Salvar anotação' }).click();
+    await page.getByTestId('anotacao').first().waitFor();
+    const card = await page.getByTestId('anotacao').first().innerText();
+    confere(card.includes('Cerca caída perto da porteira') && card.includes('urgente') && card.includes('Retiro de cima · Piquete 3'), 'anotação aparece na lista com lugar e urgência, mesmo sem internet');
+    await page.waitForFunction(() => { const i = document.querySelector('.anotacao img'); return i && i.complete && i.naturalWidth > 0; });
+    const foto1 = await page.evaluate(() => new Promise((ok) => {
+      const r = indexedDB.open('boiforte');
+      r.onsuccess = () => {
+        const g = r.result.transaction('fotosAnotacao').objectStore('fotosAnotacao').getAll();
+        g.onsuccess = () => ok(g.result.map((f) => ({ estado: f.estado, kb: f.dados.byteLength / 1024, jpeg: new Uint8Array(f.dados)[0] === 0xff })));
+      };
+    }));
+    confere(foto1.length === 1 && foto1[0].jpeg && foto1[0].kb < 1024 && foto1[0].estado === 'enviar', `foto guardada no celular como JPEG de ${Math.round(foto1[0]?.kb ?? 0)} KB, esperando para subir`);
+    await foto('21-anotacoes');
+    await page.goto(URL + '#/');
+    await page.getByText('Tarefas a fazer: 1 (1 urgente)').waitFor();
+    confere(true, 'início mostra as tarefas a fazer');
+    await page.getByTestId('cartaoAnotacoes').click();
+    await page.getByTestId('anotacao').first().locator('a').click();
+    await page.getByRole('button', { name: 'Ver foto' }).first().click();
+    await page.locator('.foto-cheia img').waitFor();
+    confere(true, 'foto abre em tela cheia');
+    await page.getByRole('button', { name: 'Fechar' }).click();
+    await foto('22-anotacao-detalhe');
+    await page.getByRole('button', { name: '✓ Marcar como feita' }).click();
+    await page.getByRole('button', { name: 'Voltar para "a fazer"' }).waitFor();
+    await page.getByRole('button', { name: 'Voltar', exact: true }).click();
+    await page.getByRole('radio', { name: 'Feitas (1)' }).waitFor();
+    confere((await page.getByRole('radio', { name: 'A fazer (0)' }).count()) === 1, 'marcada como feita sai da lista de "a fazer"');
+    await ctx.setOffline(false);
+
     console.log('18. Exemplo e tela escura');
     await page.getByRole('link', { name: 'Mais' }).click();
     await page.getByRole('button', { name: 'Carregar exemplo' }).click();

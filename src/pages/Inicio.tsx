@@ -8,6 +8,7 @@ import { fmtData, fmtGmd, fmtKg, fmtNum, hojeISO } from '../calc';
 import { Indicador, Topo } from '../components/ui';
 import { usePapel } from '../nuvem/useNuvem';
 import { nuvemConfigurada } from '../nuvem/cliente';
+import { contarAnotacoes } from '../anotacoes';
 
 export function Inicio() {
   const props = useLiveQuery(() => db.propriedades.toArray());
@@ -16,6 +17,7 @@ export function Inicio() {
   const estoque = useEstoque();
   const tudo = useTudo();
   const papel = usePapel();
+  const tarefas = useLiveQuery(contarAnotacoes);
   const [todos, setTodos] = useState(false);
   useEffect(() => { if (props?.length) garantirLembretesPadrao().catch(() => {}); }, [props?.length]);
   if (!props || !infos) return <Topo titulo="BoiForte" />;
@@ -72,6 +74,16 @@ export function Inicio() {
           <Link to="/trato" className={`alerta ${tratosFeitos === tratos.length ? 'bom' : 'atencao'}`} style={{ textDecoration: 'none' }}>
             <span className="ic">{tratosFeitos === tratos.length ? '✅' : '🪣'}</span>
             <div><b>Trato de hoje: {tratosFeitos} de {tratos.length} lotes</b>{tratosFeitos === tratos.length ? 'Tudo fornecido.' : 'Toque para marcar o que já foi dado.'}</div>
+          </Link>
+        )}
+
+        {tarefas && (
+          <Link to="/anotacoes" className={`alerta ${tarefas.urgentes ? 'ruim' : tarefas.abertas ? 'atencao' : 'bom'}`} style={{ textDecoration: 'none' }} data-testid="cartaoAnotacoes">
+            <span className="ic">📝</span>
+            <div>
+              <b>{tarefas.abertas ? `Tarefas a fazer: ${tarefas.abertas}${tarefas.urgentes ? ` (${tarefas.urgentes} urgente${tarefas.urgentes > 1 ? 's' : ''})` : ''}` : 'Anotações e tarefas'}</b>
+              {tarefas.abertas ? 'Toque para ver o que precisa ser corrigido.' : 'Na ronda, anote aqui o que precisa corrigir, com foto.'}
+            </div>
           </Link>
         )}
 

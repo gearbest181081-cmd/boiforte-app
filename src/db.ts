@@ -126,7 +126,22 @@ export interface Funcionario {
   obs?: string; criadoEm: number;
 }
 
-export const TABELAS = ['propriedades', 'modulos', 'piquetes', 'lotes', 'animais', 'pesagens', 'ingredientes', 'formulas', 'movimentos', 'batidas', 'fornecimentos', 'config', 'lancamentos', 'custosFixos', 'vendas', 'sanidade', 'lembretes', 'funcionarios'] as const;
+/** Anotação da ronda: o que precisa ser corrigido na fazenda, com foto e lugar (módulo/piquete). */
+export interface Anotacao {
+  id?: number; gid?: string; texto: string; categoria?: CategoriaAnotacao; moduloId?: number | null; piqueteId?: number | null;
+  urgente?: boolean; feita?: boolean; data: string; feitaEm?: string | null;
+  fotos?: { foto: string }[]; // ids das fotos (os arquivos ficam em fotosAnotacao e no Storage da nuvem)
+  autor?: string; autorId?: string; feitaPor?: string; // quem anotou / quem resolveu (na nuvem, o servidor é quem preenche)
+  criadoEm: number;
+}
+export type CategoriaAnotacao = 'cerca' | 'agua' | 'cocho' | 'pasto' | 'animal' | 'estrutura' | 'outro';
+/**
+ * Foto de anotação guardada no celular (não vai na cópia de segurança nem na fila de registros).
+ * estado: "enviar" = ainda não subiu para a nuvem; "ok" = igual à nuvem; "apagar" = apagar da nuvem.
+ */
+export interface FotoLocal { id: string; dados?: ArrayBuffer; estado: 'enviar' | 'ok' | 'apagar'; em: number; erro?: string }
+
+export const TABELAS = ['propriedades', 'modulos', 'piquetes', 'lotes', 'animais', 'pesagens', 'ingredientes', 'formulas', 'movimentos', 'batidas', 'fornecimentos', 'config', 'lancamentos', 'custosFixos', 'vendas', 'sanidade', 'lembretes', 'funcionarios', 'anotacoes'] as const;
 
 export class BoiForteDB extends Dexie {
   propriedades!: Table<Propriedade, number>;
@@ -147,6 +162,8 @@ export class BoiForteDB extends Dexie {
   sanidade!: Table<EventoSanitario, number>;
   lembretes!: Table<Lembrete, number>;
   funcionarios!: Table<Funcionario, number>;
+  anotacoes!: Table<Anotacao, number>;
+  fotosAnotacao!: Table<FotoLocal, string>;
   pendentes!: Table<Pendente, [string, number | string]>;
   sincEstado!: Table<{ chave: string; valor: unknown }, string>;
   sincEspera!: Table<{ tabela: string; gid: string; linha: unknown }, [string, string]>;
@@ -202,11 +219,17 @@ export class BoiForteDB extends Dexie {
     }).upgrade(async (tx) => {
       (tx as Transaction & { __silencioso?: boolean }).__silencioso = true;
       for (const t of TABELAS) {
-        if (t === 'config' || t === 'funcionarios') continue; // funcionarios só nasce na versão 5, já com gid
+        // tabelas criadas em versões depois da 4 ainda não existem aqui (e nascem já com gid)
+        if (t === 'config' || !tx.idbtrans.objectStoreNames.contains(t)) continue;
         await tx.table(t).toCollection().modify((r: { gid?: string }) => { if (!r.gid) r.gid = novoGid(); });
       }
     });
     this.version(5).stores({ funcionarios: '++id, &gid' });
+    // Anotações e tarefas da ronda.
+    this.version(6).stores({
+      anotacoes: '++id, &gid, moduloId, piqueteId, data',
+      fotosAnotacao: 'id, estado',
+    });
     this.use(middlewarePendentes);
     // Toda gravação passa pela validação, venha de onde vier.
     for (const t of TABELAS) {

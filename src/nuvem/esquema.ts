@@ -5,7 +5,7 @@
 /** Ordem de envio: quem é referenciado vai antes de quem referencia. */
 export const ORDEM_SINC = [
   'propriedades', 'modulos', 'piquetes', 'ingredientes', 'formulas', 'lotes', 'animais', 'pesagens',
-  'batidas', 'fornecimentos', 'movimentos', 'sanidade', 'vendas', 'lancamentos', 'custosFixos', 'funcionarios', 'lembretes', 'config',
+  'batidas', 'fornecimentos', 'movimentos', 'sanidade', 'vendas', 'lancamentos', 'custosFixos', 'funcionarios', 'lembretes', 'anotacoes', 'config',
 ] as const;
 export type TabelaSinc = (typeof ORDEM_SINC)[number];
 
@@ -32,6 +32,7 @@ export const REFERENCIAS: Record<string, Referencias> = {
   sanidade: { campos: { loteId: 'lotes' } },
   lembretes: { campos: {} },
   funcionarios: { campos: {} }, // usuarioId é o id da conta (não é registro): o servidor confere que é da equipe
+  anotacoes: { campos: { moduloId: 'modulos', piqueteId: 'piquetes' } },
 };
 
 export function alvoDe(alvo: Alvo, registro: Record<string, unknown>): string | null {
@@ -50,6 +51,6 @@ export const PAPEIS: Record<Papel, { nome: string; texto: string }> = {
 };
 
 /** Tabelas que o vaqueiro pode ver e gravar (o resto, principalmente o dinheiro e os salários dos funcionários, fica de fora). */
-export const VAQUEIRO_LE = ['propriedades', 'modulos', 'piquetes', 'lotes', 'animais', 'pesagens', 'ingredientes', 'formulas', 'movimentos', 'batidas', 'fornecimentos', 'sanidade', 'lembretes', 'config'] as const;
+export const VAQUEIRO_LE = ['propriedades', 'modulos', 'piquetes', 'lotes', 'animais', 'pesagens', 'ingredientes', 'formulas', 'movimentos', 'batidas', 'fornecimentos', 'sanidade', 'lembretes', 'config', 'anotacoes'] as const;
 // lotes: só a quantidade de cabeças (pesagem por brinco); lancamentos: só o custo de vacina (origem sanidade).
-export const VAQUEIRO_GRAVA = ['animais', 'pesagens', 'fornecimentos', 'movimentos', 'sanidade', 'lotes', 'lancamentos'] as const;
+export const VAQUEIRO_GRAVA = ['animais', 'pesagens', 'fornecimentos', 'movimentos', 'sanidade', 'lotes', 'lancamentos', 'anotacoes'] as const;
