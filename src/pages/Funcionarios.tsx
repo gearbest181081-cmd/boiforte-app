@@ -8,7 +8,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type Funcionario } from '../db';
 import { custoMensalFuncionario, folhaAtiva } from '../financeiro';
 import { fmtData, hojeISO } from '../calc';
-import { CampoNumero, CampoTexto, num, Topo, useAviso } from '../components/ui';
+import { CampoData, CampoEscolha, CampoNumero, CampoTexto, num, Topo, useAviso } from '../components/ui';
 import { rs } from './Nutricao';
 import { criarConvite, equipe, mudarPapel, NOME_PLANO, planoDaFazenda, removerMembro, type Membro, type PlanoFazenda } from '../nuvem/cliente';
 import { PAPEIS, type Papel } from '../nuvem/esquema';
@@ -47,7 +47,7 @@ export function Funcionarios() {
   if (papel === 'vaqueiro') {
     return (
       <>
-        <Topo titulo="Funcionários" voltar />
+        <Topo titulo="Funcionários" />
         <main><div className="dica">Só o dono, o gerente e o consultor veem os funcionários e os salários.</div></main>
       </>
     );
@@ -59,7 +59,7 @@ export function Funcionarios() {
   const membro = (f: Funcionario) => (f.usuarioId ? lista?.find((m) => m.usuario_id === f.usuarioId) : undefined);
   return (
     <>
-      <Topo titulo="Funcionários" voltar />
+      <Topo titulo="Funcionários" />
       <main>
         <div className="dica">Cadastre quem trabalha na fazenda. O salário entra sozinho no custo da fazenda e no custo da @ produzida, dividido entre os lotes pelas cabeças, dia a dia. Não lance o salário de novo em Dinheiro.</div>
         {funcs && funcs.length > 0 && (
@@ -160,7 +160,7 @@ function Formulario({ f }: { f: Funcionario | null }) {
 
   return (
     <>
-      <Topo titulo={f ? f.nome : 'Novo funcionário'} voltar />
+      <Topo titulo={f ? f.nome : 'Novo funcionário'} />
       <main>
         {meuCadastro && !souDono && <div className="dica">Este é o seu cadastro. Só o dono da fazenda muda o seu salário e a sua função.</div>}
         {papel === 'consultor' && <div className="dica">Consultor só olha: quem muda os funcionários é o dono ou o gerente.</div>}
@@ -183,12 +183,12 @@ function Formulario({ f }: { f: Funcionario | null }) {
             <p style={{ marginBottom: 0 }}><b data-testid="funcCusto">Total: {rs(custo)} por mês</b></p>
           </div>
           <div className="cartao">
-            <label className="campo"><span>Começou a trabalhar em</span><input type="date" name="funcAdmissao" value={admissao} onChange={(e) => setAdmissao(e.target.value)} /></label>
+            <CampoData rotulo="Começou a trabalhar em" valor={admissao} aoMudar={setAdmissao} nome="funcAdmissao" />
             {(f || saida) && (
-              <label className="campo"><span>Saiu da fazenda em (vazio = ainda trabalha)</span><input type="date" name="funcSaida" value={saida ?? ''} onChange={(e) => setSaida(e.target.value)} /></label>
+              <CampoData rotulo="Saiu da fazenda em (vazio = ainda trabalha)" valor={saida ?? ''} aoMudar={setSaida} nome="funcSaida" />
             )}
-            <CampoTexto rotulo="Telefone / WhatsApp" valor={telefone} aoMudar={(v) => setTelefone(v.replace(/[^\d()+\s-]/g, '').slice(0, 20))} nome="funcTelefone" />
-            <CampoTexto rotulo="Observação" valor={obs} aoMudar={setObs} nome="funcObs" />
+            <CampoTexto rotulo="Telefone / WhatsApp" valor={telefone} aoMudar={(v) => setTelefone(v.replace(/[^\d()+\s-]/g, '').slice(0, 20))} nome="funcTelefone" formato="digitos" inputMode="tel" />
+            <CampoTexto rotulo="Observação" valor={obs} aoMudar={setObs} nome="funcObs" multilinha />
           </div>
         </fieldset>
 
@@ -268,11 +268,9 @@ function AcessoApp({ f, fazendaId, souDono, usuarioId, setUsuarioId, nome, telef
             <p style={{ marginTop: 0 }}>Usa o app como <b>{ligado.nome || 'sem nome'}</b>{ligado.eu ? ' (você)' : ''}.{ligado.bloqueado ? ' Está pausado: a equipe passou do limite do plano.' : ''}</p>
             {souDono && !ligado.eu ? (
               <>
-                <label className="campo"><span>Papel no app</span>
-                  <select name="funcPapel" value={ligado.papel} onChange={(e) => mudar(e.target.value as Papel)}>
-                    {Object.entries(PAPEIS).map(([k, v]) => <option key={k} value={k}>{v.nome}</option>)}
-                  </select>
-                </label>
+                <CampoEscolha rotulo="Papel no app" nome="funcPapel" valor={ligado.papel} aoMudar={(v) => mudar(v as Papel)}>
+                  {Object.entries(PAPEIS).map(([k, v]) => <option key={k} value={k}>{v.nome}</option>)}
+                </CampoEscolha>
                 <p className="mudo">{PAPEIS[ligado.papel].texto}</p>
                 <button className="btn perigo pequeno" onClick={tirar}>Tirar o acesso ao app</button>
               </>
@@ -289,19 +287,16 @@ function AcessoApp({ f, fazendaId, souDono, usuarioId, setUsuarioId, nome, telef
       {lista && !usuarioId && souDono && (
         <>
           {livres.length > 0 && (
-            <label className="campo"><span>Ele já entrou na equipe do app?</span>
-              <select name="funcConta" value="" onChange={(e) => { if (e.target.value) { setUsuarioId(e.target.value); aviso('Conta escolhida. Toque em Salvar.'); } }}>
-                <option value="">Escolha o nome dele…</option>
-                {livres.map((m) => <option key={m.usuario_id} value={m.usuario_id}>{m.nome || 'Sem nome'} · {PAPEIS[m.papel].nome}{m.eu ? ' (você)' : ''}</option>)}
-              </select>
-            </label>
+            <CampoEscolha rotulo="Ele já entrou na equipe do app?" nome="funcConta" valor=""
+              aoMudar={(v) => { if (v) { setUsuarioId(v); aviso('Conta escolhida. Toque em Salvar.'); } }}>
+              <option value="">Escolha o nome dele…</option>
+              {livres.map((m) => <option key={m.usuario_id} value={m.usuario_id}>{m.nome || 'Sem nome'} · {PAPEIS[m.papel].nome}{m.eu ? ' (você)' : ''}</option>)}
+            </CampoEscolha>
           )}
           <p className="mudo">Para chamar para o app, escolha o papel e mande o código para o celular dele. Quando ele entrar, volte aqui e escolha o nome dele acima.</p>
-          <label className="campo"><span>Papel no app</span>
-            <select name="funcPapelConvite" value={papelConv} onChange={(e) => { setPapelConv(e.target.value as Papel); setCodigo(null); }}>
-              {(['vaqueiro', 'gerente', 'consultor'] as Papel[]).map((p) => <option key={p} value={p}>{PAPEIS[p].nome}</option>)}
-            </select>
-          </label>
+          <CampoEscolha rotulo="Papel no app" nome="funcPapelConvite" valor={papelConv} aoMudar={(v) => { setPapelConv(v as Papel); setCodigo(null); }}>
+            {(['vaqueiro', 'gerente', 'consultor'] as Papel[]).map((p) => <option key={p} value={p}>{PAPEIS[p].nome}</option>)}
+          </CampoEscolha>
           <p className="mudo">{PAPEIS[papelConv].texto}</p>
           {plano && (
             <p className="mudo" data-testid="vagasPlano">Plano {NOME_PLANO[plano.plano] ?? plano.plano}: {plano.pessoas} de {plano.limite} pessoas{plano.convites_abertos ? ` e ${plano.convites_abertos} convite(s) em aberto` : ''}. Cada pessoa a mais custa {PRECO_PESSOA_EXTRA} por mês.</p>
