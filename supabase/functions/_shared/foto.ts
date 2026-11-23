@@ -2,7 +2,9 @@
 // Nunca confiamos na resposta do modelo: cada número passa por limites antes de voltar para o app,
 // e o app mostra tudo para a pessoa conferir antes de salvar.
 
-export type TipoFoto = 'rotulo' | 'balanca';
+// balanca_lote: o visor com o lote (ou um grupo) inteiro em cima; o app divide pelas cabeças.
+export type TipoFoto = 'rotulo' | 'balanca' | 'balanca_lote';
+export const TIPOS_FOTO: readonly TipoFoto[] = ['rotulo', 'balanca', 'balanca_lote'];
 export const CATEGORIAS = ['ingrediente', 'nucleo', 'sal_mineral', 'sal_adensado', 'proteinado', 'proteico_energetico', 'racao'] as const;
 export type Categoria = (typeof CATEGORIAS)[number];
 /** Equivalente proteico da ureia: 1% de ureia dá ~2,81% de PB. */
@@ -15,14 +17,14 @@ export interface PedidoFoto { tipo: TipoFoto; imagem: string; mime: (typeof MIME
 export function validarPedido(corpo: unknown): PedidoFoto {
   const c = corpo as Record<string, unknown> | null;
   if (!c || typeof c !== 'object') throw new Error('Pedido inválido.');
-  if (c.tipo !== 'rotulo' && c.tipo !== 'balanca') throw new Error('Tipo de foto inválido.');
+  if (!(TIPOS_FOTO as readonly unknown[]).includes(c.tipo)) throw new Error('Tipo de foto inválido.');
   if (typeof c.mime !== 'string' || !(MIMES as readonly string[]).includes(c.mime)) throw new Error('A foto precisa ser JPG, PNG ou WebP.');
   if (typeof c.imagem !== 'string' || c.imagem.length < 100) throw new Error('Foto vazia.');
   if (c.imagem.length > MAX_BASE64) throw new Error('Foto grande demais.');
   if (!/^[A-Za-z0-9+/]+={0,2}$/.test(c.imagem)) throw new Error('Foto inválida.');
   // A fazenda decide o plano e a cota; o banco confere se a pessoa é mesmo dela.
   if (typeof c.fazenda !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(c.fazenda)) throw new Error('Ligue o celular a uma fazenda na nuvem.');
-  return { tipo: c.tipo, imagem: c.imagem, mime: c.mime as PedidoFoto['mime'], fazenda: c.fazenda };
+  return { tipo: c.tipo as TipoFoto, imagem: c.imagem, mime: c.mime as PedidoFoto['mime'], fazenda: c.fazenda };
 }
 
 const num = { type: ['number', 'null'] } as const;
@@ -41,6 +43,10 @@ export const ESQUEMA: Record<TipoFoto, Record<string, unknown>> = {
   balanca: {
     type: 'object', additionalProperties: false, required: ['legivel', 'peso', 'brinco'],
     properties: { legivel: { type: 'boolean' }, peso: num, brinco: { type: ['string', 'null'] } },
+  },
+  balanca_lote: {
+    type: 'object', additionalProperties: false, required: ['legivel', 'peso_total', 'quantidade', 'peso_medio'],
+    properties: { legivel: { type: 'boolean' }, peso_total: num, quantidade: { type: ['integer', 'null'] }, peso_medio: num },
   },
 };
 
@@ -68,6 +74,13 @@ export const PROMPT: Record<TipoFoto, string> = {
     'Se houver um número de brinco/identificação na tela, devolva em brinco; senão null.',
     'legivel = false se não der para ler o peso com segurança. Não estime.',
   ].join('\n'),
+  balanca_lote: [
+    'A imagem é o visor de uma balança de gado com um lote (vários animais) em cima, ou a tela de um indicador com o resumo da pesagem.',
+    'peso_total: o peso total mostrado, em kg (se estiver em toneladas, converta para kg).',
+    'quantidade: o número de animais, só se o visor mostrar (ex.: "QTD", "N", "Animais", "Cab"); senão null.',
+    'peso_medio: o peso médio por animal, só se o visor mostrar (ex.: "Média", "MED"); senão null.',
+    'Não calcule nem estime nada que não esteja na tela. legivel = false se não der para ler com segurança.',
+  ].join('\n'),
 };
 
 const faixa = (v: unknown, min: number, max: number): number | null =>
@@ -90,10 +103,20 @@ export interface LeituraRotulo {
   consumo: string | null; consumoPctPV: number | null; observacao: string | null;
 }
 export interface LeituraBalanca { legivel: boolean; peso: number | null; brinco: string | null }
+export interface LeituraBalancaLote { legivel: boolean; pesoTotal: number | null; quantidade: number | null; pesoMedio: number | null }
 
 /** Limpa o que o modelo respondeu: só números plausíveis passam. */
-export function limparLeitura(tipo: TipoFoto, bruto: unknown): LeituraRotulo | LeituraBalanca {
+export function limparLeitura(tipo: TipoFoto, bruto: unknown): LeituraRotulo | LeituraBalanca | LeituraBalancaLote {
   const r = (bruto && typeof bruto === 'object' ? bruto : {}) as Record<string, unknown>;
+  if (tipo === 'balanca_lote') {
+    const pesoTotal = faixa(r.peso_total, 1, 200_000);
+    const q = faixa(r.quantidade, 1, 5000);
+    const quantidade = q != null && Number.isInteger(q) ? q : null;
+    let pesoMedio = faixa(r.peso_medio, 1, 2000);
+    // média que não bate com o total e a quantidade da própria tela não é confiável
+    if (pesoMedio != null && pesoTotal != null && quantidade != null && Math.abs(pesoMedio * quantidade - pesoTotal) > pesoTotal * 0.05) pesoMedio = null;
+    return { legivel: r.legivel === true && (pesoTotal != null || pesoMedio != null), pesoTotal, quantidade, pesoMedio };
+  }
   if (tipo === 'balanca') {
     const peso = faixa(r.peso, 1, 2000);
     return { legivel: r.legivel === true && peso != null, peso, brinco: texto(r.brinco, 30) };

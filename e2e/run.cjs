@@ -99,6 +99,12 @@ function confere(cond, msg) {
     const previa = await page.getByText('0,800 kg/dia').isVisible();
     confere(previa, 'prévia do GMD = 0,800 kg/dia antes de salvar');
     await page.getByRole('button', { name: 'Salvar pesagem' }).click();
+    await page.getByTestId('pesagemSalva').waitFor();
+    const relTxt = await page.locator('main').innerText();
+    confere(relTxt.includes('GMD desde a pesagem anterior') && relTxt.includes('0,800 kg/dia'), 'depois de salvar, abre o relatório da pesagem com o GMD');
+    confere((await page.locator('svg.grafico').count()) === 2, 'relatório mostra a curva de ganho e o GMD por período');
+    await foto('03a-relatorio-pesagem');
+    await page.getByRole('link', { name: 'Ver o lote' }).click();
     await page.getByRole('heading', { name: 'Lote 5' }).waitFor();
     const txt = await page.locator('main').innerText();
     confere(txt.includes('0,800 kg/dia'), 'GMD do período aparece no resumo');
@@ -112,6 +118,13 @@ function confere(cond, msg) {
     console.log('5. Pesagem um a um com média automática');
     await page.getByRole('link', { name: 'Nova pesagem' }).click();
     await page.locator('input[type=date]').fill('2026-10-31');
+    await page.getByRole('radio', { name: /Lote todo/ }).click();
+    await page.locator('input[name=pesoTotal]').fill('3480');
+    await page.locator('input[name=qtdPesada]').fill('10');
+    confere((await page.getByTestId('contaMedia').innerText()).includes('348 kg por cabeça'), 'lote todo na balança: 3.480 kg ÷ 10 cab = 348 kg por cabeça');
+    await page.getByRole('button', { name: /Ler o peso pela foto da balança/ }).click();
+    confere(await page.getByTestId('fotoPrecisaNuvem').isVisible(), 'foto da balança explica que precisa da nuvem (plano Pro)');
+    await foto('04a-pesar-lote-todo');
     await page.getByRole('radio', { name: /Um a um/ }).click();
     const pesos = ['350', '340', '352'];
     for (let i = 0; i < pesos.length; i++) {
@@ -120,6 +133,23 @@ function confere(cond, msg) {
     }
     confere(await page.getByText('347,3 kg').isVisible(), 'média de 3 animais = 347,3 kg');
     await page.getByRole('button', { name: 'Salvar pesagem' }).click();
+    await page.getByTestId('pesagemSalva').waitFor();
+    {
+      const fs = require('node:fs');
+      const [dP] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Enviar PDF (com gráficos)' }).click()]);
+      confere(dP.suggestedFilename() === 'pesagem-lote-5-2026-10-31.pdf', 'PDF da pesagem com nome do lote e data');
+      const cP = path.join(FOTOS, 'pesagem.pdf');
+      await dP.saveAs(cP);
+      const pdf = fs.readFileSync(cP).toString('latin1');
+      confere(pdf.startsWith('%PDF-') && pdf.includes('(Curva de ganho de peso) Tj'), 'PDF da pesagem com a curva de ganho');
+      const [dX] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Enviar Excel' }).click()]);
+      const cX = path.join(FOTOS, 'pesagem.xlsx');
+      await dX.saveAs(cX);
+      confere(fs.readFileSync(cX).subarray(0, 2).toString() === 'PK', 'Excel da pesagem gerado');
+      const wa = decodeURIComponent(await page.getByRole('link', { name: 'Mandar resumo em texto no WhatsApp' }).getAttribute('href'));
+      confere(wa.includes('Pesagem do lote *Lote 5*') && wa.includes('347 kg'), 'resumo da pesagem pronto para o WhatsApp');
+    }
+    await page.getByRole('link', { name: 'Ver o lote' }).click();
     await page.getByRole('heading', { name: 'Lote 5' }).waitFor();
     await page.getByRole('radio', { name: /Pesagens/ }).click();
     confere((await page.locator('table.tab tbody tr').count()) === 3, 'histórico com 3 pesagens');
@@ -141,6 +171,8 @@ function confere(cond, msg) {
       await page.getByLabel(`Peso ${i + 1}`, { exact: true }).fill(ent[i][1]);
     }
     await page.getByRole('button', { name: 'Salvar pesagem' }).click();
+    await page.getByTestId('pesagemSalva').waitFor();
+    await page.getByRole('link', { name: 'Ver o lote' }).click();
     await page.getByRole('heading', { name: 'Novilhas' }).waitFor();
     await page.getByRole('link', { name: 'Nova pesagem' }).click();
     await page.getByLabel('Peso 1', { exact: true }).waitFor();
@@ -149,6 +181,13 @@ function confere(cond, msg) {
     await page.getByLabel('Peso 1', { exact: true }).fill('221');
     await page.getByLabel('Peso 2', { exact: true }).fill('225');
     await page.getByRole('button', { name: 'Salvar pesagem' }).click();
+    await page.getByTestId('pesagemSalva').waitFor();
+    confere((await page.locator('main').innerText()).includes('Melhor animal'), 'relatório do lote por cabeça mostra o melhor animal');
+    await page.getByRole('button', { name: 'A2' }).click();
+    await page.getByText('Posição no lote (GMD)').waitFor();
+    confere((await page.locator('main').innerText()).includes('2º de 2'), 'relatório do animal A2: posição no lote');
+    await foto('05a-relatorio-animal');
+    await page.getByRole('link', { name: 'Ver o lote' }).click();
     await page.getByRole('heading', { name: 'Novilhas' }).waitFor();
     await page.getByRole('radio', { name: /Animais/ }).click();
     const tab = await page.locator('table.tab').innerText();
@@ -178,9 +217,15 @@ function confere(cond, msg) {
     await page.locator('input[type=date]').fill(new Date().toISOString().slice(0, 10)); // hoje: o trato usa o peso estimado para hoje
     await page.locator('input[name=pesoMedio]').fill('366');
     await page.getByRole('button', { name: 'Salvar pesagem' }).click();
-    await page.getByRole('heading', { name: 'Lote 5' }).waitFor();
+    await page.getByTestId('pesagemSalva').waitFor();
     confere(true, 'pesagem salva sem internet');
+    {
+      const [dOff] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Enviar PDF (com gráficos)' }).click()]);
+      confere(/\.pdf$/.test(dOff.suggestedFilename()), 'relatório em PDF sai mesmo sem internet');
+    }
     await foto('07-offline');
+    await page.getByRole('link', { name: 'Ver o lote' }).click();
+    await page.getByRole('heading', { name: 'Lote 5' }).waitFor();
     await ctx.setOffline(false);
     await page.reload();
     await page.getByRole('radio', { name: /Pesagens/ }).click();
@@ -460,7 +505,7 @@ function confere(cond, msg) {
       await p2.getByText('Fêmea — 4º lote').waitFor();
       const loteId = await p2.evaluate(() => new Promise((ok) => { const r = indexedDB.open('boiforte'); r.onsuccess = () => { const t = r.result.transaction('lotes').objectStore('lotes').getAll(); t.onsuccess = () => ok(t.result[0].id); }; }));
       const formulaId = await p2.evaluate(() => new Promise((ok) => { const r = indexedDB.open('boiforte'); r.onsuccess = () => { const t = r.result.transaction('formulas').objectStore('formulas').getAll(); t.onsuccess = () => ok(t.result[0]?.id ?? 'nova'); }; }));
-      const telas = ['/lotes', '/lotes/novo', `/lotes/${loteId}`, `/lotes/${loteId}/editar`, '/pesar', `/pesar/${loteId}`, '/fazenda', '/mais', '/nutricao',
+      const telas = ['/lotes', '/lotes/novo', `/lotes/${loteId}`, `/lotes/${loteId}/editar`, `/lotes/${loteId}/relatorio`, '/pesar', `/pesar/${loteId}`, '/fazenda', '/mais', '/nutricao',
         `/nutricao/formula/${formulaId}`, '/nutricao/formula/nova', '/nutricao/ingrediente/novo', '/estoque', '/trato', '/financeiro', '/sanidade', '/simular', '/relatorios', '/nuvem', '/cotacoes'];
       const semVoltar = [], semMic = [];
       for (const t of telas) {
