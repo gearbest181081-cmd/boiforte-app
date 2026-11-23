@@ -508,7 +508,12 @@ function confere(cond, msg) {
       await foto('22-dica-microfone');
       await p2.getByRole('button', { name: 'Entendi, falar agora' }).click();
       const ontem = await p2.evaluate(() => { const d = new Date(Date.now() - 86400000); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); });
-      await p2.waitForFunction((v) => document.querySelector('input[name=pesagemData]').value === v, ontem);
+      // Espera no Node (waitForFunction pode cair em eval e a CSP do app bloqueia).
+      const esperarValor = async (sel, v) => {
+        for (const fim = Date.now() + 5000; Date.now() < fim; await p2.waitForTimeout(50)) if ((await p2.locator(sel).inputValue()) === v) return;
+        throw new Error(`${sel} não ficou "${v}"`);
+      };
+      await esperarValor('input[name=pesagemData]', ontem);
       confere(true, 'falar "ontem" preenche a data');
       await p2.evaluate(() => { window.__fala = 'trezentos e vinte vírgula cinco'; });
       const mic = p2.locator('.com-mic').filter({ has: p2.locator('input[name=pesoMedio]') }).locator('.mic');
@@ -517,7 +522,7 @@ function confere(cond, msg) {
         await p2.getByTestId('dicaMic').waitFor();
         confere((await p2.getByTestId('dicaMic').innerText()).includes('2 de 3'), 'segundo toque: explicação 2 de 3');
         await p2.getByRole('button', { name: 'Entendi, falar agora' }).click();
-        await p2.waitForFunction(() => document.querySelector('input[name=pesoMedio]').value === '320,5');
+        await esperarValor('input[name=pesoMedio]', '320,5');
         confere(true, 'falar número preenche o peso');
         await mic.click(); await p2.getByRole('button', { name: 'Entendi, falar agora' }).click();
         await p2.waitForTimeout(200);
