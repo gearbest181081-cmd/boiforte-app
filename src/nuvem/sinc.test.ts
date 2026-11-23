@@ -35,6 +35,7 @@ describe('sincronização entre celulares', () => {
     usarBanco(A);
     await carregarExemplo();
     const id = await s.rpc<string>(ana, 'criar_fazenda', { p_nome: 'Fazenda Exemplo' });
+    await s.pg.query(`select public.definir_plano($1, 'pro')`, [id]); // equipe de 3 pessoas
     faz = { id, nome: 'Fazenda Exemplo', papel: 'dono' };
     await ligarFazenda(faz, 'enviar');
     const total = await db.pendentes.count();

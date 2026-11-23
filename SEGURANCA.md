@@ -44,6 +44,7 @@ Os testes `src/nuvem/servidor.test.ts` sobem essas mesmas migrações e tentam f
 | Rastro | Auditoria de alterações de dinheiro e de exclusões (quem, quando, o quê). |
 | Login | Código de 6 números por e-mail (Supabase Auth), com "Confirm email" ligado. Nenhuma senha passa pelo app. Uma conta criada com senha pela API (fora do app) fica bloqueada no banco: não vê nem grava nada. Sessão com renovação automática. |
 | Posse da fazenda | Fica só na tabela de membros. Apagar a conta de quem criou a fazenda não apaga a fazenda dos outros. |
+| Plano e número de pessoas | O plano fica na fazenda e só o servidor muda (`definir_plano`, chave de serviço); o app não tem permissão de alterar a tabela. Básico: 2 pessoas; Pro: 4 + extras. Uma trava no banco (gatilho em `membros`) recusa quem passar do limite, por qualquer caminho, trancando a linha da fazenda antes de contar (dois convites aceitos ao mesmo tempo não passam juntos). Convites em aberto ocupam vaga. Se o plano diminuir, ninguém é apagado: quem passou do limite fica pausado (não baixa, não envia, não usa foto); donos têm prioridade, depois quem entrou antes. |
 | Convite vazado | O dono vê os convites ainda não usados e pode cancelar cada um. |
 | Leitura por foto | Função no servidor: exige login e ser de uma fazenda, confere tipo e tamanho da imagem, cota de 30 por pessoa e teto de 300 por dia no sistema todo (no banco), chave da IA só no servidor. O CORS só deixa o endereço do app usar a função pelo navegador; não é a proteção principal. A resposta é limpa por faixas plausíveis e o app mostra para a pessoa conferir antes de salvar. A foto não é guardada. |
 | Cotações | Gravadas só pela função agendada (cabeçalho secreto comparado em tempo constante, chave de serviço); números fora da faixa plausível são descartados no banco. O app só lê. |
@@ -55,4 +56,6 @@ Os testes `src/nuvem/servidor.test.ts` sobem essas mesmas migrações e tentam f
 - O app ainda é servido no GitHub Pages, cujo endereço (`gearbest181081-cmd.github.io`) é dividido com qualquer outro site Pages da mesma conta: não publique outros sites Pages nesta conta. Com o domínio próprio, servir com cabeçalhos HTTP (CSP com `frame-ancestors 'none'`).
 - A versão de sincronização é uma sequência única para todas as fazendas: revela só o volume total de gravações, nenhum conteúdo.
 - Os limites de login por e-mail são os do Supabase Auth; para muitos usuários, configure um SMTP próprio (ver `CONFIGURAR.md`).
+- O limite do plano conta **pessoas (contas)**, não aparelhos: a mesma conta pode entrar em mais de um celular. O servidor não tem como identificar um aparelho com segurança (quem informa é o próprio celular).
+- Quem fica pausado ou é tirado da equipe continua com os dados que já estavam no celular (o app funciona sem internet); só deixa de sincronizar.
 - A balança Bluetooth é experimental: o peso entra na tela e a pessoa confere antes de salvar.

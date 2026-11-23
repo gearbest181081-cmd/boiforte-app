@@ -64,8 +64,11 @@ export async function sair() { await (await sb()).auth.signOut({ scope: 'local' 
 
 // ---------- fazendas e equipe ----------
 
-export interface MinhaFazenda { fazenda_id: string; nome: string; papel: Papel }
-export interface Membro { usuario_id: string; nome: string; papel: Papel; entrou_em: string; eu: boolean }
+/** bloqueado: a pessoa está "pausada" porque a equipe passou do limite do plano (decidido no servidor). */
+export interface MinhaFazenda { fazenda_id: string; nome: string; papel: Papel; bloqueado?: boolean }
+export interface Membro { usuario_id: string; nome: string; papel: Papel; entrou_em: string; eu: boolean; bloqueado?: boolean }
+export interface PlanoFazenda { plano: 'basico' | 'pro'; usuarios_extras: number; limite: number; pessoas: number; convites_abertos: number; eu_pausado: boolean }
+export const NOME_PLANO: Record<string, string> = { basico: 'Básico', pro: 'Pro' };
 
 export const minhasFazendas = () => rpc<MinhaFazenda[]>('minhas_fazendas', {});
 export const criarFazenda = (nome: string, meuNome: string) => rpc<string>('criar_fazenda', { p_nome: nome, meu_nome: meuNome });
@@ -76,6 +79,8 @@ export async function aceitarConvite(codigo: string, meuNome: string): Promise<s
   return id;
 }
 export const equipe = (f: string) => rpc<Membro[]>('equipe', { f });
+/** Plano e vagas da fazenda. Só para mostrar: quem limita é o servidor. */
+export const planoDaFazenda = (f: string) => rpc<PlanoFazenda[]>('plano_da_fazenda', { f }).then((r) => r[0] ?? null);
 export const mudarPapel = (f: string, usuario: string, papel: Papel) => rpc<void>('mudar_papel', { f, usuario, p_papel: papel });
 export async function apagarMinhaConta() { await rpc<void>('apagar_minha_conta', { confirmar: 'APAGAR' }); await sair(); }
 export const removerMembro = (f: string, usuario: string) => rpc<void>('remover_membro', { f, usuario });
