@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { melhorNumero, ouvir, vozDisponivel } from '../voz';
+import { Perfil } from './Perfil';
 
 // ---------- Ícones (desenhados aqui para funcionar sem internet) ----------
 const caminhos: Record<string, ReactNode> = {
@@ -50,6 +51,7 @@ export function Topo({ titulo, voltar }: { titulo: string; voltar?: boolean }) {
       {voltar && <button className="voltar" aria-label="Voltar" onClick={() => ((window.history.state?.idx ?? 0) > 0 ? nav(-1) : nav('/', { replace: true }))}>‹</button>}
       <h1>{titulo}</h1>
       {!online && <span className="offline" title="Tudo continua sendo salvo no celular">Sem internet</span>}
+      <Perfil />
     </header>
   );
 }

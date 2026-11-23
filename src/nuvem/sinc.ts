@@ -67,6 +67,13 @@ export async function desligarFazenda() {
   });
 }
 
+/** Apaga tudo deste celular (dados e ligação com a nuvem). Na nuvem nada muda. */
+export async function apagarDadosDoCelular() {
+  await semAnotar(TABS_SINC, async () => {
+    for (const t of TABS_SINC) await db.table(t).clear();
+  });
+}
+
 // ---------- tradução entre o celular (ids numéricos) e a nuvem (gid) ----------
 
 type Reg = Record<string, unknown>;

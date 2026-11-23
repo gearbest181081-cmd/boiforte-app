@@ -7,6 +7,7 @@ import { ordenarAlertas } from '../alertas';
 import { fmtData, fmtGmd, fmtKg, fmtNum, hojeISO } from '../calc';
 import { Indicador, Topo } from '../components/ui';
 import { usePapel } from '../nuvem/useNuvem';
+import { nuvemConfigurada } from '../nuvem/cliente';
 
 export function Inicio() {
   const props = useLiveQuery(() => db.propriedades.toArray());
@@ -30,6 +31,7 @@ export function Inicio() {
             <p className="mudo">Tudo o que você lançar fica guardado no celular e funciona mesmo sem internet, no meio do pasto.</p>
           </div>
           <Link to="/fazenda" className="btn largo">Começar: cadastrar minha fazenda</Link>
+          {nuvemConfigurada() && <Link to="/nuvem" className="btn sec largo" style={{ marginTop: 12 }}>Recebi um convite da equipe</Link>}
           <div className="dica" style={{ marginTop: 16 }}>
             Quer só conhecer? Em <Link to="/mais">Mais</Link> você pode carregar um exemplo pronto.
           </div>
