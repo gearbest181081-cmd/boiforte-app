@@ -49,8 +49,8 @@ describe('servidor', () => {
   });
 
   it('cada um só vê a própria fazenda', async () => {
-    const deBeto = await s.como(beto, () => s.pg.query('select * from public.registros'));
-    expect(deBeto.rows).toHaveLength(0);
+    const deBeto = await s.como(beto, () => s.pg.query('select * from public.registros').catch((e) => e));
+    expect(String(deBeto)).toMatch(/permission denied/); // leitura só por baixar_alteracoes
     const fazBeto = await s.como(beto, () => s.pg.query<{ id: string }>('select id from public.fazendas'));
     expect(fazBeto.rows.map((x) => x.id)).toEqual([fb]);
     await expect(s.rpc(beto, 'baixar_alteracoes', { f: fa, desde: 0 })).rejects.toThrow('não faz parte');
@@ -160,13 +160,16 @@ describe('servidor', () => {
       { tabela: 'config', gid: 'precoArroba', op: 'put', dados: { chave: 'precoArroba', valor: 1 } },
     ]);
     expect(nao.map((x) => x.ok)).toEqual([false, false, false, false, false, false]);
-    const vac = await enviar(caio, fa, [{ tabela: 'lancamentos', gid: uuid(43), op: 'put', dados: { data: '2026-11-19', tipo: 'despesa', categoria: 'sanidade', valor: 240, loteId: uuid(2), origem: 'sanidade', criadoEm: 0 } }]);
-    expect(vac[0].ok).toBe(true); // custo da vacina que ele aplicou
+    const vac = await enviar(caio, fa, [
+      { tabela: 'sanidade', gid: uuid(44), op: 'put', dados: { loteId: uuid(2), data: '2026-11-19', feito: true, tipo: 'vacina', produto: 'Aftosa', custo: 240, criadoEm: 0 } },
+      { tabela: 'lancamentos', gid: uuid(43), op: 'put', dados: { data: '2026-11-19', tipo: 'despesa', categoria: 'sanidade', valor: 240, loteId: uuid(2), origem: 'sanidade', refId: uuid(44), criadoEm: 0 } },
+    ]);
+    expect(vac.map((x) => x.ok)).toEqual([true, true]); // custo da vacina que ele aplicou
     const baixou = await s.rpc<{ tabela: string }[]>(caio, 'baixar_alteracoes', { f: fa, desde: 0 });
     expect(baixou.some((x) => x.tabela === 'vendas' || x.tabela === 'lancamentos')).toBe(false);
     expect(baixou.some((x) => x.tabela === 'pesagens')).toBe(true);
-    const direto = await s.como(caio, () => s.pg.query<{ tabela: string }>(`select tabela from public.registros where tabela in ('vendas', 'lancamentos')`));
-    expect(direto.rows).toHaveLength(0);
+    const direto = await s.como(caio, () => s.pg.query(`select tabela from public.registros`).catch((e) => e));
+    expect(String(direto)).toMatch(/permission denied/);
     const aud = await s.como(caio, () => s.pg.query('select * from public.auditoria'));
     expect(aud.rows).toHaveLength(0); // auditoria é só do dono
   });
@@ -246,5 +249,119 @@ describe('servidor', () => {
     await s.rpc(zeca, 'apagar_minha_conta', { confirmar: 'APAGAR' });
     const r = await s.pg.query<{ f: number; u: number }>(`select (select count(*) from public.fazendas where id = $1)::int f, (select count(*) from auth.users where id = $2)::int u`, [fz, zeca]);
     expect(r.rows[0]).toEqual({ f: 0, u: 0 });
+  });
+});
+
+// Correções da auditoria de segurança de 23/11/2026 (A1 a A6).
+describe('servidor: correções da auditoria', () => {
+  let s: Servidor;
+  let dono: string, vaq: string, f: string;
+  const enviar = (u: string, fz: string, ops: unknown[]) => s.rpc<Res>(u, 'enviar_alteracoes', { f: fz, ops });
+  const put = (tabela: string, n: number, dados: Record<string, unknown>) => ({ tabela, gid: uuid(n), op: 'put', dados: { criadoEm: 0, ...dados } });
+  const ing = (n: number, preco: number) => put('ingredientes', n, { nome: 'Ing ' + n, ms: 88, pb: 9, ndt: 80, ca: 0.1, p: 0.3, preco, ativo: true });
+
+  beforeAll(async () => {
+    s = await subirServidor();
+    dono = await s.novoUsuario('dono@x');
+    vaq = await s.novoUsuario('vaq@x');
+    f = await s.rpc<string>(dono, 'criar_fazenda', { p_nome: 'Canaã', meu_nome: 'Dono' });
+    const r = await enviar(dono, f, [
+      put('propriedades', 1, { nome: 'Sede' }),
+      ing(2, 1.5), ing(3, 4),
+      put('formulas', 4, { nome: 'Proteinado', tipo: 'proteinado', unidade: 'kg', modo: 'direto', consumoPctPV: 0.002, itens: [{ ingredienteId: uuid(2), qtd: 3 }, { ingredienteId: uuid(3), qtd: 1 }] }),
+      put('formulas', 5, { nome: 'Batida', tipo: 'tip', unidade: 'kg', modo: 'batida', consumoPctPV: 0.015, itens: [{ ingredienteId: uuid(2), qtd: 1 }], custoEstoque: 2 }),
+      put('lotes', 6, { propriedadeId: uuid(1), nome: 'Recria', fase: 'recria', sexo: 'macho', controle: 'lote', qtdCabecas: 30, dataEntrada: '2026-09-01', formulaId: uuid(4) }),
+      put('batidas', 7, { formulaId: uuid(5), data: '2026-10-01', kg: 100, custoTotal: 150, itens: [{ ingredienteId: uuid(2), kg: 100, custo: 150 }] }),
+      put('movimentos', 8, { ingredienteId: uuid(2), data: '2026-10-01', tipo: 'entrada', kg: 1000, valor: 1500, origem: 'compra' }),
+      { tabela: 'config', gid: 'precoArroba', op: 'put', dados: { chave: 'precoArroba', valor: 320 } },
+      { tabela: 'config', gid: 'rendimento', op: 'put', dados: { chave: 'rendimento', valor: 0.52 } },
+    ]);
+    expect(r.map((x) => x.erro ?? x.ok)).toEqual(Array(r.length).fill(true));
+    const c = await s.rpc<string>(dono, 'criar_convite', { f, p_papel: 'vaqueiro' });
+    await s.rpc(vaq, 'aceitar_convite', { p_codigo: c, meu_nome: 'Vaq' });
+  }, 30000);
+
+  it('A1: conta criada com senha (fora do app) fica bloqueada', async () => {
+    const intruso = await s.novoUsuario('vitima@x');
+    await s.pg.query(`update auth.users set encrypted_password = '$2a$10$abc' where id = $1`, [intruso]);
+    await expect(s.rpc(intruso, 'criar_fazenda', { p_nome: 'X' })).rejects.toThrow('criada fora do app');
+    expect(await s.rpc<unknown[]>(intruso, 'minhas_fazendas', {})).toHaveLength(0);
+    // mesmo se já estivesse numa equipe, o papel some
+    await s.pg.query(`insert into public.membros (fazenda_id, usuario_id, papel) values ($1, $2, 'gerente')`, [f, intruso]);
+    await expect(s.rpc(intruso, 'baixar_alteracoes', { f, desde: 0 })).rejects.toThrow();
+    const fz = await s.como(intruso, () => s.pg.query('select id from public.fazendas'));
+    expect(fz.rows).toHaveLength(0);
+    await s.pg.query(`delete from public.membros where usuario_id = $1`, [intruso]);
+  });
+
+  it('A3: o vaqueiro baixa tudo do trato, mas sem preço nem custo', async () => {
+    const l = await s.rpc<{ tabela: string; gid: string; dados: Record<string, unknown> | null; excluido: boolean }[]>(vaq, 'baixar_alteracoes', { f, desde: 0 });
+    const de = (t: string) => l.filter((x) => x.tabela === t).map((x) => x.dados);
+    expect(de('ingredientes').map((d) => d?.preco)).toEqual([0, 0]);
+    expect(de('formulas').every((d) => d && !('custoEstoque' in d))).toBe(true);
+    expect(de('movimentos').every((d) => d && !('valor' in d))).toBe(true);
+    expect(de('batidas')[0]).toMatchObject({ custoTotal: 0, itens: [{ custo: 0 }] });
+    const arroba = l.find((x) => x.tabela === 'config' && x.gid === 'precoArroba');
+    expect(arroba).toMatchObject({ excluido: true, dados: null });
+    expect(l.find((x) => x.gid === 'rendimento')?.dados).toEqual({ chave: 'rendimento', valor: 0.52 });
+    // o dono continua recebendo os valores
+    const d = await s.rpc<{ tabela: string; dados: Record<string, unknown> }[]>(dono, 'baixar_alteracoes', { f, desde: 0 });
+    expect(d.filter((x) => x.tabela === 'ingredientes').map((x) => x.dados.preco).sort()).toEqual([1.5, 4]);
+  });
+
+  it('A4: o vaqueiro não lança receita e o valor da vacina vem da aplicação', async () => {
+    const r = await enviar(vaq, f, [
+      put('sanidade', 20, { loteId: uuid(6), data: '2026-11-19', feito: true, tipo: 'vacina', produto: 'Aftosa', custo: 240 }),
+      put('lancamentos', 21, { data: '2026-11-19', tipo: 'receita', categoria: 'venda_animais', valor: 1, origem: 'sanidade', refId: uuid(20) }),
+      put('lancamentos', 22, { data: '2026-11-19', tipo: 'despesa', categoria: 'sanidade', valor: 99999, origem: 'sanidade' }),
+      put('lancamentos', 23, { data: '2026-01-01', tipo: 'despesa', categoria: 'sanidade', valor: 99999, origem: 'sanidade', refId: uuid(20) }),
+    ]);
+    expect(r.map((x) => x.ok)).toEqual([true, false, false, true]);
+    expect(r[3].dados).toMatchObject({ valor: 240, data: '2026-11-19' });
+  });
+
+  it('A4: custo do trato do vaqueiro é calculado no servidor; valor de estoque dele é ignorado', async () => {
+    const r = await enviar(vaq, f, [
+      put('fornecimentos', 30, { loteId: uuid(6), formulaId: uuid(4), data: '2026-11-19', cabecas: 30, pesoRef: 300, kgPrevisto: 20, kgFornecido: 20, custo: 0 }),
+      put('fornecimentos', 31, { loteId: uuid(6), formulaId: uuid(5), data: '2026-11-20', cabecas: 30, pesoRef: 300, kgPrevisto: 10, kgFornecido: 10, custo: 999 }),
+      put('movimentos', 32, { ingredienteId: uuid(2), data: '2026-11-19', tipo: 'entrada', kg: 10, valor: 50000, origem: 'compra' }),
+      put('movimentos', 8, { ingredienteId: uuid(2), data: '2026-10-01', tipo: 'entrada', kg: 1000, origem: 'compra' }),
+    ]);
+    expect(r.map((x) => x.erro ?? x.ok)).toEqual([true, true, true, true]);
+    expect(r[0].dados).toMatchObject({ custo: 0 }); // a resposta para ele também vem sem dinheiro
+    const d = await s.rpc<{ gid: string; dados: Record<string, unknown> }[]>(dono, 'baixar_alteracoes', { f, desde: 0 });
+    const pega = (n: number) => d.find((x) => x.gid === uuid(n))!.dados;
+    expect(pega(30).custo).toBe(42.5); // 20 kg x (3/4 x 1,50 + 1/4 x 4,00), igual a calcularFormula
+    expect(pega(31).custo).toBe(20); // 10 kg x custo do estoque 2,00
+    expect('valor' in pega(32)).toBe(false);
+    expect(pega(8).valor).toBe(1500); // valor da compra lançado pelo dono fica
+  });
+
+  it('A5: quem criou a fazenda apaga a conta e a fazenda continua com o dono', async () => {
+    const criador = await s.novoUsuario('criador@x');
+    const novo = await s.novoUsuario('novo@x');
+    const fz = await s.rpc<string>(criador, 'criar_fazenda', { p_nome: 'Vendida', meu_nome: 'C' });
+    const c = await s.rpc<string>(criador, 'criar_convite', { f: fz, p_papel: 'gerente' });
+    await s.rpc(novo, 'aceitar_convite', { p_codigo: c });
+    await s.rpc(criador, 'mudar_papel', { f: fz, usuario: novo, p_papel: 'dono' });
+    await s.rpc(novo, 'mudar_papel', { f: fz, usuario: criador, p_papel: 'vaqueiro' });
+    await s.rpc(criador, 'apagar_minha_conta', { confirmar: 'APAGAR' });
+    const m = await s.rpc<{ fazenda_id: string }[]>(novo, 'minhas_fazendas', {});
+    expect(m.map((x) => x.fazenda_id)).toEqual([fz]);
+  });
+
+  it('A6: só o dono cancela convite, e o código cancelado não serve mais', async () => {
+    const c = await s.rpc<string>(dono, 'criar_convite', { f, p_papel: 'gerente' });
+    await expect(s.rpc(vaq, 'cancelar_convite', { f, p_codigo: c })).rejects.toThrow('Só o dono');
+    await s.rpc(dono, 'cancelar_convite', { f, p_codigo: c });
+    const outro = await s.novoUsuario('outro@x');
+    expect(await s.rpc(outro, 'aceitar_convite', { p_codigo: c })).toBeNull();
+    await expect(s.rpc(dono, 'cancelar_convite', { f, p_codigo: c })).rejects.toThrow('não encontrado');
+  });
+
+  it('A2: leitura por foto tem teto para o sistema todo', async () => {
+    await s.pg.query(`insert into public.limites (usuario_id, tipo, janela, contagem)
+      values ('00000000-0000-0000-0000-000000000000', 'foto_total', to_timestamp(floor(extract(epoch from now()) / 86400) * 86400), 300)`);
+    await expect(s.rpc(dono, 'pode_usar_foto', {})).rejects.toThrow('limite de hoje');
   });
 });

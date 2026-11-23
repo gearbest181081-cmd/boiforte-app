@@ -5,6 +5,7 @@ import { db, garantirIngredientesPadrao } from '../db';
 import { avaliarFormula, calcularFormula, TIPOS } from '../nutricao';
 import { fmtNum } from '../calc';
 import { Opcoes, Topo } from '../components/ui';
+import { useVeDinheiro } from '../nuvem/useNuvem';
 
 export const rs = (v: number | null | undefined, casas = 2) =>
   v == null || !Number.isFinite(v) ? '—' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: casas, maximumFractionDigits: casas });
@@ -14,6 +15,7 @@ export function Nutricao() {
   useEffect(() => { garantirIngredientesPadrao().catch(() => {}); }, []);
   useEffect(() => { sessionStorageSet('abaNutricao', aba); }, [aba]);
   const ingredientes = useLiveQuery(() => db.ingredientes.toArray());
+  const veDinheiro = useVeDinheiro();
   const formulas = useLiveQuery(() => db.formulas.toArray());
   const usoPorFormula = useLiveQuery(async () => {
     const m: Record<number, number> = {};
@@ -38,7 +40,7 @@ export function Nutricao() {
               const base = TIPOS[f.tipo].base === 'ms' ? r.ms : r.mn;
               return (
                 <Link key={f.id} to={`/nutricao/formula/${f.id}`} className="cartao">
-                  <div className="linha-lote"><h3>{f.nome}</h3><b>{rs(r.custoKg)}/kg</b></div>
+                  <div className="linha-lote"><h3>{f.nome}</h3>{veDinheiro && <b>{rs(r.custoKg)}/kg</b>}</div>
                   <div style={{ marginBottom: 6 }}>
                     <span className="etiqueta">{TIPOS[f.tipo].nome.split(' (')[0]}</span>
                     <span className={`etiqueta ${pior === 'bom' ? '' : pior}`}>{pior === 'bom' ? 'Dentro da faixa' : pior === 'ruim' ? 'Fora da faixa' : 'Atenção'}</span>
@@ -56,12 +58,12 @@ export function Nutricao() {
             <div className="dica">Valores na matéria natural, como no rótulo. Ajuste o preço que você paga e, para núcleos e sais, copie a composição do rótulo.</div>
             <div className="cartao rolagem">
               <table className="tab">
-                <thead><tr><th>Ingrediente</th><th className="n">PB%</th><th className="n">NDT%</th><th className="n">R$/kg</th></tr></thead>
+                <thead><tr><th>Ingrediente</th><th className="n">PB%</th><th className="n">NDT%</th>{veDinheiro && <th className="n">R$/kg</th>}</tr></thead>
                 <tbody>
                   {ingredientes?.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map((i) => (
                     <tr key={i.id}>
                       <td><Link to={`/nutricao/ingrediente/${i.id}`} style={{ color: 'inherit', fontWeight: 600 }}>{i.nome}</Link></td>
-                      <td className="n">{fmtNum(i.pb)}</td><td className="n">{fmtNum(i.ndt)}</td><td className="n">{fmtNum(i.preco, 2)}</td>
+                      <td className="n">{fmtNum(i.pb)}</td><td className="n">{fmtNum(i.ndt)}</td>{veDinheiro && <td className="n">{fmtNum(i.preco, 2)}</td>}
                     </tr>
                   ))}
                 </tbody>

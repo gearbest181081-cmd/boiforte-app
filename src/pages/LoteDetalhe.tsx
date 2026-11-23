@@ -10,7 +10,7 @@ import { GraficoCrescimento } from '../components/Grafico';
 import { Indicador, Opcoes, Topo, useAviso } from '../components/ui';
 import { LoteFinanceiro } from './LoteFinanceiro';
 import { LoteSanidade } from './Sanidade';
-import { usePapel } from '../nuvem/useNuvem';
+import { usePapel, useVeDinheiro } from '../nuvem/useNuvem';
 
 export function LoteDetalhe() {
   const { id } = useParams();
@@ -176,6 +176,7 @@ function ListaAnimais({ animais, pesagens, gmdMeta }: { animais: { id?: number; 
 }
 
 function CartaoNutricao({ lote, pontos, gmdRef, fornecimentos, formula, ingredientes, config }: any) {
+  const veDinheiro = useVeDinheiro();
   const custoTotal = fornecimentos.reduce((s: number, f: any) => s + f.custo, 0);
   const kgTotal = fornecimentos.reduce((s: number, f: any) => s + f.kgFornecido, 0);
   const cabDias = fornecimentos.reduce((s: number, f: any) => s + f.cabecas, 0);
@@ -196,13 +197,13 @@ function CartaoNutricao({ lote, pontos, gmdRef, fornecimentos, formula, ingredie
       <h2>Nutrição</h2>
       <div className="cartao">
         <p>{formula ? <><b>{formula.nome}</b> · {fmtNum(consumo * 100, 2)}% PV · {fmtNum(kgCab, 2)} kg/cab/dia hoje</> : 'Dieta removida'}</p>
-        <div className="grade">
+        {veDinheiro ? <div className="grade">
           <div><div className="mudo">Diária por cabeça</div><b>{rs(diaria)}</b><div className="mudo" style={{ fontSize: 13 }}>{diariaReal != null ? `média de ${fornecimentos.length} trato(s)` : 'prevista'}</div></div>
           <div><div className="mudo">Custo da @ (nutrição)</div><b style={{ color: custoArroba != null && custoArroba > config.precoArroba ? 'var(--alerta)' : undefined }}>{rs(custoArroba)}</b><div className="mudo" style={{ fontSize: 13 }}>@ a {rs(config.precoArroba, 0)}</div></div>
           <div><div className="mudo">Gasto com trato</div><b>{rs(custoTotal)}</b><div className="mudo" style={{ fontSize: 13 }}>{fmtNum(kgTotal, 0)} kg fornecidos</div></div>
           <div><div className="mudo">Por cabeça</div><b>{rs(lote.qtdCabecas ? custoTotal / lote.qtdCabecas : null)}</b></div>
-        </div>
-        {custoArroba != null && custoArroba > config.precoArroba && (
+        </div> : <p className="mudo">{fmtNum(kgTotal, 0)} kg fornecidos</p>}
+        {veDinheiro && custoArroba != null && custoArroba > config.precoArroba && (
           <div className="alerta ruim" style={{ marginTop: 10 }}><span className="ic">⚠️</span><div><b>Nutrição mais cara que a arroba</b>Cada @ produzida custa {rs(custoArroba)} só de trato, acima do preço de {rs(config.precoArroba, 0)}. Reveja a fórmula ou o GMD.</div></div>
         )}
       </div>

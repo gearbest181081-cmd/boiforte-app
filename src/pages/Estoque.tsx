@@ -6,9 +6,11 @@ import { useEstoque, type ItemEstoque } from '../hooks';
 import { fmtData, fmtNum, hojeISO } from '../calc';
 import { CampoNumero, num, Opcoes, Topo, useAviso } from '../components/ui';
 import { rs } from './Nutricao';
+import { useVeDinheiro } from '../nuvem/useNuvem';
 
 export function Estoque() {
   const itens = useEstoque();
+  const veDinheiro = useVeDinheiro();
   const [acao, setAcao] = useState<'compra' | 'batida' | null>(null);
   const batidas = useLiveQuery(async () => {
     const bs = await db.batidas.orderBy('data').reverse().limit(10).toArray();
@@ -35,11 +37,11 @@ export function Estoque() {
             <h2>Últimas batidas</h2>
             <div className="cartao rolagem">
               <table className="tab">
-                <thead><tr><th>Data</th><th>Mistura</th><th className="n">kg</th><th className="n">R$/kg</th><th /></tr></thead>
+                <thead><tr><th>Data</th><th>Mistura</th><th className="n">kg</th>{veDinheiro && <th className="n">R$/kg</th>}<th /></tr></thead>
                 <tbody>
                   {batidas.map((b) => (
                     <tr key={b.id}>
-                      <td>{fmtData(b.data)}</td><td>{b.nome}</td><td className="n">{fmtNum(b.kg, 0)}</td><td className="n">{fmtNum(b.custoTotal / b.kg, 3)}</td>
+                      <td>{fmtData(b.data)}</td><td>{b.nome}</td><td className="n">{fmtNum(b.kg, 0)}</td>{veDinheiro && <td className="n">{fmtNum(b.custoTotal / b.kg, 3)}</td>}
                       <td><button className="remover" aria-label="Desfazer batida" onClick={async () => { if (window.confirm('Desfazer esta batida? Os ingredientes voltam para o estoque.')) { await desfazerBatida(b.id!); aviso('Batida desfeita.'); } }}>×</button></td>
                     </tr>
                   ))}
@@ -58,6 +60,7 @@ function CartaoEstoque({ item }: { item: ItemEstoque }) {
   const [contando, setContando] = useState(false);
   const [kg, setKg] = useState('');
   const s = item.situacao;
+  const veDinheiro = useVeDinheiro();
   const salvarContagem = async () => {
     const v = num(kg);
     if (v == null || v < 0) return aviso('Informe quantos kg tem no depósito.', true);
@@ -77,7 +80,7 @@ function CartaoEstoque({ item }: { item: ItemEstoque }) {
       </div>
       <p className="mudo">
         {s.consumoDia > 0 ? `Consumo ${fmtNum(s.consumoDia, 1)} kg/dia` : 'Sem consumo'}
-        {s.acabaEm && s.nivel !== 'ruim' ? ` · acaba por volta de ${fmtData(s.acabaEm)}` : ''} · {rs(item.precoKg, 3)}/kg · valor {rs(Math.max(0, s.saldoKg) * item.precoKg)}
+        {s.acabaEm && s.nivel !== 'ruim' ? ` · acaba por volta de ${fmtData(s.acabaEm)}` : ''}{veDinheiro && <> · {rs(item.precoKg, 3)}/kg · valor {rs(Math.max(0, s.saldoKg) * item.precoKg)}</>}
       </p>
       {s.saldoKg < 0 && <p style={{ color: 'var(--alerta)', fontSize: 15 }}>Saldo negativo: falta lançar uma compra ou batida.</p>}
       {contando ? (
@@ -101,6 +104,7 @@ function FormCompra({ aoTerminar }: { aoTerminar: () => void }) {
   const [kg, setKg] = useState('');
   const [modoValor, setModoValor] = useState<'total' | 'kg'>('total');
   const [valor, setValor] = useState('');
+  const veDinheiro = useVeDinheiro();
   const k = num(kg) ?? 0, v = num(valor) ?? 0;
   const total = modoValor === 'total' ? v : v * k;
   const salvar = async () => {
@@ -123,9 +127,11 @@ function FormCompra({ aoTerminar }: { aoTerminar: () => void }) {
       </label>
       <label className="campo"><span>Data</span><input type="date" value={data} onChange={(e) => setData(e.target.value)} /></label>
       <CampoNumero rotulo="Quantidade" valor={kg} aoMudar={setKg} unidade="kg" nome="compraKg" dica="Ex.: 10 sacos de 30 kg = 300 kg" />
-      <div className="campo"><Opcoes valor={modoValor} aoMudar={setModoValor} opcoes={[{ valor: 'total', rotulo: 'Valor total' }, { valor: 'kg', rotulo: 'Preço por kg' }]} /></div>
-      <CampoNumero rotulo={modoValor === 'total' ? 'Valor pago (total)' : 'Preço por kg'} valor={valor} aoMudar={setValor} unidade="R$" nome="compraValor" />
-      {k > 0 && total > 0 && <p className="mudo">{rs(total)} no total · {rs(total / k, 3)} por kg</p>}
+      {veDinheiro && <>
+        <div className="campo"><Opcoes valor={modoValor} aoMudar={setModoValor} opcoes={[{ valor: 'total', rotulo: 'Valor total' }, { valor: 'kg', rotulo: 'Preço por kg' }]} /></div>
+        <CampoNumero rotulo={modoValor === 'total' ? 'Valor pago (total)' : 'Preço por kg'} valor={valor} aoMudar={setValor} unidade="R$" nome="compraValor" />
+        {k > 0 && total > 0 && <p className="mudo">{rs(total)} no total · {rs(total / k, 3)} por kg</p>}
+      </>}
       <div className="botoes"><button className="btn" onClick={salvar}>Lançar compra</button><button className="btn sec" onClick={aoTerminar}>Cancelar</button></div>
     </div>
   );

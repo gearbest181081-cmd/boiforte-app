@@ -5,6 +5,7 @@ import { useEscala, type LinhaEscala } from '../hooks';
 import { fmtData, fmtNum, hojeISO, somaDias } from '../calc';
 import { num, Topo, useAviso } from '../components/ui';
 import { rs } from './Nutricao';
+import { useVeDinheiro } from '../nuvem/useNuvem';
 
 export function Trato() {
   const [data, setData] = useState(hojeISO());
@@ -57,6 +58,7 @@ function CartaoTrato({ linha: l, data }: { linha: LinhaEscala; data: string }) {
   const [kg, setKg] = useState(l.kgTotal ? fmtNum(l.kgTotal, 1).replace(/\./g, '') : '');
   const [ocupado, setOcupado] = useState(false);
   const feito = !!l.fornecimento;
+  const veDinheiro = useVeDinheiro();
 
   const marcar = async () => {
     setOcupado(true);
@@ -81,7 +83,7 @@ function CartaoTrato({ linha: l, data }: { linha: LinhaEscala; data: string }) {
       <p className="mudo">{l.formula!.nome} · {fmtNum(l.consumoPctPV * 100, 2)}% do PV · peso {l.pesoRef ? `${fmtNum(l.pesoRef, 0)} kg (estimado)` : 'sem pesagem'}</p>
       <div className="grade" style={{ marginBottom: 10 }}>
         <div><div className="mudo">Por cabeça</div><b>{fmtNum(l.kgCab, 2)} kg</b></div>
-        <div><div className="mudo">Custo do dia</div><b>{rs(feito ? l.fornecimento!.custo : l.custoPrevisto)}</b></div>
+        {veDinheiro && <div><div className="mudo">Custo do dia</div><b>{rs(feito ? l.fornecimento!.custo : l.custoPrevisto)}</b></div>}
       </div>
       {feito ? (
         <p><b>Fornecido: {fmtNum(l.fornecimento!.kgFornecido, 1)} kg</b>{Math.abs(l.fornecimento!.kgFornecido - l.fornecimento!.kgPrevisto) > 0.5 ? <span className="mudo"> (previsto {fmtNum(l.fornecimento!.kgPrevisto, 1)} kg)</span> : null}</p>

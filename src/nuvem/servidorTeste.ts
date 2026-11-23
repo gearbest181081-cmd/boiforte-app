@@ -9,7 +9,7 @@ const PASTA = fileURLToPath(new URL('../../supabase/migrations/', import.meta.ur
 
 const IMITACAO_SUPABASE = `
 create schema auth;
-create table auth.users (id uuid primary key, email text);
+create table auth.users (id uuid primary key, email text, encrypted_password text);
 create function auth.uid() returns uuid language sql stable as $$
   select coalesce(nullif(current_setting('request.jwt.claim.sub', true), ''),
                   (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub'))::uuid

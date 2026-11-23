@@ -1,14 +1,16 @@
 // Função "ler-foto": lê o rótulo de um núcleo/suplemento ou o visor de uma balança a partir de uma foto.
-// Segurança: só aceita chamadas do endereço do app (APP_ORIGIN), exige login, exige ser de uma fazenda,
-// cota diária por pessoa no banco (pode_usar_foto), e a chave da IA fica só aqui no servidor.
+// Segurança: exige login, exige ser de uma fazenda, cota diária por pessoa e teto geral no banco (pode_usar_foto),
+// e a chave da IA fica só aqui no servidor. O CORS (APP_ORIGIN) só impede outros sites de usar a função pelo navegador
+// de alguém; não é a proteção principal, porque fora do navegador qualquer um escolhe o cabeçalho Origin.
 // A resposta da IA é limpa por limparLeitura antes de voltar; o app ainda mostra tudo para conferir.
 import Anthropic from 'npm:@anthropic-ai/sdk@1.4.0';
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { ESQUEMA, PROMPT, limparLeitura, validarPedido } from '../_shared/foto.ts';
 
 const ORIGEM = Deno.env.get('APP_ORIGIN') ?? '';
-const cors = (origem: string | null) => ({
-  'Access-Control-Allow-Origin': origem && origem === ORIGEM ? origem : 'null',
+// Só manda Access-Control-Allow-Origin para o endereço do app (nunca o valor "null", que casaria com iframes isolados).
+const cors = (origem: string | null): Record<string, string> => ({
+  ...(ORIGEM && origem === ORIGEM ? { 'Access-Control-Allow-Origin': origem } : {}),
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   Vary: 'Origin',

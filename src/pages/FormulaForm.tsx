@@ -6,6 +6,7 @@ import { avaliarFormula, batida, calcularFormula, custoArrobaNutricao, kgCabDia,
 import { fmtNum } from '../calc';
 import { CampoNumero, CampoTexto, num, Opcoes, Topo, useAviso } from '../components/ui';
 import { rs } from './Nutricao';
+import { useVeDinheiro } from '../nuvem/useNuvem';
 
 type Linha = { ingredienteId: number; qtd: string };
 const br = (x: number, c = 2) => x.toLocaleString('pt-BR', { maximumFractionDigits: c });
@@ -13,6 +14,7 @@ const br = (x: number, c = 2) => x.toLocaleString('pt-BR', { maximumFractionDigi
 export function FormulaForm() {
   const { id } = useParams();
   const editando = id != null && id !== 'nova';
+  const veDinheiro = useVeDinheiro();
   const nav = useNavigate();
   const aviso = useAviso();
   useEffect(() => { garantirIngredientesPadrao().catch(() => {}); }, []);
@@ -118,7 +120,7 @@ export function FormulaForm() {
         <div className="grade tres">
           <div className="indicador"><div className="rotulo">PB{perfil.base === 'ms' ? ' (MS)' : ''}</div><div className="valor">{fmtNum(base.pb)}<small>%</small></div></div>
           <div className="indicador"><div className="rotulo">NDT{perfil.base === 'ms' ? ' (MS)' : ''}</div><div className="valor">{fmtNum(base.ndt)}<small>%</small></div></div>
-          <div className="indicador"><div className="rotulo">Custo</div><div className="valor" data-testid="custoKg">{rs(r.custoKg, 3)}<small>/kg</small></div></div>
+          {veDinheiro && <div className="indicador"><div className="rotulo">Custo</div><div className="valor" data-testid="custoKg">{rs(r.custoKg, 3)}<small>/kg</small></div></div>}
           <div className="indicador"><div className="rotulo">Ca</div><div className="valor">{fmtNum(base.ca, 2)}<small>%</small></div></div>
           <div className="indicador"><div className="rotulo">P</div><div className="valor">{fmtNum(base.p, 2)}<small>%</small></div></div>
           <div className="indicador"><div className="rotulo">Ca:P</div><div className="valor">{r.caP == null ? '—' : fmtNum(r.caP)}<small>:1</small></div></div>
@@ -146,6 +148,7 @@ export function FormulaForm() {
           </div>
           <div className="grade">
             <div><div className="mudo">Consumo por cabeça</div><b>{fmtNum(kgDia, 3)} kg/dia</b></div>
+            {veDinheiro && <>
             <div><div className="mudo">Diária por cabeça</div><b data-testid="diaria">{rs(diaria)}</b></div>
             <div><div className="mudo">Custo da @ produzida (só nutrição)</div><b data-testid="custoArroba">{rs(custoArroba)}</b></div>
             <div><div className="mudo">Preço da @ ({rs(config?.precoArroba, 0)})</div>
@@ -153,6 +156,7 @@ export function FormulaForm() {
                 {custoArroba == null || !config ? '—' : custoArroba > config.precoArroba ? 'Nutrição custa mais que a @' : `Sobra ${rs(config.precoArroba - custoArroba)} por @`}
               </b>
             </div>
+            </>}
           </div>
         </div>
 
@@ -167,13 +171,13 @@ export function FormulaForm() {
         {r.totalKg > 0 && (
           <div className="cartao rolagem">
             <table className="tab">
-              <thead><tr><th>Ingrediente</th><th className="n">kg</th><th className="n">R$</th></tr></thead>
+              <thead><tr><th>Ingrediente</th><th className="n">kg</th>{veDinheiro && <th className="n">R$</th>}</tr></thead>
               <tbody>
                 {batida(r, num(kgBatida) ?? 0).map((b) => {
                   const g = ingredientes?.find((x) => x.id === b.ingredienteId);
-                  return <tr key={b.ingredienteId}><td>{g?.nome ?? '?'}</td><td className="n">{br(b.kg, 1)}</td><td className="n">{rs(b.kg * (g?.preco ?? 0))}</td></tr>;
+                  return <tr key={b.ingredienteId}><td>{g?.nome ?? '?'}</td><td className="n">{br(b.kg, 1)}</td>{veDinheiro && <td className="n">{rs(b.kg * (g?.preco ?? 0))}</td>}</tr>;
                 })}
-                <tr><td><b>Total</b></td><td className="n"><b>{br(num(kgBatida) ?? 0, 1)}</b></td><td className="n"><b>{rs((num(kgBatida) ?? 0) * r.custoKg)}</b></td></tr>
+                <tr><td><b>Total</b></td><td className="n"><b>{br(num(kgBatida) ?? 0, 1)}</b></td>{veDinheiro && <td className="n"><b>{rs((num(kgBatida) ?? 0) * r.custoKg)}</b></td>}</tr>
               </tbody>
             </table>
           </div>

@@ -149,7 +149,7 @@ function confere(cond, msg) {
     confere(await page.getByText('Sem internet').isVisible(), 'mostra o selo "Sem internet"');
     await page.goto(URL + '#/pesar');
     await page.locator('select[name=lote]').selectOption({ label: 'Lote 5 (40 cab)' });
-    await page.locator('input[type=date]').fill('2026-11-20');
+    await page.locator('input[type=date]').fill(new Date().toISOString().slice(0, 10)); // hoje: o trato usa o peso estimado para hoje
     await page.locator('input[name=pesoMedio]').fill('366');
     await page.getByRole('button', { name: 'Salvar pesagem' }).click();
     await page.getByRole('heading', { name: 'Lote 5' }).waitFor();

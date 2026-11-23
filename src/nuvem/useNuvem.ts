@@ -64,3 +64,8 @@ export function SincAutomatica() {
 export function usePapel() {
   return useLiveQuery(async () => ((await db.sincEstado.get('fazenda'))?.valor as FazendaNuvem | undefined)?.papel ?? null);
 }
+
+/** O vaqueiro não vê dinheiro. O servidor já manda os preços zerados para ele; aqui só some da tela. */
+export function useVeDinheiro() {
+  return usePapel() !== 'vaqueiro';
+}

@@ -23,7 +23,10 @@ No *SQL Editor* do Supabase, rode **na ordem** o conteúdo de cada arquivo de `s
 ## 3. Login por código no e-mail
 
 Em *Authentication*:
-- *Providers › Email*: ligado, "Confirm email" desligado, OTP com 6 dígitos e validade de 600 s.
+- *Providers › Email*: ligado, **"Confirm email" LIGADO**, OTP com 6 dígitos e validade de 600 s.
+  Não desligue o "Confirm email": sem ele, qualquer pessoa cria pela API uma conta com senha usando o e-mail de outra
+  e entra na conta dela depois. O login por código continua funcionando, porque o código já confirma o e-mail.
+  (O banco também bloqueia contas com senha, mas isso é a segunda tranca.)
 - *Email Templates › Magic Link*: cole o conteúdo de `supabase/templates/codigo.html`
   (o importante é ter `{{ .Token }}`, que é o código de 6 números).
 - *URL Configuration › Site URL*: o endereço do app (ex.: `https://SEU-USUARIO.github.io/boiforte-app/`).
@@ -41,7 +44,7 @@ supabase secrets set ANTHROPIC_API_KEY=sua-chave-da-anthropic
 supabase secrets set CRON_SECRET=uma-senha-longa-e-aleatoria
 ```
 
-- `APP_ORIGIN` é só o começo do endereço do app (sem `/boiforte-app/`). A foto só é aceita vinda dele.
+- `APP_ORIGIN` é só o começo do endereço do app (sem `/boiforte-app/`). Outros sites não conseguem usar a função pelo navegador; a proteção principal é o login e a cota no banco.
 - A chave da Anthropic é criada em https://console.anthropic.com. Cada pessoa pode ler até 30 fotos por dia.
 - As cotações vêm das páginas de indicadores do Cepea/Esalq. Antes de abrir ao público, confira as
   condições de uso do Cepea (citar a fonte é obrigatório; o app já mostra "Fonte: Cepea/Esalq").
