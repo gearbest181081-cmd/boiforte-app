@@ -29,6 +29,8 @@ export const RE_GID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]
 const CRIADO = NUM(0, 4102444800000, false, true);
 
 export const FASES_V = ['cria', 'recria', 'engorda_pasto', 'tip', 'confinamento'] as const;
+export const CATEGORIAS_ANOTACAO_V = ['cerca', 'agua', 'cocho', 'pasto', 'animal', 'estrutura', 'outro'] as const;
+export const MAX_FOTOS_ANOTACAO = 4;
 export const TIPOS_FORMULA_V = ['sal_mineral', 'proteinado', 'proteico_energetico', 'rip', 'tip', 'creep', 'confinamento', 'outro'] as const;
 
 const ESQUEMAS_BASE: Record<string, Record<string, Regra>> = {
@@ -95,6 +97,14 @@ const ESQUEMAS_BASE: Record<string, Record<string, Regra>> = {
   funcionarios: {
     id: ID(false), nome: TXT(80, true), funcao: TXT(60, true), salario: NUM(0, 1_000_000, true), encargos: NUM(0, 1_000_000),
     admissao: DATA(), saida: DATA(false), telefone: TXT(20), usuarioId: TXT(36), obs: TXT(300), criadoEm: CRIADO,
+  },
+  // autor, autorId e feitaPor: na nuvem quem preenche é o servidor (gatilho em 20261123170000_anotacoes.sql).
+  // fotos[].foto: id da foto (uuid); o servidor confere o formato e o Storage só aceita "fazenda/foto.jpg".
+  anotacoes: {
+    id: ID(false), texto: TXT(1000, true), categoria: ENUM(CATEGORIAS_ANOTACAO_V, false), moduloId: ID(false), piqueteId: ID(false),
+    urgente: BOOL, feita: BOOL, data: DATA(), feitaEm: DATA(false),
+    fotos: { t: 'lista', max: MAX_FOTOS_ANOTACAO, item: { foto: TXT(36, true) } },
+    autor: TXT(80), autorId: TXT(36), feitaPor: TXT(80), criadoEm: CRIADO,
   },
 };
 
@@ -170,7 +180,7 @@ function limpar(esquema: Record<string, Regra>, obj: unknown, rotulo: string): R
 export const ROTULOS: Record<string, string> = {
   propriedades: 'Fazenda', modulos: 'Módulo', piquetes: 'Piquete', lotes: 'Lote', animais: 'Animal', pesagens: 'Pesagem',
   ingredientes: 'Ingrediente', formulas: 'Fórmula', movimentos: 'Estoque', batidas: 'Batida', fornecimentos: 'Fornecimento', config: 'Configuração',
-  lancamentos: 'Lançamento', custosFixos: 'Custo fixo', vendas: 'Venda', sanidade: 'Sanidade', lembretes: 'Lembrete', funcionarios: 'Funcionário',
+  lancamentos: 'Lançamento', custosFixos: 'Custo fixo', vendas: 'Venda', sanidade: 'Sanidade', lembretes: 'Lembrete', funcionarios: 'Funcionário', anotacoes: 'Anotação',
 };
 
 /** Valida e devolve uma cópia limpa do registro (sem campos desconhecidos). */

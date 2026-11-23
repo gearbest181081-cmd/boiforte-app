@@ -20,6 +20,20 @@ No *SQL Editor* do Supabase, rode **na ordem** o conteúdo de cada arquivo de `s
 
 (Ou, com o Supabase CLI: `supabase link` e `supabase db push`.)
 
+### Anotações e tarefas (fotos no Storage)
+
+A migração `20261123170000_anotacoes.sql` cria o balde **privado** `anotacoes` no Storage, as regras de quem vê,
+envia e apaga as fotos, e o carimbo de quem anotou/resolveu. Rode-a no *SQL Editor* depois das anteriores (ela já traz as regras
+de validação atualizadas, com a tabela `anotacoes`). Para conferir:
+
+```sql
+select id, public, file_size_limit, allowed_mime_types from storage.buckets where id = 'anotacoes';  -- public = false
+select policyname, cmd from pg_policies where schemaname = 'storage' and tablename = 'objects' and policyname like 'bf_anotacoes%';
+```
+
+As fotos são diminuídas no celular (lado maior 1280 px, uns 100 a 300 KB). Limite de 5.000 fotos por fazenda
+(cerca de 1 GB no pior caso); para mudar, troque o número numa migração nova.
+
 ### Plano de cada fazenda (Básico / Pro)
 
 Fazenda nova começa no **Básico**. Os dois planos incluem quem assina + 1 pessoa; cada pessoa a mais é paga (`usuarios_extras`). As fazendas que já existiam quando a migração

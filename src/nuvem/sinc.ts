@@ -17,7 +17,7 @@ export interface RelatorioSinc { enviados: number; recebidos: number; erros: { t
 const LOTE_ENVIO = 200;
 const LOTE_BAIXA = 500;
 const ordem = (t: string) => { const i = (ORDEM_SINC as readonly string[]).indexOf(t); return i < 0 ? 99 : i; };
-const TABS_SINC = [...TABELAS, 'pendentes', 'sincEstado', 'sincEspera'];
+const TABS_SINC = [...TABELAS, 'pendentes', 'sincEstado', 'sincEspera', 'fotosAnotacao'];
 
 // ---------- estado ----------
 
@@ -46,12 +46,16 @@ export async function ligarFazenda(f: FazendaNuvem, modo: 'enviar' | 'baixar') {
     await db.sincEstado.clear();
     if (modo === 'baixar') {
       for (const t of TABELAS) await db.table(t).clear();
+      await db.fotosAnotacao.clear();
     } else {
       const em = Date.now();
       for (const t of TABELAS) {
         const chaves = (await db.table(t).toCollection().primaryKeys()) as (number | string)[];
         if (chaves.length) await db.pendentes.bulkPut(chaves.map((chave) => ({ tabela: t, chave, op: 'put' as const, em })));
       }
+      // as fotos das anotações também sobem para a pasta da fazenda nova
+      await db.fotosAnotacao.filter((f) => f.estado === 'apagar' || !f.dados).delete();
+      await db.fotosAnotacao.toCollection().modify((f) => { f.estado = 'enviar'; delete f.erro; });
     }
     await gravarEstado('fazenda', f);
     await gravarEstado('versao', 0);
