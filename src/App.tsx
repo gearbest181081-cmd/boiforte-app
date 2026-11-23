@@ -16,6 +16,7 @@ import { Financeiro } from './pages/Financeiro';
 import { Sanidade } from './pages/Sanidade';
 import { Simular } from './pages/Simular';
 import { Relatorios } from './pages/Relatorios';
+import { RelatorioPesagem } from './pages/RelatorioPesagem';
 import { Cotacoes } from './pages/Cotacoes';
 import { Nuvem } from './pages/Nuvem';
 import { FuncionarioForm, Funcionarios } from './pages/Funcionarios';
@@ -38,6 +39,7 @@ export function App() {
               <Route path="/lotes/novo" element={<LoteForm />} />
               <Route path="/lotes/:id" element={<LoteDetalhe />} />
               <Route path="/lotes/:id/editar" element={<LoteForm />} />
+              <Route path="/lotes/:id/relatorio" element={<RelatorioPesagem />} />
               <Route path="/pesar" element={<Pesagem />} />
               <Route path="/pesar/:loteId" element={<Pesagem />} />
               <Route path="/fazenda" element={<Fazenda />} />

@@ -4,12 +4,13 @@ import { db, excluirIngrediente } from '../db';
 import { CampoEscolha, CampoNumero, CampoTexto, num, Topo, useAviso } from '../components/ui';
 import { BotaoFoto } from '../components/Foto';
 import { useVeDinheiro } from '../nuvem/useNuvem';
-import { TIPOS, type CategoriaIngrediente, type TipoFormula } from '../nutricao';
+import { TIPOS, valorExtra, type CategoriaIngrediente, type TipoFormula } from '../nutricao';
 import type { LeituraRotulo } from '../../supabase/functions/_shared/foto';
 
 const CAMPOS = [
   ['ms', 'Matéria seca (MS)', '%'], ['pb', 'Proteína bruta (PB)', '%'], ['ndt', 'NDT (energia)', '%'],
-  ['ca', 'Cálcio (Ca)', '%'], ['p', 'Fósforo (P)', '%'], ['preco', 'Preço', 'R$/kg'],
+  ['ca', 'Cálcio (Ca)', '%'], ['p', 'Fósforo (P)', '%'], ['fb', 'Fibra bruta (FB)', '%'],
+  ['cobre', 'Cobre (Cu)', 'mg/kg'], ['manganes', 'Manganês (Mn)', 'mg/kg'], ['preco', 'Preço', 'R$/kg'],
 ] as const;
 
 export const CATEGORIAS: { valor: CategoriaIngrediente; rotulo: string; pronto?: TipoFormula }[] = [
@@ -30,7 +31,7 @@ export function IngredienteForm() {
   const nav = useNavigate();
   const aviso = useAviso();
   const [nome, setNome] = useState('');
-  const [v, setV] = useState<Record<string, string>>({ ms: '90', pb: '', ndt: '', ca: '', p: '', preco: '', diasAlerta: '7', ureiaTeor: '', consumoPct: '' });
+  const [v, setV] = useState<Record<string, string>>({ ms: '90', pb: '', ndt: '', ca: '', p: '', fb: '', cobre: '', manganes: '', preco: '', diasAlerta: '7', ureiaTeor: '', consumoPct: '' });
   const [ureia, setUreia] = useState(false);
   const [categoria, setCategoria] = useState<CategoriaIngrediente>('ingrediente');
   const [consumo, setConsumo] = useState('');
@@ -45,7 +46,7 @@ export function IngredienteForm() {
     if (r.categoria) setCategoria(r.categoria);
     setV((s) => ({
       ...s,
-      ...Object.fromEntries((['ms', 'pb', 'ndt', 'ca', 'p'] as const).flatMap((k) => (r[k] != null ? [[k, br(r[k])]] : []))),
+      ...Object.fromEntries((['ms', 'pb', 'ndt', 'ca', 'p', 'fb', 'cobre', 'manganes'] as const).flatMap((k) => (r[k] != null ? [[k, br(r[k])]] : []))),
       ureiaTeor: r.ureiaTeor != null ? br(r.ureiaTeor) : s.ureiaTeor,
       consumoPct: r.consumoPctPV != null ? br(+(r.consumoPctPV * 100).toFixed(3)) : s.consumoPct,
     }));
@@ -60,7 +61,7 @@ export function IngredienteForm() {
     db.ingredientes.get(Number(id)).then((i) => {
       if (!i) return;
       setNome(i.nome); setUreia(!!i.ureia); setCategoria(i.categoria ?? 'ingrediente'); setConsumo(i.consumo ?? '');
-      setV({ ms: br(i.ms), pb: br(i.pb), ndt: br(i.ndt), ca: br(i.ca), p: br(i.p), preco: br(i.preco), diasAlerta: br(i.diasAlerta ?? 7), ureiaTeor: br(i.ureiaTeor), consumoPct: '' });
+      setV({ ms: br(i.ms), pb: br(i.pb), ndt: br(i.ndt), ca: br(i.ca), p: br(i.p), fb: br(valorExtra(i, 'fb')), cobre: br(valorExtra(i, 'cobre')), manganes: br(valorExtra(i, 'manganes')), preco: br(i.preco), diasAlerta: br(i.diasAlerta ?? 7), ureiaTeor: br(i.ureiaTeor), consumoPct: '' });
     });
   }, [editando, id]);
 
@@ -69,6 +70,7 @@ export function IngredienteForm() {
     const teor = num(v.ureiaTeor);
     const dados = {
       nome: nome.trim(), ms: num(v.ms) ?? 0, pb: num(v.pb) ?? 0, ndt: num(v.ndt) ?? 0, ca: num(v.ca) ?? 0, p: num(v.p) ?? 0,
+      fb: num(v.fb) ?? undefined, cobre: num(v.cobre) ?? undefined, manganes: num(v.manganes) ?? undefined,
       preco: num(v.preco) ?? 0, ureia: eIngrediente && ureia, ureiaTeor: !eIngrediente && teor ? teor : undefined,
       categoria, consumo: pronto ? consumo.trim() || undefined : undefined,
       diasAlerta: Math.round(num(v.diasAlerta) ?? 7), ativo: true,
@@ -111,7 +113,7 @@ export function IngredienteForm() {
           {CATEGORIAS.map((c) => <option key={c.valor} value={c.valor}>{c.rotulo}</option>)}
         </CampoEscolha>
         <CampoTexto rotulo="Nome" valor={nome} aoMudar={setNome} nome="ingNome" />
-        <div className="dica">Valores na matéria natural (como no rótulo do saco).</div>
+        <div className="dica">Valores na matéria natural (como no rótulo do saco). Cobre e manganês em mg/kg (= ppm). Deixe vazio o que o rótulo não traz.</div>
         <div className="grade">
           {CAMPOS.filter(([k]) => veDinheiro || k !== 'preco').map(([k, r, u]) => <CampoNumero key={k} rotulo={r} valor={v[k]} aoMudar={(x) => setV((s) => ({ ...s, [k]: x }))} unidade={u === 'R$/kg' ? 'R$' : u} nome={`ing_${k}`} />)}
         </div>

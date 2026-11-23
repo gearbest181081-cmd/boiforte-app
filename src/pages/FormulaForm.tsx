@@ -6,6 +6,8 @@ import { avaliarFormula, batida, calcularFormula, custoArrobaNutricao, kgCabDia,
 import { fmtNum } from '../calc';
 import { CampoEscolha, CampoNumero, CampoTexto, Entrada, Escolha, num, Opcoes, Topo, useAviso } from '../components/ui';
 import { rs } from './Nutricao';
+import { avaliarNutrientes } from '../faixas';
+import { GradeNutrientes } from '../components/Nutrientes';
 import { useVeDinheiro } from '../nuvem/useNuvem';
 
 type Linha = { ingredienteId: number; qtd: string };
@@ -43,9 +45,10 @@ export function FormulaForm() {
 
   const itens = linhas.map((l) => ({ ingredienteId: l.ingredienteId, qtd: num(l.qtd) ?? 0 })).filter((i) => i.ingredienteId > 0);
   const r = useMemo(() => calcularFormula(itens, ingredientes ?? []), [JSON.stringify(itens), ingredientes]); // eslint-disable-line react-hooks/exhaustive-deps
-  const alertas = avaliarFormula(tipo, r);
   const perfil = TIPOS[tipo];
   const consumoFrac = (num(consumo) ?? 0) / 100;
+  const alertas = avaliarFormula(tipo, r, consumoFrac);
+  const nutrientes = avaliarNutrientes(tipo, r, consumoFrac);
   const kgDia = kgCabDia(num(pesoRef) ?? 0, consumoFrac);
   const diaria = kgDia * r.custoKg;
   const custoArroba = custoArrobaNutricao(diaria, num(gmdRef), config?.rendimento);
@@ -80,7 +83,6 @@ export function FormulaForm() {
   };
 
   const ingsOrdenados = (ingredientes ?? []).slice().sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-  const base = perfil.base === 'ms' ? r.ms : r.mn;
 
   return (
     <>
@@ -114,14 +116,13 @@ export function FormulaForm() {
         </div>
 
         <h2>Resultado</h2>
-        <div className="grade tres">
-          <div className="indicador"><div className="rotulo">PB{perfil.base === 'ms' ? ' (MS)' : ''}</div><div className="valor">{fmtNum(base.pb)}<small>%</small></div></div>
-          <div className="indicador"><div className="rotulo">NDT{perfil.base === 'ms' ? ' (MS)' : ''}</div><div className="valor">{fmtNum(base.ndt)}<small>%</small></div></div>
-          {veDinheiro && <div className="indicador"><div className="rotulo">Custo</div><div className="valor" data-testid="custoKg">{rs(r.custoKg, 3)}<small>/kg</small></div></div>}
-          <div className="indicador"><div className="rotulo">Ca</div><div className="valor">{fmtNum(base.ca, 2)}<small>%</small></div></div>
-          <div className="indicador"><div className="rotulo">P</div><div className="valor">{fmtNum(base.p, 2)}<small>%</small></div></div>
-          <div className="indicador"><div className="rotulo">Ca:P</div><div className="valor">{r.caP == null ? '—' : fmtNum(r.caP)}<small>:1</small></div></div>
-        </div>
+        <p className="mudo" style={{ fontSize: 15 }}>
+          Embaixo de cada número está a <b>faixa adequada</b> para {perfil.nome.split(' (')[0]}{perfil.base === 'mn' && tipo !== 'outro' ? ` com consumo de ${br(consumoFrac * 100, 3)}% do peso vivo` : ''}.
+          {perfil.base === 'mn' && tipo !== 'outro' ? ' Mudou o consumo, a faixa dos minerais muda junto.' : ''}
+        </p>
+        <GradeNutrientes avaliacao={nutrientes} extra={veDinheiro && (
+          <div className="indicador"><div className="rotulo">Custo</div><div className="valor" data-testid="custoKg">{rs(r.custoKg, 3)}<small>/kg</small></div></div>
+        )} />
         <p className="mudo" style={{ marginTop: 8 }}>
           {perfil.base === 'ms' ? `Na matéria seca. Na matéria natural: PB ${fmtNum(r.mn.pb)}%, NDT ${fmtNum(r.mn.ndt)}%. MS da dieta ${fmtNum(r.mn.ms)}%.` : `Na matéria natural. Na matéria seca: PB ${fmtNum(r.ms.pb)}%, NDT ${fmtNum(r.ms.ndt)}%.`}
           {r.ureiaPct > 0 ? ` Ureia: ${fmtNum(r.ureiaPct)}%.` : ''}
@@ -133,7 +134,10 @@ export function FormulaForm() {
               <div><b>{a.texto}</b>{a.risco}</div>
             </div>
           ))}
-          <p className="mudo" style={{ fontSize: 14 }}>Faixas de referência de mercado. Confirme com o seu nutricionista.</p>
+          <p className="mudo" style={{ fontSize: 14 }}>
+            Faixas de referência: PB, NDT e Ca:P de mercado; Ca, P, cobre e manganês pela exigência do NASEM 2016 e do BR-CORTE, descontando o que o pasto costuma dar (Embrapa);
+            fibra pelos rótulos comuns. Confirme com o seu nutricionista.
+          </p>
         </div>
 
         <h2>Consumo e custo</h2>

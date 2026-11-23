@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { lerFoto, nuvemConfigurada } from '../nuvem/cliente';
 import { useEstadoNuvem } from '../nuvem/useNuvem';
 import { useOnline } from './ui';
+import type { TipoFoto } from '../../supabase/functions/_shared/foto';
 
 /** Diminui a foto para no máximo 1600 px e devolve JPEG em base64 (sem o prefixo data:). */
 export async function prepararFoto(arquivo: File, lado = 1600): Promise<string> {
@@ -19,7 +20,7 @@ export async function prepararFoto(arquivo: File, lado = 1600): Promise<string> 
 }
 
 export function BotaoFoto<T>({ tipo, rotulo, aoLer, aoErro, sempre }: {
-  tipo: 'rotulo' | 'balanca'; rotulo: string; aoLer: (r: T) => void; aoErro: (m: string) => void; sempre?: boolean;
+  tipo: TipoFoto; rotulo: string; aoLer: (r: T) => void; aoErro: (m: string) => void; sempre?: boolean;
 }) {
   const nav = useNavigate();
   const [explicar, setExplicar] = useState(false);
@@ -28,6 +29,7 @@ export function BotaoFoto<T>({ tipo, rotulo, aoLer, aoErro, sempre }: {
   const ref = useRef<HTMLInputElement>(null);
   const [lendo, setLendo] = useState(false);
   const ligada = nuvemConfigurada() && !!est?.fazenda;
+  const oQue = tipo === 'rotulo' ? 'os valores do rótulo' : 'o peso que aparece na balança';
   if (!ligada) {
     if (!sempre || est === undefined) return null;
     return (
@@ -36,7 +38,7 @@ export function BotaoFoto<T>({ tipo, rotulo, aoLer, aoErro, sempre }: {
         {explicar && (
           <div className="alerta atencao" data-testid="fotoPrecisaNuvem"><span className="ic">☁️</span><div>
             <b>A leitura por foto usa a internet</b>
-            {nuvemConfigurada() ? 'Ligue este celular a uma fazenda na nuvem para usar. Enquanto isso, digite os valores do rótulo.' : 'Ela ainda não está ligada nesta versão do app. Por enquanto, digite os valores do rótulo.'}
+            {nuvemConfigurada() ? `Ligue este celular a uma fazenda na nuvem (plano Pro) para usar. Enquanto isso, digite ${oQue}.` : `Ela ainda não está ligada nesta versão do app. Por enquanto, digite ${oQue}.`}
             {nuvemConfigurada() && <button className="btn sec pequeno" style={{ marginTop: 8 }} onClick={() => nav('/nuvem')}>Ligar a nuvem</button>}
           </div></div>
         )}

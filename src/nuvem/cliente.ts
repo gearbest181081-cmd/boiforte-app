@@ -142,7 +142,7 @@ export async function ultimasCotacoes(): Promise<Cotacao[]> {
 }
 
 /** Manda a foto para o servidor ler (rótulo do núcleo ou visor da balança). */
-export async function lerFoto<T>(fazenda: string, tipo: 'rotulo' | 'balanca', imagemBase64: string, mime: string): Promise<T> {
+export async function lerFoto<T>(fazenda: string, tipo: 'rotulo' | 'balanca' | 'balanca_lote', imagemBase64: string, mime: string): Promise<T> {
   const { data, error } = await (await sb()).functions.invoke('ler-foto', { body: { fazenda, tipo, imagem: imagemBase64, mime } });
   if (error) {
     const corpo = await (error as { context?: Response }).context?.json?.().catch(() => null);

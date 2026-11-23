@@ -18,8 +18,14 @@ describe('leitura por foto (regras do servidor)', () => {
 
   it('só deixa passar números plausíveis do rótulo', () => {
     const r = limparLeitura('rotulo', { legivel: true, categoria: 'nucleo', nome: ' Núcleo <b>X</b> ', umidade: 10, pb: 40, ndt: 999, ca: 12.5, p: -1, nnp_pb: 28.1, consumo_texto: null, consumo_pct_pv: null, observacao: null });
-    expect(r).toEqual({ legivel: true, categoria: 'nucleo', nome: 'Núcleo bX/b', ms: 90, pb: 40, ndt: null, ca: 12.5, p: null, ureia: false, ureiaTeor: 10, consumo: null, consumoPctPV: null, observacao: null });
+    expect(r).toEqual({ legivel: true, categoria: 'nucleo', nome: 'Núcleo bX/b', ms: 90, pb: 40, ndt: null, ca: 12.5, p: null, fb: null, cobre: null, manganes: null, ureia: false, ureiaTeor: 10, consumo: null, consumoPctPV: null, observacao: null });
     expect(limparLeitura('rotulo', 'lixo')).toMatchObject({ legivel: false, categoria: null, pb: null, ureia: false, ureiaTeor: null });
+  });
+
+  it('fibra em %, cobre e manganês em mg/kg', () => {
+    const r = limparLeitura('rotulo', { legivel: true, categoria: 'sal_mineral', fb: 3, cobre: 1250, manganes: 99999, umidade: 2 });
+    expect(r).toMatchObject({ fb: 3, cobre: 1250, manganes: null });
+    expect(limparLeitura('rotulo', { legivel: true, fb: 120, cobre: -5 })).toMatchObject({ fb: null, cobre: null });
   });
 
   it('produto pronto: tipo, consumo do rótulo e ureia pura', () => {
@@ -31,6 +37,19 @@ describe('leitura por foto (regras do servidor)', () => {
   it('balança: peso fora da faixa não vale', () => {
     expect(limparLeitura('balanca', { legivel: true, peso: 352.5, brinco: '101' })).toEqual({ legivel: true, peso: 352.5, brinco: '101' });
     expect(limparLeitura('balanca', { legivel: true, peso: 5000, brinco: null })).toMatchObject({ legivel: false, peso: null });
+  });
+
+  it('balança com o lote todo: total, quantidade e média só se baterem', () => {
+    const fazenda = '10000000-0000-4000-8000-000000000001';
+    expect(validarPedido({ tipo: 'balanca_lote', imagem: img, mime: 'image/jpeg', fazenda }).tipo).toBe('balanca_lote');
+    expect(limparLeitura('balanca_lote', { legivel: true, peso_total: 4235, quantidade: 12, peso_medio: 352.9 })).toEqual({ legivel: true, pesoTotal: 4235, quantidade: 12, pesoMedio: 352.9 });
+    // média que não bate com total ÷ quantidade é descartada (o app divide)
+    expect(limparLeitura('balanca_lote', { legivel: true, peso_total: 4235, quantidade: 12, peso_medio: 500 })).toMatchObject({ pesoTotal: 4235, pesoMedio: null });
+    // quantidade quebrada ou absurda não vale; total acima de 200 t também não
+    expect(limparLeitura('balanca_lote', { legivel: true, peso_total: 4235, quantidade: 12.5, peso_medio: null })).toMatchObject({ quantidade: null });
+    expect(limparLeitura('balanca_lote', { legivel: true, peso_total: 300000, quantidade: null, peso_medio: null })).toMatchObject({ legivel: false, pesoTotal: null });
+    expect(limparLeitura('balanca_lote', { legivel: true, peso_total: null, quantidade: null, peso_medio: 351 })).toEqual({ legivel: true, pesoTotal: null, quantidade: null, pesoMedio: 351 });
+    expect(limparLeitura('balanca_lote', 'lixo')).toMatchObject({ legivel: false });
   });
 
   it('segredo confere só quando é igual', () => {
