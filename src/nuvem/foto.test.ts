@@ -18,8 +18,14 @@ describe('leitura por foto (regras do servidor)', () => {
 
   it('só deixa passar números plausíveis do rótulo', () => {
     const r = limparLeitura('rotulo', { legivel: true, categoria: 'nucleo', nome: ' Núcleo <b>X</b> ', umidade: 10, pb: 40, ndt: 999, ca: 12.5, p: -1, nnp_pb: 28.1, consumo_texto: null, consumo_pct_pv: null, observacao: null });
-    expect(r).toEqual({ legivel: true, categoria: 'nucleo', nome: 'Núcleo bX/b', ms: 90, pb: 40, ndt: null, ca: 12.5, p: null, ureia: false, ureiaTeor: 10, consumo: null, consumoPctPV: null, observacao: null });
+    expect(r).toEqual({ legivel: true, categoria: 'nucleo', nome: 'Núcleo bX/b', ms: 90, pb: 40, ndt: null, ca: 12.5, p: null, fb: null, cobre: null, manganes: null, ureia: false, ureiaTeor: 10, consumo: null, consumoPctPV: null, observacao: null });
     expect(limparLeitura('rotulo', 'lixo')).toMatchObject({ legivel: false, categoria: null, pb: null, ureia: false, ureiaTeor: null });
+  });
+
+  it('fibra em %, cobre e manganês em mg/kg', () => {
+    const r = limparLeitura('rotulo', { legivel: true, categoria: 'sal_mineral', fb: 3, cobre: 1250, manganes: 99999, umidade: 2 });
+    expect(r).toMatchObject({ fb: 3, cobre: 1250, manganes: null });
+    expect(limparLeitura('rotulo', { legivel: true, fb: 120, cobre: -5 })).toMatchObject({ fb: null, cobre: null });
   });
 
   it('produto pronto: tipo, consumo do rótulo e ureia pura', () => {

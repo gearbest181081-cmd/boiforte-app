@@ -35,7 +35,7 @@ export function Nutricao() {
             {formulas?.length === 0 && <div className="dica">Monte aqui suas dietas e suplementos: RIP, TIP, creep, proteinado, proteico energético, confinamento. O app calcula PB, NDT, Ca, P e o custo por kg e avisa o que estiver fora da faixa.</div>}
             {formulas?.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map((f) => {
               const r = calcularFormula(f.itens, ingredientes ?? []);
-              const al = avaliarFormula(f.tipo, r);
+              const al = avaliarFormula(f.tipo, r, f.consumoPctPV);
               const pior = al.find((a) => a.nivel === 'ruim') ? 'ruim' : al.find((a) => a.nivel === 'atencao') ? 'atencao' : 'bom';
               const base = TIPOS[f.tipo].base === 'ms' ? r.ms : r.mn;
               return (

@@ -4,6 +4,7 @@ import { seMudarGmd, seSegurar, simularCompra } from '../simulacao';
 import { fmtData, fmtNum, hojeISO, somaDias } from '../calc';
 import { CampoNumero, num, Opcoes, Topo } from '../components/ui';
 import { rs } from './Nutricao';
+import { SimComparar } from './Comparar';
 
 const txt = (v: number | null | undefined, casas = 3) => (v == null || !Number.isFinite(v) ? '' : String(+v.toFixed(casas)).replace('.', ','));
 
@@ -17,23 +18,24 @@ export function custoDiaCabeca(a: AnaliseLote): number | null {
 
 export function Simular() {
   const tudo = useTudo();
-  const [aba, setAba] = useState<'gmd' | 'segurar' | 'compra'>('gmd');
+  const [aba, setAba] = useState<'gmd' | 'segurar' | 'compra' | 'comparar'>('gmd');
   const analise = useMemo(() => (tudo ? analisarLotes(tudo).filter((a) => !a.info.lote.encerrado) : []), [tudo]);
   const [loteId, setLoteId] = useState<string>('');
-  if (!tudo) return <Topo titulo="E se…" voltar />;
+  if (!tudo) return <Topo titulo="Simulação" voltar />;
   const sel = analise.find((a) => String(a.info.lote.id) === loteId) ?? null;
   return (
     <>
-      <Topo titulo="E se…" voltar />
+      <Topo titulo="Simulação" voltar />
       <main>
         <p className="mudo">Faça a conta antes de decidir. Nada aqui é salvo nem muda seus lotes.</p>
-        <Opcoes tres valor={aba} aoMudar={setAba} opcoes={[
+        <Opcoes valor={aba} aoMudar={setAba} opcoes={[
           { valor: 'gmd', rotulo: 'Mudar GMD' },
           { valor: 'segurar', rotulo: 'Segurar lote' },
           { valor: 'compra', rotulo: 'Comprar gado' },
+          { valor: 'comparar', rotulo: 'Comparar produtos' },
         ]} />
         <div style={{ height: 14 }} />
-        {aba !== 'compra' && analise.length > 0 && (
+        {(aba === 'gmd' || aba === 'segurar') && analise.length > 0 && (
           <label className="campo"><span>Usar dados do lote</span>
             <select name="simLote" value={loteId} onChange={(e) => setLoteId(e.target.value)}>
               <option value="">Digitar os números</option>
@@ -43,6 +45,7 @@ export function Simular() {
         )}
         {aba === 'gmd' && <SimGmd key={`g${loteId}`} a={sel} />}
         {aba === 'segurar' && <SimSegurar key={`s${loteId}`} a={sel} precoArroba={tudo.precoArroba} rendimento={tudo.rendimento} />}
+        {aba === 'comparar' && <SimComparar />}
         {aba === 'compra' && <SimCompra precoArroba={tudo.precoArroba} rendimento={tudo.rendimento} oportunidade={tudo.oportunidadeMes} />}
       </main>
     </>

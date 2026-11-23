@@ -30,10 +30,10 @@ const num = { type: ['number', 'null'] } as const;
 export const ESQUEMA: Record<TipoFoto, Record<string, unknown>> = {
   rotulo: {
     type: 'object', additionalProperties: false,
-    required: ['legivel', 'categoria', 'nome', 'umidade', 'pb', 'ndt', 'ca', 'p', 'nnp_pb', 'consumo_texto', 'consumo_pct_pv', 'observacao'],
+    required: ['legivel', 'categoria', 'nome', 'umidade', 'pb', 'ndt', 'ca', 'p', 'fb', 'cobre', 'manganes', 'nnp_pb', 'consumo_texto', 'consumo_pct_pv', 'observacao'],
     properties: {
       legivel: { type: 'boolean' }, categoria: { type: ['string', 'null'], enum: [...CATEGORIAS, null] },
-      nome: { type: ['string', 'null'] }, umidade: num, pb: num, ndt: num, ca: num, p: num, nnp_pb: num,
+      nome: { type: ['string', 'null'] }, umidade: num, pb: num, ndt: num, ca: num, p: num, fb: num, cobre: num, manganes: num, nnp_pb: num,
       consumo_texto: { type: ['string', 'null'] }, consumo_pct_pv: num,
       observacao: { type: ['string', 'null'] },
     },
@@ -51,10 +51,12 @@ export const PROMPT: Record<TipoFoto, string> = {
     '"sal_mineral" (mineral puro), "sal_adensado" (mineral com ureia/proteína, "adensado"), "proteinado" (proteico ou proteico-mineral pronto),',
     '"proteico_energetico" (proteico-energético pronto), "racao" (ração pronta: RIP, TIP, creep, engorda) ou "ingrediente" (grão, farelo, ureia...).',
     'Para produto pronto para uso, use o modo de uso / consumo indicado no rótulo.',
-    'Leia os valores impressos e devolva TODOS em porcentagem (%) na matéria natural, como está no rótulo:',
+    'Leia os valores impressos na matéria natural, como está no rótulo. Devolva em porcentagem (%), menos cobre e manganês:',
     '- converta g/kg dividindo por 10 (ex.: 400 g/kg = 40%); mg/kg dividindo por 10000.',
     '- umidade: o valor de "Umidade (máx.)". pb: "Proteína bruta (mín.)". ndt: "NDT" se houver.',
     '- ca: "Cálcio" (se vier mínimo e máximo, use a média). p: "Fósforo (mín.)".',
+    '- fb: "Fibra bruta (máx.)" em %.',
+    '- cobre e manganes: "Cobre (mín.)" e "Manganês (mín.)" em mg/kg (NÃO converta para %). ppm = mg/kg; g/kg × 1000 = mg/kg.',
     '- nnp_pb: "Equivalente proteico de NNP" (proteína vinda de ureia), se houver.',
     '- consumo_texto: o consumo indicado, curto, como está no rótulo (ex.: "1 g por kg de peso vivo" ou "100 a 200 g/cab/dia").',
     '- consumo_pct_pv: o mesmo consumo em % do peso vivo só se o rótulo der assim (1 g/kg PV = 0,1; 0,3% PV = 0,3); senão null.',
@@ -79,6 +81,8 @@ const texto = (v: unknown, max: number): string | null => {
 export interface LeituraRotulo {
   legivel: boolean; categoria: Categoria | null; nome: string | null;
   ms: number | null; pb: number | null; ndt: number | null; ca: number | null; p: number | null;
+  /** Fibra bruta (%), cobre e manganês (mg/kg). */
+  fb: number | null; cobre: number | null; manganes: number | null;
   /** true só quando o produto é a própria ureia. */
   ureia: boolean;
   /** % de ureia contida no produto, pelo equivalente proteico de NNP do rótulo. */
@@ -105,6 +109,7 @@ export function limparLeitura(tipo: TipoFoto, bruto: unknown): LeituraRotulo | L
     nome: texto(r.nome, 80),
     ms: umidade == null ? null : Math.round((100 - umidade) * 1000) / 1000,
     pb, ndt: faixa(r.ndt, 0, 100), ca: faixa(r.ca, 0, 40), p: faixa(r.p, 0, 25),
+    fb: faixa(r.fb, 0, 100), cobre: faixa(r.cobre, 0, 50000), manganes: faixa(r.manganes, 0, 50000),
     ureia: pura,
     ureiaTeor: pura || !nnp ? null : Math.min(100, Math.round((nnp / PB_POR_UREIA) * 100) / 100),
     consumo: texto(r.consumo_texto, 80),
