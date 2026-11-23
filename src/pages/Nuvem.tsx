@@ -253,6 +253,7 @@ function Equipe({ fazendaId, souDono }: { fazendaId: string; souDono: boolean })
         <p className="mudo" data-testid="planoEquipe">
           Plano {NOME_PLANO[plano.plano] ?? plano.plano}: {plano.pessoas} de {plano.limite} pessoas
           {souDono && plano.convites_abertos > 0 ? ` (e ${plano.convites_abertos} convite(s) em aberto)` : ''}.
+          {plano.plano === 'pro' && plano.fotos_limite != null ? ` Leitura por foto: ${plano.fotos_usadas ?? 0} de ${plano.fotos_limite} neste mês.` : plano.plano === 'basico' ? ' A leitura por foto é do plano Pro.' : ''}
         </p>
       )}
       {plano?.eu_pausado && (

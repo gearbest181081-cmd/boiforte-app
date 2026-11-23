@@ -46,7 +46,7 @@ export function BotaoFoto<T>({ tipo, rotulo, aoLer, aoErro, sempre }: {
   const escolheu = async (a?: File) => {
     if (!a) return;
     setLendo(true);
-    try { aoLer(await lerFoto<T>(tipo, await prepararFoto(a), 'image/jpeg')); }
+    try { aoLer(await lerFoto<T>(est!.fazenda!.id, tipo, await prepararFoto(a), 'image/jpeg')); }
     catch (e) { aoErro((e as Error).message); }
     finally { setLendo(false); if (ref.current) ref.current.value = ''; }
   };
