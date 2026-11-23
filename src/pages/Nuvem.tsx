@@ -11,7 +11,7 @@ import { PAPEIS, type Papel } from '../nuvem/esquema';
 import { desligarFazenda, ligarFazenda, temDadosLocais, tentarDeNovo } from '../nuvem/sinc';
 import { sincronizarAgora, useEstadoNuvem } from '../nuvem/useNuvem';
 import { linkWhatsApp } from '../exportar';
-import { CampoTexto, Topo, useAviso } from '../components/ui';
+import { CampoEscolha, CampoTexto, Escolha, Topo, useAviso } from '../components/ui';
 import { Entrar } from '../components/Entrar';
 import { marcarDono, useSessao } from '../nuvem/sessao';
 
@@ -107,7 +107,7 @@ function Escolher({ email, aoSair }: { email: string; aoSair: () => void }) {
       )}
       <h2>Recebeu um convite?</h2>
       <div className="cartao">
-        <label className="campo"><span>Código do convite</span><input name="convite" autoCapitalize="characters" maxLength={14} value={cod} onChange={(e) => setCod(e.target.value.toUpperCase())} /></label>
+        <CampoTexto rotulo="Código do convite" nome="convite" formato="codigo" maxLength={14} valor={cod} aoMudar={(v) => setCod(v.toUpperCase())} />
         <button className="btn largo" disabled={ocupado} onClick={entrarComCodigo}>Entrar na equipe</button>
       </div>
       <h2>Ou crie a sua</h2>
@@ -233,9 +233,11 @@ function Equipe({ fazendaId, souDono }: { fazendaId: string; souDono: boolean })
           <div className="linha-lote"><b>{m.nome || 'Sem nome'}{m.eu ? ' (você)' : ''}</b><span className="etiqueta">{PAPEIS[m.papel].nome}{m.bloqueado ? ' · pausado' : ''}</span></div>
           {souDono && !m.eu && (
             <div className="botoes" style={{ margin: '8px 0 0' }}>
-              <select aria-label={`Papel de ${m.nome}`} value={m.papel} onChange={(e) => mudar(m, e.target.value as Papel)}>
-                {Object.entries(PAPEIS).map(([k, v]) => <option key={k} value={k}>{v.nome}</option>)}
-              </select>
+              <div style={{ flex: '1 1 180px' }}>
+                <Escolha aria-label={`Papel de ${m.nome}`} rotuloVoz="papel" valor={m.papel} aoMudar={(v) => mudar(m, v as Papel)}>
+                  {Object.entries(PAPEIS).map(([k, v]) => <option key={k} value={k}>{v.nome}</option>)}
+                </Escolha>
+              </div>
               <button className="btn perigo pequeno" onClick={() => tirar(m)}>Tirar</button>
             </div>
           )}
@@ -255,11 +257,9 @@ function Equipe({ fazendaId, souDono }: { fazendaId: string; souDono: boolean })
       {souDono && (
         <div className="cartao">
           <h3>Chamar alguém</h3>
-          <label className="campo"><span>Papel</span>
-            <select name="papelConvite" value={papel} onChange={(e) => { setPapel(e.target.value as Papel); setCodigo(null); }}>
-              {(['gerente', 'vaqueiro', 'consultor'] as Papel[]).map((p) => <option key={p} value={p}>{PAPEIS[p].nome}</option>)}
-            </select>
-          </label>
+          <CampoEscolha rotulo="Papel" nome="papelConvite" valor={papel} aoMudar={(v) => { setPapel(v as Papel); setCodigo(null); }}>
+            {(['gerente', 'vaqueiro', 'consultor'] as Papel[]).map((p) => <option key={p} value={p}>{PAPEIS[p].nome}</option>)}
+          </CampoEscolha>
           <p className="mudo">{PAPEIS[papel].texto}</p>
           {!codigo && semVaga ? (
             <p className="mudo" data-testid="semVaga">Sem vaga: o plano {NOME_PLANO[plano!.plano]} permite {plano!.limite} pessoas, contando os convites em aberto. Cancele um convite, tire alguém ou aumente o plano.</p>
