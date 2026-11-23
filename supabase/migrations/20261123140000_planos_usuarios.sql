@@ -1,5 +1,5 @@
 -- BoiForte: limite de pessoas na equipe por plano da fazenda.
---   Básico: quem assina + 2 pessoas (3 no total).  Pro: 4 pessoas.  Os dois aceitam pessoas extras pagas.
+--   Básico e Pro: quem assina + 1 pessoa (2 no total). Cada pessoa a mais é paga (usuarios_extras).
 -- Regras (todas no banco; o app só mostra):
 --   * O plano fica na tabela fazendas e só o servidor muda (definir_plano, chave de serviço). O app não tem
 --     permissão de UPDATE em fazendas, então ninguém se dá plano Pro pelo celular.
@@ -8,24 +8,24 @@
 --     convites aceitos ao mesmo tempo não passam juntos do limite.
 --   * Se o plano diminuir (ex.: Pro vencido vira Básico), ninguém é apagado: quem passa do limite fica "pausado"
 --     (não baixa, não envia, não usa foto) até o dono tirar alguém ou aumentar o plano. Os donos ficam na frente;
---     depois, quem entrou primeiro. Todo plano tem pelo menos 3 vagas, então sempre sobra um dono ativo.
+--     depois, quem entrou primeiro. Todo plano tem pelo menos 2 vagas, então sempre sobra um dono ativo.
 -- Depende de 20261123130000_correcoes_seguranca.sql (bf_uid, cancelar_convite, pode_usar_foto com teto geral).
 
 -- ---------------------------------------------------------------- colunas novas
 alter table public.fazendas
   add column plano text not null default 'basico' check (plano in ('basico', 'pro')),
-  add column usuarios_extras integer not null default 0 check (usuarios_extras between 0 and 46);
+  add column usuarios_extras integer not null default 0 check (usuarios_extras between 0 and 48);
 
 alter table public.membros add column bloqueado boolean not null default false;
 
 -- Fazendas que já existem hoje (antes de haver cobrança) passam para Pro com vagas para todos que já estão
 -- nelas, para ninguém perder acesso ao rodar esta migração. Ajuste depois com definir_plano.
 update public.fazendas fz set plano = 'pro',
-  usuarios_extras = least(46, greatest(0, (select count(*) from public.membros m where m.fazenda_id = fz.id) - 4));
+  usuarios_extras = least(48, greatest(0, (select count(*) from public.membros m where m.fazenda_id = fz.id) - 2));
 
 -- ---------------------------------------------------------------- contas do plano
 create function public.bf_limite_usuarios(p_plano text, p_extras integer) returns integer language sql immutable as $$
-  select case p_plano when 'basico' then 3 when 'pro' then 4 else 0 end + coalesce(p_extras, 0)
+  select case when p_plano in ('basico', 'pro') then 2 + coalesce(p_extras, 0) else 0 end
 $$;
 
 create function public.bf_nome_plano(p_plano text) returns text language sql immutable as $$
@@ -166,7 +166,7 @@ begin
 end $$;
 
 -- mudar_papel e remover_membro: mesmo corpo de antes, trancando a fazenda primeiro (mesma ordem de trava).
--- Sempre sobra um dono ativo: os donos ficam na frente da fila, e todo plano tem pelo menos 3 vagas.
+-- Sempre sobra um dono ativo: os donos ficam na frente da fila, e todo plano tem pelo menos 2 vagas.
 create or replace function public.mudar_papel(f uuid, usuario uuid, p_papel public.papel) returns void
 language plpgsql security definer set search_path = public, pg_temp as $$
 declare u uuid := public.bf_exigir_login(); antes public.papel;
@@ -222,7 +222,7 @@ language plpgsql security definer set search_path = public, pg_temp as $$
 declare antes public.fazendas;
 begin
   if p_plano not in ('basico', 'pro') then perform public.bf_erro('Plano desconhecido.'); end if;
-  if coalesce(p_extras, 0) not between 0 and 46 then perform public.bf_erro('Pessoas extras: de 0 a 46.'); end if;
+  if coalesce(p_extras, 0) not between 0 and 48 then perform public.bf_erro('Pessoas extras: de 0 a 48.'); end if;
   select * into antes from public.fazendas where id = f for no key update;
   if not found then perform public.bf_erro('Fazenda não encontrada.'); end if;
   update public.fazendas set plano = p_plano, usuarios_extras = coalesce(p_extras, 0) where id = f;
