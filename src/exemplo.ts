@@ -51,13 +51,11 @@ export async function carregarExemplo() {
     }
   }
 
-  // Financeiro: compra dos lotes (planilha), custos fixos e uma despesa rateada
+  // Financeiro: compra dos lotes (planilha), custos fixos, o vaqueiro e uma despesa rateada
   await registrarCompraLote(machos, { data: '2026-09-28', precoCab: 3260, comissaoPct: 0.02, frete: 1200, nfGta: 210 });
   await registrarCompraLote(femeas, { data: '2026-09-30', precoCab: 2610, comissaoPct: 0.02, frete: 450, nfGta: 90 });
-  await db.custosFixos.bulkAdd([
-    { nome: 'Vaqueiro (salário e encargos)', valorMensal: 3200, desde: '2026-09-01', criadoEm: Date.now() },
-    { nome: 'Arrendamento do pasto', valorMensal: 1500, desde: '2026-09-01', criadoEm: Date.now() },
-  ]);
+  await db.custosFixos.add({ nome: 'Arrendamento do pasto', valorMensal: 1500, desde: '2026-09-01', criadoEm: Date.now() });
+  await db.funcionarios.add({ nome: 'João', funcao: 'Vaqueiro', salario: 2400, encargos: 800, admissao: '2026-09-01', criadoEm: Date.now() });
   await db.lancamentos.add({ data: '2026-10-15', tipo: 'despesa', categoria: 'manutencao', descricao: 'Conserto da cerca', valor: 640, loteId: null, origem: 'manual', criadoEm: Date.now() });
 
   // Sanidade: vermífugo na entrada, reforço agendado e um carrapaticida com carência

@@ -117,25 +117,25 @@ export function useEstoque(hoje = hojeISO()): ItemEstoque[] | undefined {
 }
 
 // ---------- Financeiro e análise dos lotes ----------
-import { dreLote, ratear, variacao, type DreLote } from './financeiro';
+import { dreLote, folhaComoFixos, ratear, variacao, type DreLote } from './financeiro';
 import { emCarencia, pendenciasSanidade, liberacaoAbate } from './sanidade';
 import { lerConfigFin, lerConfig as lerConfigMercado } from './db';
-import type { Lancamento, CustoFixo, Venda, EventoSanitario, Lembrete, Animal } from './db';
+import type { Lancamento, CustoFixo, Venda, EventoSanitario, Lembrete, Animal, Funcionario } from './db';
 
 export interface Tudo {
   lotes: Lote[]; pesagens: Pesagem[]; formulas: Formula[]; ingredientes: Ingrediente[]; fornecimentos: Fornecimento[];
   lancamentos: Lancamento[]; custosFixos: CustoFixo[]; vendas: Venda[]; sanidade: EventoSanitario[]; lembretes: Lembrete[];
-  movimentos: { data: string; valor?: number; tipo: string; origem: string }[]; animais: Animal[];
+  movimentos: { data: string; valor?: number; tipo: string; origem: string }[]; animais: Animal[]; funcionarios: Funcionario[];
   precoArroba: number; rendimento: number; oportunidadeMes: number; comissaoVenda: number;
 }
 
 export async function carregarTudo(): Promise<Tudo> {
-  const [lotes, pesagens, formulas, ingredientes, fornecimentos, lancamentos, custosFixos, vendas, sanidade, lembretes, movimentos, animais, m, f] = await Promise.all([
+  const [lotes, pesagens, formulas, ingredientes, fornecimentos, lancamentos, custosFixos, vendas, sanidade, lembretes, movimentos, animais, funcionarios, m, f] = await Promise.all([
     db.lotes.toArray(), db.pesagens.toArray(), db.formulas.toArray(), db.ingredientes.toArray(), db.fornecimentos.toArray(),
     db.lancamentos.toArray(), db.custosFixos.toArray(), db.vendas.toArray(), db.sanidade.toArray(), db.lembretes.toArray(), db.movimentos.toArray(), db.animais.toArray(),
-    lerConfigMercado(), lerConfigFin(),
+    db.funcionarios.toArray(), lerConfigMercado(), lerConfigFin(),
   ]);
-  return { lotes, pesagens, formulas, ingredientes, fornecimentos, lancamentos, custosFixos, vendas, sanidade, lembretes, movimentos, animais, ...m, ...f };
+  return { lotes, pesagens, formulas, ingredientes, fornecimentos, lancamentos, custosFixos, vendas, sanidade, lembretes, movimentos, animais, funcionarios, ...m, ...f };
 }
 
 export function useTudo(): Tudo | undefined {
@@ -148,11 +148,12 @@ export interface AnaliseLote { info: LoteInfo; dre: DreLote; liberacao: { data: 
 export function analisarLotes(t: Tudo, ate = hojeISO()): AnaliseLote[] {
   const loteFin = t.lotes.map((l) => ({ id: l.id!, nome: l.nome, dataEntrada: l.dataEntrada, qtdCabecas: l.qtdCabecas, encerrado: l.encerrado, dataSaida: l.dataSaida }));
   const rateio = ratear(loteFin, t.vendas, t.lancamentos, t.custosFixos, ate);
+  const rateioFolha = ratear(loteFin, t.vendas, [], folhaComoFixos(t.funcionarios), ate);
   return t.lotes.map((l, i) => {
     const pes = t.pesagens.filter((p) => p.loteId === l.id);
     const dre = dreLote({
       lote: loteFin[i], pontos: pontosDoLote(pes), gmdMeta: l.gmdMeta, saidas: t.vendas, lancamentos: t.lancamentos,
-      fornecimentos: t.fornecimentos, rateio: rateio.get(l.id!) ?? 0, precoArroba: t.precoArroba, rendimento: t.rendimento,
+      fornecimentos: t.fornecimentos, rateio: rateio.get(l.id!) ?? 0, rateioFolha: rateioFolha.get(l.id!) ?? 0, precoArroba: t.precoArroba, rendimento: t.rendimento,
       taxaOportunidadeMes: t.oportunidadeMes, ate,
     });
     return { info: montarInfo(l, pes, ate), dre, liberacao: liberacaoAbate(t.sanidade, l.id!) };

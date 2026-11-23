@@ -39,6 +39,7 @@ Aplicativo de gestão de **cria, recria e engorda** (a pasto, TIP e confinamento
 
 - **Nuvem e equipe**: entrar com código no e-mail, criar a fazenda na nuvem ou entrar por convite. O celular continua funcionando sem sinal e sincroniza sozinho quando pega internet.
 - **Papéis**: dono, gerente, vaqueiro (pesa, trata e vacina, sem ver dinheiro) e consultor (só olha). Tudo conferido no servidor.
+- **Funcionários**: nome, função e salário (com 13º, férias e encargos). A folha entra sozinha no custo da fazenda e no custo da @ produzida, rateada entre os lotes pelas cabeças. O dono chama o funcionário para o app pela própria ficha dele. O vaqueiro não vê salários.
 - **Cálculos de dinheiro refeitos no servidor**: se um celular mandar valor errado, volta corrigido.
 - **Leitura por foto**: rótulo do núcleo/suplemento (preenche MS, PB, NDT, Ca, P e ureia) e visor da balança.
 - **Cotações** do boi gordo, bezerro, milho e soja (Cepea), atualizadas todo dia, com botão para usar como preço da @.

@@ -1,6 +1,6 @@
 // Monta as tabelas dos relatórios (as mesmas vão para a tela, o PDF e o Excel).
 import { analisarLotes, type AnaliseLote, type Tudo } from './hooks';
-import { drePeriodo, fluxoCaixa, mesNome, NOMES_CATEGORIA } from './financeiro';
+import { drePeriodo, fluxoCaixa, folhaComoFixos, mesNome, NOMES_CATEGORIA } from './financeiro';
 import { FASES } from './db';
 import { fmtData, hojeISO } from './calc';
 import type { Tabela } from './exportar';
@@ -54,9 +54,9 @@ export function tabelaRanking(an: AnaliseLote[], c: Criterio): Tabela {
 }
 
 export function tabelasPeriodo(t: Tudo, de: string, ate: string): Tabela[] {
-  const dre = drePeriodo(de, ate, t.lancamentos, t.vendas, t.fornecimentos, t.custosFixos);
+  const dre = drePeriodo(de, ate, t.lancamentos, t.vendas, t.fornecimentos, t.custosFixos, folhaComoFixos(t.funcionarios));
   const compras = t.movimentos.filter((m) => m.origem === 'compra' && m.valor).map((m) => ({ data: m.data, valor: m.valor! }));
-  const todos = fluxoCaixa(de, ate, t.lancamentos, t.vendas, compras, t.custosFixos);
+  const todos = fluxoCaixa(de, ate, t.lancamentos, t.vendas, compras, t.custosFixos, folhaComoFixos(t.funcionarios));
   // meses vazios do começo do período não ajudam a ler o caixa
   const primeiro = todos.findIndex((m) => m.entradas || m.saidas);
   const fluxo = primeiro < 0 ? [] : todos.slice(primeiro);

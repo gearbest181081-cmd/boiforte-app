@@ -18,13 +18,34 @@ export const CATEGORIAS_RECEITA = { venda_animais: 'Venda de animais', outras_re
 export type CategoriaDespesa = keyof typeof CATEGORIAS_DESPESA;
 export type CategoriaReceita = keyof typeof CATEGORIAS_RECEITA;
 export type Categoria = CategoriaDespesa | CategoriaReceita;
-export const NOMES_CATEGORIA: Record<string, string> = { ...CATEGORIAS_DESPESA, ...CATEGORIAS_RECEITA, nutricao: 'Nutrição (trato)', fixos: 'Custos fixos rateados', oportunidade: 'Custo de oportunidade' };
+export const NOMES_CATEGORIA: Record<string, string> = { ...CATEGORIAS_DESPESA, ...CATEGORIAS_RECEITA, nutricao: 'Nutrição (trato)', fixos: 'Custos fixos rateados', folha: 'Salários dos funcionários', oportunidade: 'Custo de oportunidade' };
 
 export interface LancamentoFin { data: string; tipo: 'despesa' | 'receita'; categoria: Categoria; valor: number; loteId?: number | null }
 export interface CustoFixoFin { nome: string; valorMensal: number; desde: string; ate?: string | null }
 export interface VendaFin { loteId: number; data: string; tipo: 'venda' | 'morte'; cabecas: number; pesoMedio?: number; valorLiquido: number }
 export interface FornecimentoFin { loteId: number; data: string; custo: number }
+export interface FuncionarioFin { salario: number; encargos?: number; admissao: string; saida?: string | null }
 export interface LoteFin { id: number; nome: string; dataEntrada: string; qtdCabecas: number; encerrado?: boolean; dataSaida?: string | null }
+
+// ---------- Funcionários ----------
+
+/** Quanto o funcionário custa por mês: salário + encargos e outros gastos com ele. */
+export const custoMensalFuncionario = (f: FuncionarioFin) => f.salario + (f.encargos ?? 0);
+
+/**
+ * A folha entra nas contas como um custo fixo por funcionário (da admissão até a saída):
+ * rateada todo dia entre os lotes pelas cabeças, igual aos custos fixos, mas numa linha própria.
+ */
+export function folhaComoFixos(funcionarios: FuncionarioFin[]): CustoFixoFin[] {
+  return funcionarios
+    .filter((f) => custoMensalFuncionario(f) > 0)
+    .map((f) => ({ nome: 'folha', valorMensal: custoMensalFuncionario(f), desde: f.admissao, ate: f.saida ?? null }));
+}
+
+/** Folha do mês de hoje: soma de quem está trabalhando (sem data de saída ou saída depois de hoje). */
+export function folhaAtiva(funcionarios: FuncionarioFin[], hoje: string): number {
+  return funcionarios.filter((f) => f.admissao <= hoje && (!f.saida || f.saida >= hoje)).reduce((t, f) => t + custoMensalFuncionario(f), 0);
+}
 
 // ---------- Compra e venda (fórmulas da planilha) ----------
 
@@ -132,7 +153,7 @@ export interface DreLote {
 
 export function dreLote(p: {
   lote: LoteFin; pontos: PontoPeso[]; gmdMeta?: number | null; saidas: VendaFin[]; lancamentos: LancamentoFin[];
-  fornecimentos: FornecimentoFin[]; rateio: number; precoArroba: number; rendimento: number; taxaOportunidadeMes: number; ate: string;
+  fornecimentos: FornecimentoFin[]; rateio: number; rateioFolha?: number; precoArroba: number; rendimento: number; taxaOportunidadeMes: number; ate: string;
 }): DreLote {
   const { lote, ate } = p;
   const fimLote = lote.dataSaida && lote.dataSaida < ate ? lote.dataSaida : ate;
@@ -151,6 +172,7 @@ export function dreLote(p: {
   const nutricao = p.fornecimentos.filter((f) => f.loteId === lote.id && f.data <= ate).reduce((t, f) => t + f.custo, 0);
   if (nutricao) custos.nutricao = nutricao;
   if (p.rateio) custos.fixos = p.rateio;
+  if (p.rateioFolha) custos.folha = p.rateioFolha;
   const custoTotal = Object.values(custos).reduce((a, b) => a + b, 0);
   const compra = custos.compra_animais ?? 0;
   // planilha: oportunidade sobre o capital médio (compra + metade dos demais custos) × meses
@@ -180,7 +202,7 @@ export function dreLote(p: {
 export interface DrePeriodo { receitas: Record<string, number>; despesas: Record<string, number>; totalReceitas: number; totalDespesas: number; resultado: number }
 
 /** Regime de competência: nutrição pelo que foi fornecido, fixos pelo dia, demais pela data do lançamento. */
-export function drePeriodo(de: string, ate: string, lancamentos: LancamentoFin[], vendas: VendaFin[], fornecimentos: FornecimentoFin[], fixos: CustoFixoFin[]): DrePeriodo {
+export function drePeriodo(de: string, ate: string, lancamentos: LancamentoFin[], vendas: VendaFin[], fornecimentos: FornecimentoFin[], fixos: CustoFixoFin[], folha: CustoFixoFin[] = []): DrePeriodo {
   const receitas: Record<string, number> = {}, despesas: Record<string, number> = {};
   for (const v of vendas) if (v.data >= de && v.data <= ate && v.valorLiquido) receitas.venda_animais = (receitas.venda_animais ?? 0) + v.valorLiquido;
   for (const l of lancamentos) {
@@ -190,21 +212,27 @@ export function drePeriodo(de: string, ate: string, lancamentos: LancamentoFin[]
   }
   const nut = fornecimentos.filter((f) => f.data >= de && f.data <= ate).reduce((t, f) => t + f.custo, 0);
   if (nut) despesas.nutricao = nut;
-  let fx = 0;
-  for (const f of fixos) {
-    const a = f.desde > de ? f.desde : de, b = f.ate && f.ate < ate ? f.ate : ate;
-    if (b >= a) fx += ((f.valorMensal * 12) / 365) * (diasEntre(a, b) + 1);
-  }
+  const fx = fixosNoPeriodo(fixos, de, ate), fl = fixosNoPeriodo(folha, de, ate);
   if (fx) despesas.fixos = fx;
+  if (fl) despesas.folha = fl;
   const totalReceitas = Object.values(receitas).reduce((a, b) => a + b, 0);
   const totalDespesas = Object.values(despesas).reduce((a, b) => a + b, 0);
   return { receitas, despesas, totalReceitas, totalDespesas, resultado: totalReceitas - totalDespesas };
 }
 
+function fixosNoPeriodo(fixos: CustoFixoFin[], de: string, ate: string): number {
+  let fx = 0;
+  for (const f of fixos) {
+    const a = f.desde > de ? f.desde : de, b = f.ate && f.ate < ate ? f.ate : ate;
+    if (b >= a) fx += ((f.valorMensal * 12) / 365) * (diasEntre(a, b) + 1);
+  }
+  return fx;
+}
+
 export interface MesCaixa { mes: string; entradas: number; saidas: number; saldo: number; acumulado: number }
 
 /** Fluxo de caixa mensal: dinheiro que entrou e saiu (compras de insumo entram pela data da compra). */
-export function fluxoCaixa(de: string, ate: string, lancamentos: LancamentoFin[], vendas: VendaFin[], comprasInsumo: { data: string; valor: number }[], fixos: CustoFixoFin[]): MesCaixa[] {
+export function fluxoCaixa(de: string, ate: string, lancamentos: LancamentoFin[], vendas: VendaFin[], comprasInsumo: { data: string; valor: number }[], fixos: CustoFixoFin[], folha: CustoFixoFin[] = []): MesCaixa[] {
   const meses: MesCaixa[] = [];
   let acumulado = 0;
   for (let m = inicioDoMes(de); m <= ate; m = somaDias(fimDoMes(m), 1)) {
@@ -214,7 +242,7 @@ export function fluxoCaixa(de: string, ate: string, lancamentos: LancamentoFin[]
     for (const v of vendas) if (dentro(v.data)) entradas += v.valorLiquido;
     for (const l of lancamentos) if (dentro(l.data)) { if (l.tipo === 'receita') entradas += l.valor; else saidas += l.valor; }
     for (const c of comprasInsumo) if (dentro(c.data)) saidas += c.valor;
-    for (const f of fixos) if (f.desde <= fim && (!f.ate || f.ate >= m)) saidas += f.valorMensal;
+    for (const f of [...fixos, ...folha]) if (f.desde <= fim && (!f.ate || f.ate >= m)) saidas += f.valorMensal;
     acumulado += entradas - saidas;
     meses.push({ mes: m.slice(0, 7), entradas, saidas, saldo: entradas - saidas, acumulado });
   }

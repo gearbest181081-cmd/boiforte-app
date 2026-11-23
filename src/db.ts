@@ -119,8 +119,14 @@ export interface EventoSanitario {
   carenciaDias?: number; repetirDias?: number; obs?: string; criadoEm: number;
 }
 export interface Lembrete { id?: number; gid?: string; titulo: string; mes: number; dia: number; antecedenciaDias: number; obs?: string; criadoEm: number }
+/** Funcionário da fazenda. Salário + encargos (por mês) entram no custo da fazenda e da @ produzida. */
+export interface Funcionario {
+  id?: number; gid?: string; nome: string; funcao: string; salario: number; encargos?: number; admissao: string; saida?: string | null;
+  telefone?: string; usuarioId?: string | null; // conta do app (pessoa da equipe na nuvem); vazio = não usa o app
+  obs?: string; criadoEm: number;
+}
 
-export const TABELAS = ['propriedades', 'modulos', 'piquetes', 'lotes', 'animais', 'pesagens', 'ingredientes', 'formulas', 'movimentos', 'batidas', 'fornecimentos', 'config', 'lancamentos', 'custosFixos', 'vendas', 'sanidade', 'lembretes'] as const;
+export const TABELAS = ['propriedades', 'modulos', 'piquetes', 'lotes', 'animais', 'pesagens', 'ingredientes', 'formulas', 'movimentos', 'batidas', 'fornecimentos', 'config', 'lancamentos', 'custosFixos', 'vendas', 'sanidade', 'lembretes', 'funcionarios'] as const;
 
 export class BoiForteDB extends Dexie {
   propriedades!: Table<Propriedade, number>;
@@ -140,6 +146,7 @@ export class BoiForteDB extends Dexie {
   vendas!: Table<Venda, number>;
   sanidade!: Table<EventoSanitario, number>;
   lembretes!: Table<Lembrete, number>;
+  funcionarios!: Table<Funcionario, number>;
   pendentes!: Table<Pendente, [string, number | string]>;
   sincEstado!: Table<{ chave: string; valor: unknown }, string>;
   sincEspera!: Table<{ tabela: string; gid: string; linha: unknown }, [string, string]>;
@@ -195,10 +202,11 @@ export class BoiForteDB extends Dexie {
     }).upgrade(async (tx) => {
       (tx as Transaction & { __silencioso?: boolean }).__silencioso = true;
       for (const t of TABELAS) {
-        if (t === 'config') continue;
+        if (t === 'config' || t === 'funcionarios') continue; // funcionarios só nasce na versão 5, já com gid
         await tx.table(t).toCollection().modify((r: { gid?: string }) => { if (!r.gid) r.gid = novoGid(); });
       }
     });
+    this.version(5).stores({ funcionarios: '++id, &gid' });
     this.use(middlewarePendentes);
     // Toda gravação passa pela validação, venha de onde vier.
     for (const t of TABELAS) {

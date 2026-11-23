@@ -18,6 +18,7 @@ import { Simular } from './pages/Simular';
 import { Relatorios } from './pages/Relatorios';
 import { Cotacoes } from './pages/Cotacoes';
 import { Nuvem } from './pages/Nuvem';
+import { FuncionarioForm, Funcionarios } from './pages/Funcionarios';
 import { SincAutomatica } from './nuvem/useNuvem';
 import { SessaoProvider } from './nuvem/sessao';
 import { Porta } from './pages/Login';
@@ -49,6 +50,8 @@ export function App() {
               <Route path="/simular" element={<Simular />} />
               <Route path="/relatorios" element={<Relatorios />} />
               <Route path="/nuvem" element={<Nuvem />} />
+              <Route path="/funcionarios" element={<Funcionarios />} />
+              <Route path="/funcionarios/:id" element={<FuncionarioForm />} />
               <Route path="/cotacoes" element={<Cotacoes />} />
               <Route path="*" element={<Inicio />} />
             </Routes>

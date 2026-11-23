@@ -1,20 +1,35 @@
 // Testes do servidor: rodam as migrações reais do Supabase num Postgres em memória e tentam
 // furar a segurança do jeito que um app adulterado faria (chamando a API direto).
 import { describe, it, expect, beforeAll } from 'vitest';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gerarSqlEsquemas } from './gerarSql';
 import { subirServidor, type Servidor } from './servidorTeste';
 
-const ARQ = fileURLToPath(new URL('../../supabase/migrations/20261119000002_esquemas.sql', import.meta.url));
+// As regras geradas ficam num bloco "-- GERADO por ..." dentro da migração MAIS NOVA que tiver esse bloco
+// (as antigas já rodaram no Supabase e não mudam). Tabela nova: crie a migração nova com uma cópia do bloco
+// e rode `npm run gerar-sql`, que reescreve só o bloco dela.
+const PASTA = fileURLToPath(new URL('../../supabase/migrations/', import.meta.url));
+const MARCA = '-- GERADO por src/nuvem/gerarSql.ts';
+const FIM = 'refs = excluded.refs;\n';
+function blocoGerado(): { arq: string; texto: string; ini: number; fim: number } {
+  for (const n of readdirSync(PASTA).filter((x) => x.endsWith('.sql')).sort().reverse()) {
+    const texto = readFileSync(join(PASTA, n), 'utf8');
+    const ini = texto.indexOf(MARCA);
+    if (ini >= 0) return { arq: join(PASTA, n), texto, ini, fim: texto.indexOf(FIM, ini) + FIM.length };
+  }
+  throw new Error('Nenhuma migração com as regras geradas.');
+}
 const uuid = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 type Res = { tabela: string; gid: string; ok: boolean; erro?: string; versao?: number; dados?: Record<string, unknown> }[];
 
 describe('SQL das regras', () => {
   it('está igual ao gerado a partir de src/validar.ts', () => {
     const novo = gerarSqlEsquemas();
-    if (process.env.ATUALIZAR_SQL) writeFileSync(ARQ, novo);
-    expect(readFileSync(ARQ, 'utf8')).toBe(novo);
+    let b = blocoGerado();
+    if (process.env.ATUALIZAR_SQL) { writeFileSync(b.arq, b.texto.slice(0, b.ini) + novo + b.texto.slice(b.fim)); b = blocoGerado(); }
+    expect(b.texto.slice(b.ini, b.fim)).toBe(novo);
   });
 });
 
@@ -548,5 +563,108 @@ describe('servidor: leitura por foto por plano', () => {
   it('o mês vira no horário de Brasília', async () => {
     const r = await s.pg.query<{ ok: boolean }>(`select public.bf_inicio_mes() = (date_trunc('month', now() at time zone 'America/Sao_Paulo') at time zone 'America/Sao_Paulo') ok`);
     expect(r.rows[0].ok).toBe(true);
+  });
+});
+
+// Funcionários com salário: o vaqueiro não vê; só o dono liga à conta do app; ninguém mexe no próprio salário.
+describe('servidor: funcionários e salários', () => {
+  let s: Servidor;
+  let n = 0;
+  let dono: string, gerente: string, vaq: string, cons: string, estranho: string, f: string, outra: string;
+  const nova = () => s.novoUsuario(`func${++n}@x`);
+  const enviar = (u: string, fz: string, ops: unknown[]) => s.rpc<Res>(u, 'enviar_alteracoes', { f: fz, ops });
+  const func = (k: number, extra: Record<string, unknown> = {}) => ({
+    tabela: 'funcionarios', gid: uuid(900 + k), op: 'put',
+    dados: { nome: 'Func ' + k, funcao: 'Vaqueiro', salario: 2400, encargos: 800, admissao: '2026-09-01', criadoEm: 0, ...extra },
+  });
+  const entrar = async (papel: string, nome: string) => {
+    const u = await nova();
+    await s.rpc(u, 'aceitar_convite', { p_codigo: await s.rpc<string>(dono, 'criar_convite', { f, p_papel: papel }), meu_nome: nome });
+    return u;
+  };
+
+  beforeAll(async () => {
+    s = await subirServidor();
+    dono = await nova();
+    f = await s.rpc<string>(dono, 'criar_fazenda', { p_nome: 'Canaã', meu_nome: 'Dono' });
+    await s.pg.query(`select public.definir_plano($1, 'pro', 3)`, [f]);
+    gerente = await entrar('gerente', 'Gerente');
+    vaq = await entrar('vaqueiro', 'Vaqueiro');
+    cons = await entrar('consultor', 'Consultor');
+    estranho = await nova();
+    outra = await s.rpc<string>(estranho, 'criar_fazenda', { p_nome: 'Outra', meu_nome: 'Estranho' });
+  }, 30000);
+
+  it('dono cadastra com salário; os campos são conferidos como no celular', async () => {
+    const r = await enviar(dono, f, [
+      func(1),
+      func(2, { salario: -5 }),
+      func(3, { nome: '' }),
+      func(4, { admissao: '2026-02-30' }),
+      func(5, { usuarioId: 'nao-e-conta' }),
+    ]);
+    expect(r.map((x) => x.ok)).toEqual([true, false, false, false, false]);
+    expect(r[0].dados).toEqual({ nome: 'Func 1', funcao: 'Vaqueiro', salario: 2400, encargos: 800, admissao: '2026-09-01', criadoEm: 0 });
+    expect(r[1].erro).toMatch(/fora do limite/);
+    expect(r[4].erro).toMatch(/não faz parte da equipe/);
+  });
+
+  it('o vaqueiro não recebe nem grava funcionários (nem os salários)', async () => {
+    const baixou = await s.rpc<{ tabela: string; dados: unknown }[]>(vaq, 'baixar_alteracoes', { f, desde: 0 });
+    expect(baixou.some((x) => x.tabela === 'funcionarios')).toBe(false);
+    expect(JSON.stringify(baixou)).not.toMatch(/salario|2400/);
+    const r = await enviar(vaq, f, [func(10), { tabela: 'funcionarios', gid: uuid(901), op: 'del' }]);
+    expect(r.map((x) => x.ok)).toEqual([false, false]);
+    const direto = await s.como(vaq, () => s.pg.query(`select dados from public.registros where tabela = 'funcionarios'`).catch((e) => e));
+    expect(String(direto)).toMatch(/permission denied/);
+  });
+
+  it('consultor vê, mas não grava', async () => {
+    const baixou = await s.rpc<{ tabela: string }[]>(cons, 'baixar_alteracoes', { f, desde: 0 });
+    expect(baixou.some((x) => x.tabela === 'funcionarios')).toBe(true);
+    await expect(enviar(cons, f, [func(11)])).rejects.toThrow('Consultor');
+  });
+
+  it('outra fazenda não vê os funcionários', async () => {
+    await expect(s.rpc(estranho, 'baixar_alteracoes', { f, desde: 0 })).rejects.toThrow('não faz parte');
+    const r = await s.rpc<{ tabela: string }[]>(estranho, 'baixar_alteracoes', { f: outra, desde: 0 });
+    expect(r.some((x) => x.tabela === 'funcionarios')).toBe(false);
+  });
+
+  it('só o dono liga a conta do app, e só de quem é da equipe e uma vez', async () => {
+    // gerente cadastra e muda salário de outro funcionário, mas não liga conta
+    const g = await enviar(gerente, f, [func(20), func(20, { salario: 2600 }), func(21, { usuarioId: vaq })]);
+    expect(g.map((x) => x.ok)).toEqual([true, true, false]);
+    expect(g[2].erro).toMatch(/Só o dono liga/);
+    // dono liga: conta de fora da fazenda não serve
+    const d = await enviar(dono, f, [func(20, { salario: 2600, usuarioId: estranho }), func(20, { salario: 2600, usuarioId: vaq }), func(22, { usuarioId: vaq })]);
+    expect(d.map((x) => x.ok)).toEqual([false, true, false]);
+    expect(d[0].erro).toMatch(/não faz parte da equipe/);
+    expect(d[2].erro).toMatch(/já está ligada a outro funcionário/);
+    // gerente não desliga nem troca a conta de quem já está ligado
+    const g2 = await enviar(gerente, f, [func(20, { salario: 2700 }), func(20, { salario: 2700, usuarioId: vaq }), { tabela: 'funcionarios', gid: uuid(920), op: 'del' }]);
+    expect(g2.map((x) => x.ok)).toEqual([false, true, false]);
+    expect(g2[2].erro).toMatch(/Só o dono apaga/);
+  });
+
+  it('ninguém além do dono mexe no próprio cadastro (nem aumenta o próprio salário)', async () => {
+    expect((await enviar(dono, f, [func(30, { funcao: 'Gerente', salario: 5000, usuarioId: gerente })]))[0].ok).toBe(true);
+    const r = await enviar(gerente, f, [func(30, { funcao: 'Gerente', salario: 9000, usuarioId: gerente }), { tabela: 'funcionarios', gid: uuid(930), op: 'del' }]);
+    expect(r.map((x) => x.ok)).toEqual([false, false]);
+    expect(r[0].erro).toMatch(/próprio cadastro/);
+    expect((await enviar(dono, f, [func(30, { funcao: 'Gerente', salario: 5500, usuarioId: gerente })]))[0].ok).toBe(true);
+  });
+
+  it('toda mudança de funcionário fica na auditoria do dono, com o salário de antes e de depois', async () => {
+    const aud = await s.como(dono, () => s.pg.query<{ acao: string; antes: { salario?: number } | null; depois: { salario?: number } | null }>(
+      `select acao, antes, depois from public.auditoria where tabela = 'funcionarios' and gid = $1 order by id`, [uuid(930)]));
+    expect(aud.rows.map((x) => [x.acao, x.antes?.salario ?? null, x.depois?.salario ?? null])).toEqual([['gravar', null, 5000], ['gravar', 5000, 5500]]);
+    const doGerente = await s.como(gerente, () => s.pg.query(`select * from public.auditoria`));
+    expect(doGerente.rows).toHaveLength(0);
+  });
+
+  it('apagar e recriar o mesmo funcionário funciona; apagar libera a conta para outro cadastro', async () => {
+    expect((await enviar(dono, f, [{ tabela: 'funcionarios', gid: uuid(920), op: 'del' }]))[0].ok).toBe(true);
+    expect((await enviar(dono, f, [func(22, { usuarioId: vaq })]))[0].ok).toBe(true);
   });
 });
