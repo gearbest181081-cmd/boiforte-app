@@ -31,7 +31,8 @@ Aplicativo de gestão de **cria, recria e engorda** (a pasto, TIP e confinamento
 - Despesas e receitas por lote ou gerais da fazenda; as gerais e os custos fixos mensais são **rateados por cabeça-dia**.
 - DRE por lote (com custo de oportunidade, valor do gado no pasto, custo da @ produzida e custo por cabeça), DRE da fazenda por mês, ano ou safra e fluxo de caixa mensal.
 - Sanidade: aplicações e agendamentos por lote, próxima dose automática, **carência para abate** e calendário anual (declaração do rebanho, brucelose) editável.
-- Simulações "E se": mudar o GMD, segurar o lote com a @ travada e simulador de compra (igual à aba SIMULADOR da planilha).
+- Simulação: mudar o GMD, segurar o lote com a @ travada, simulador de compra (igual à aba SIMULADOR da planilha) e comparar produtos
+  (fórmulas da biblioteca ou dois rótulos pela foto/digitados), mostrando o mais adequado ao tipo e o melhor custo-benefício.
 - Relatórios de desempenho, resultado e ranking em **PDF e Excel**, com envio pelo WhatsApp.
 - Avisos inteligentes: custo da @ subindo 5% no mês, @ produzida mais cara que a vendida, carência antes da data prevista de saída, doses atrasadas e prazos do calendário.
 
@@ -67,7 +68,8 @@ A cada envio para `main`, o GitHub Actions roda os testes e publica o app no Git
 - `src/voz.ts`: reconhecimento de voz e leitura de números, datas, textos e escolhas faladas.
 - `src/nutricao.ts` e `src/estoque.ts`: formulação, faixas de referência, estoque.
 - `src/validar.ts`: validação de tudo que é gravado.
-- `src/financeiro.ts`, `src/sanidade.ts`, `src/simulacao.ts`: dinheiro, saúde do rebanho e "E se".
+- `src/financeiro.ts`, `src/sanidade.ts`, `src/simulacao.ts`: dinheiro, saúde do rebanho e Simulação.
+- `src/faixas.ts`: faixa adequada de cada nutriente por tipo de fórmula (com as fontes); `src/comparar.ts`: comparação de produtos.
 - `src/relatorios.ts` e `src/exportar.ts`: tabelas dos relatórios, Excel e PDF gerados no próprio celular.
 - `src/db.ts`: banco local (Dexie/IndexedDB), regras de estoque/trato e cópia de segurança.
 - `src/nuvem/`: sincronização, login e equipe (`sinc.ts`, `cliente.ts`) e os testes do servidor.

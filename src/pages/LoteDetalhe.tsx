@@ -106,6 +106,7 @@ export function LoteDetalhe() {
             <div className="cartao">
               <GraficoCrescimento pontos={pontos} gmdMeta={lote.gmdMeta} pesoAlvo={lote.pesoAlvo} projecao={p} />
             </div>
+            {pesagens.length > 0 && <Link to={`/lotes/${lote.id}/relatorio`} className="btn sec largo" style={{ marginBottom: 14 }}>Relatório de pesagem (PDF, Excel, WhatsApp)</Link>}
             {lote.obs && <div className="cartao"><b>Observações</b><p>{lote.obs}</p></div>}
             <div className="botoes">
               <Link to={`/lotes/${lote.id}/editar`} className="btn sec pequeno">Editar lote</Link>
@@ -115,6 +116,9 @@ export function LoteDetalhe() {
           </>
         )}
 
+        {aba === 'pesagens' && pesagens.length > 0 && (
+          <Link to={`/lotes/${lote.id}/relatorio`} className="btn sec largo" style={{ marginBottom: 12 }}>Relatório de pesagem (PDF, Excel, WhatsApp)</Link>
+        )}
         {aba === 'pesagens' && (
           <div className="cartao rolagem">
             {pesagens.length === 0 ? <p className="mudo">Nenhuma pesagem.</p> : (
@@ -142,13 +146,13 @@ export function LoteDetalhe() {
 
         {aba === 'dinheiro' && <LoteFinanceiro lote={lote} />}
         {aba === 'saude' && <LoteSanidade lote={lote} />}
-        {aba === 'animais' && <ListaAnimais animais={animais} pesagens={pesagens} gmdMeta={lote.gmdMeta} />}
+        {aba === 'animais' && <ListaAnimais loteId={loteId} animais={animais} pesagens={pesagens} gmdMeta={lote.gmdMeta} />}
       </main>
     </>
   );
 }
 
-function ListaAnimais({ animais, pesagens, gmdMeta }: { animais: { id?: number; brinco: string }[]; pesagens: any[]; gmdMeta?: number | null }) {
+function ListaAnimais({ loteId, animais, pesagens, gmdMeta }: { loteId: number; animais: { id?: number; brinco: string }[]; pesagens: any[]; gmdMeta?: number | null }) {
   const linhas = animais.map((a) => ({ a, r: resumo(pontosDoAnimal(pesagens, a.id!)) }))
     .sort((x, y) => (y.r.gmdTotal ?? -99) - (x.r.gmdTotal ?? -99));
   if (!linhas.length) return <p className="mudo">Nenhum animal pesado ainda.</p>;
@@ -161,7 +165,7 @@ function ListaAnimais({ animais, pesagens, gmdMeta }: { animais: { id?: number; 
             const d = desvioMeta(r.gmdTotal, gmdMeta);
             return (
               <tr key={a.id}>
-                <td><b>{a.brinco}</b></td>
+                <td>{r.pesoAtual != null ? <Link to={`/lotes/${loteId}/relatorio?animal=${a.id}`}><b>{a.brinco}</b></Link> : <b>{a.brinco}</b>}</td>
                 <td className="n">{fmtKg(r.pesoAtual, 0)}</td>
                 <td className="n" style={{ color: d != null && d <= -0.1 ? 'var(--alerta)' : undefined }}>{r.gmdTotal == null ? '—' : fmtGmd(r.gmdTotal).replace(' kg/dia', '')}</td>
                 <td className="n">{fmtKg(r.ganhoTotal, 0)}</td>
@@ -170,7 +174,7 @@ function ListaAnimais({ animais, pesagens, gmdMeta }: { animais: { id?: number; 
           })}
         </tbody>
       </table>
-      <p className="mudo" style={{ marginTop: 10 }}>Ordenado do maior para o menor GMD. Em vermelho, animais 10% ou mais abaixo da meta.</p>
+      <p className="mudo" style={{ marginTop: 10 }}>Ordenado do maior para o menor GMD. Em vermelho, animais 10% ou mais abaixo da meta. Toque no brinco para ver a curva e mandar o relatório do animal.</p>
     </div>
   );
 }

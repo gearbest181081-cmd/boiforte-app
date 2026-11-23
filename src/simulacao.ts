@@ -1,4 +1,4 @@
-// Simulações "E se" e simulador de compra (mesmas fórmulas da aba SIMULADOR da planilha).
+// Simulação ("E se...") e simulador de compra (mesmas fórmulas da aba SIMULADOR da planilha).
 import { arrobas } from './calc';
 
 export interface EntradaSimulador {

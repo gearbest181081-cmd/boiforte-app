@@ -99,6 +99,12 @@ function confere(cond, msg) {
     const previa = await page.getByText('0,800 kg/dia').isVisible();
     confere(previa, 'prévia do GMD = 0,800 kg/dia antes de salvar');
     await page.getByRole('button', { name: 'Salvar pesagem' }).click();
+    await page.getByTestId('pesagemSalva').waitFor();
+    const relTxt = await page.locator('main').innerText();
+    confere(relTxt.includes('GMD desde a pesagem anterior') && relTxt.includes('0,800 kg/dia'), 'depois de salvar, abre o relatório da pesagem com o GMD');
+    confere((await page.locator('svg.grafico').count()) === 2, 'relatório mostra a curva de ganho e o GMD por período');
+    await foto('03a-relatorio-pesagem');
+    await page.getByRole('link', { name: 'Ver o lote' }).click();
     await page.getByRole('heading', { name: 'Lote 5' }).waitFor();
     const txt = await page.locator('main').innerText();
     confere(txt.includes('0,800 kg/dia'), 'GMD do período aparece no resumo');
@@ -112,6 +118,13 @@ function confere(cond, msg) {
     console.log('5. Pesagem um a um com média automática');
     await page.getByRole('link', { name: 'Nova pesagem' }).click();
     await page.locator('input[type=date]').fill('2026-10-31');
+    await page.getByRole('radio', { name: /Lote todo/ }).click();
+    await page.locator('input[name=pesoTotal]').fill('3480');
+    await page.locator('input[name=qtdPesada]').fill('10');
+    confere((await page.getByTestId('contaMedia').innerText()).includes('348 kg por cabeça'), 'lote todo na balança: 3.480 kg ÷ 10 cab = 348 kg por cabeça');
+    await page.getByRole('button', { name: /Ler o peso pela foto da balança/ }).click();
+    confere(await page.getByTestId('fotoPrecisaNuvem').isVisible(), 'foto da balança explica que precisa da nuvem (plano Pro)');
+    await foto('04a-pesar-lote-todo');
     await page.getByRole('radio', { name: /Um a um/ }).click();
     const pesos = ['350', '340', '352'];
     for (let i = 0; i < pesos.length; i++) {
@@ -120,6 +133,23 @@ function confere(cond, msg) {
     }
     confere(await page.getByText('347,3 kg').isVisible(), 'média de 3 animais = 347,3 kg');
     await page.getByRole('button', { name: 'Salvar pesagem' }).click();
+    await page.getByTestId('pesagemSalva').waitFor();
+    {
+      const fs = require('node:fs');
+      const [dP] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Enviar PDF (com gráficos)' }).click()]);
+      confere(dP.suggestedFilename() === 'pesagem-lote-5-2026-10-31.pdf', 'PDF da pesagem com nome do lote e data');
+      const cP = path.join(FOTOS, 'pesagem.pdf');
+      await dP.saveAs(cP);
+      const pdf = fs.readFileSync(cP).toString('latin1');
+      confere(pdf.startsWith('%PDF-') && pdf.includes('(Curva de ganho de peso) Tj'), 'PDF da pesagem com a curva de ganho');
+      const [dX] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Enviar Excel' }).click()]);
+      const cX = path.join(FOTOS, 'pesagem.xlsx');
+      await dX.saveAs(cX);
+      confere(fs.readFileSync(cX).subarray(0, 2).toString() === 'PK', 'Excel da pesagem gerado');
+      const wa = decodeURIComponent(await page.getByRole('link', { name: 'Mandar resumo em texto no WhatsApp' }).getAttribute('href'));
+      confere(wa.includes('Pesagem do lote *Lote 5*') && wa.includes('347 kg'), 'resumo da pesagem pronto para o WhatsApp');
+    }
+    await page.getByRole('link', { name: 'Ver o lote' }).click();
     await page.getByRole('heading', { name: 'Lote 5' }).waitFor();
     await page.getByRole('radio', { name: /Pesagens/ }).click();
     confere((await page.locator('table.tab tbody tr').count()) === 3, 'histórico com 3 pesagens');
@@ -141,6 +171,8 @@ function confere(cond, msg) {
       await page.getByLabel(`Peso ${i + 1}`, { exact: true }).fill(ent[i][1]);
     }
     await page.getByRole('button', { name: 'Salvar pesagem' }).click();
+    await page.getByTestId('pesagemSalva').waitFor();
+    await page.getByRole('link', { name: 'Ver o lote' }).click();
     await page.getByRole('heading', { name: 'Novilhas' }).waitFor();
     await page.getByRole('link', { name: 'Nova pesagem' }).click();
     await page.getByLabel('Peso 1', { exact: true }).waitFor();
@@ -149,6 +181,13 @@ function confere(cond, msg) {
     await page.getByLabel('Peso 1', { exact: true }).fill('221');
     await page.getByLabel('Peso 2', { exact: true }).fill('225');
     await page.getByRole('button', { name: 'Salvar pesagem' }).click();
+    await page.getByTestId('pesagemSalva').waitFor();
+    confere((await page.locator('main').innerText()).includes('Melhor animal'), 'relatório do lote por cabeça mostra o melhor animal');
+    await page.getByRole('button', { name: 'A2' }).click();
+    await page.getByText('Posição no lote (GMD)').waitFor();
+    confere((await page.locator('main').innerText()).includes('2º de 2'), 'relatório do animal A2: posição no lote');
+    await foto('05a-relatorio-animal');
+    await page.getByRole('link', { name: 'Ver o lote' }).click();
     await page.getByRole('heading', { name: 'Novilhas' }).waitFor();
     await page.getByRole('radio', { name: /Animais/ }).click();
     const tab = await page.locator('table.tab').innerText();
@@ -178,9 +217,15 @@ function confere(cond, msg) {
     await page.locator('input[type=date]').fill(new Date().toISOString().slice(0, 10)); // hoje: o trato usa o peso estimado para hoje
     await page.locator('input[name=pesoMedio]').fill('366');
     await page.getByRole('button', { name: 'Salvar pesagem' }).click();
-    await page.getByRole('heading', { name: 'Lote 5' }).waitFor();
+    await page.getByTestId('pesagemSalva').waitFor();
     confere(true, 'pesagem salva sem internet');
+    {
+      const [dOff] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Enviar PDF (com gráficos)' }).click()]);
+      confere(/\.pdf$/.test(dOff.suggestedFilename()), 'relatório em PDF sai mesmo sem internet');
+    }
     await foto('07-offline');
+    await page.getByRole('link', { name: 'Ver o lote' }).click();
+    await page.getByRole('heading', { name: 'Lote 5' }).waitFor();
     await ctx.setOffline(false);
     await page.reload();
     await page.getByRole('radio', { name: /Pesagens/ }).click();
@@ -212,6 +257,13 @@ function confere(cond, msg) {
     }
     confere((await page.getByTestId('custoKg').innerText()).includes('1,874'), 'custo da RIP = R$ 1,874/kg (igual à planilha)');
     confere(await page.getByText('Fórmula dentro das faixas de referência.').isVisible(), 'RIP dentro das faixas');
+    confere((await page.getByTestId('nut-pb').innerText()).includes('Faixa: 16 a 24%'), 'faixa adequada da PB para RIP embaixo do resultado');
+    const cu = await page.getByTestId('nut-cobre').innerText();
+    confere(cu.includes('Faixa:') && cu.includes('Incompleto'), 'cobre aparece com faixa e avisa que o núcleo não informou');
+    confere((await page.getByTestId('nut-fb').innerText()).includes('até 10%'), 'fibra bruta com faixa da RIP');
+    await page.locator('select[name=tipo]').selectOption('tip');
+    confere((await page.getByTestId('nut-pb').innerText()).includes('Faixa: 13 a 18%'), 'faixa muda quando o tipo vira TIP');
+    await page.locator('select[name=tipo]').selectOption('rip');
     await foto('10-formula');
     await page.getByRole('button', { name: 'Salvar fórmula' }).click();
     await page.getByRole('link', { name: /RIP teste/ }).waitFor();
@@ -348,7 +400,7 @@ function confere(cond, msg) {
     await page.getByTestId('resultadoPeriodo').waitFor();
     confere((await page.locator('main').innerText()).includes('Salários dos funcionários'), 'salário entra no DRE da fazenda');
 
-    console.log('15. Simulações "E se"');
+    console.log('15. Simulação');
     await page.goto(URL + '#/simular');
     await page.locator('input[name=simPeso]').fill('300');
     await page.locator('input[name=simAlvo]').fill('450');
@@ -365,6 +417,18 @@ function confere(cond, msg) {
     await page.getByRole('radio', { name: 'Comprar gado' }).click();
     confere(/Prejuízo de R\$\s608,53/.test(await page.getByTestId('resultadoCompra').innerText()), 'simulador de compra igual à planilha (− R$ 608,53/cab)');
     await foto('17-simular');
+    await page.getByRole('radio', { name: /Comparar produtos/ }).click();
+    await page.getByRole('radio', { name: /Dois rótulos/ }).click();
+    await page.locator('input[name=cmpNome0]').fill('Prot A');
+    await page.locator('input[name=cmpPreco0]').fill('2,4');
+    await page.locator('input[name=cmpPb0]').fill('25');
+    await page.locator('input[name=cmpNome1]').fill('Prot B');
+    await page.locator('input[name=cmpPreco1]').fill('3,6');
+    await page.locator('input[name=cmpPb1]').fill('40');
+    confere((await page.getByTestId('melhorTipo').innerText()).includes('Prot B'), 'comparar: o proteinado com 40% de PB é o mais adequado');
+    const mc = await page.getByTestId('melhorCusto').innerText();
+    confere(mc.includes('Prot B') && /R\$\s9,00/.test(mc), 'comparar: melhor custo-benefício = R$ 9,00 por kg de proteína');
+    await foto('17b-comparar');
 
     console.log('16. Relatórios em PDF e Excel');
     await page.goto(URL + '#/relatorios');
@@ -465,7 +529,7 @@ function confere(cond, msg) {
       await p2.getByText('Fêmea — 4º lote').waitFor();
       const loteId = await p2.evaluate(() => new Promise((ok) => { const r = indexedDB.open('boiforte'); r.onsuccess = () => { const t = r.result.transaction('lotes').objectStore('lotes').getAll(); t.onsuccess = () => ok(t.result[0].id); }; }));
       const formulaId = await p2.evaluate(() => new Promise((ok) => { const r = indexedDB.open('boiforte'); r.onsuccess = () => { const t = r.result.transaction('formulas').objectStore('formulas').getAll(); t.onsuccess = () => ok(t.result[0]?.id ?? 'nova'); }; }));
-      const telas = ['/lotes', '/lotes/novo', `/lotes/${loteId}`, `/lotes/${loteId}/editar`, '/pesar', `/pesar/${loteId}`, '/fazenda', '/mais', '/nutricao',
+      const telas = ['/lotes', '/lotes/novo', `/lotes/${loteId}`, `/lotes/${loteId}/editar`, `/lotes/${loteId}/relatorio`, '/pesar', `/pesar/${loteId}`, '/fazenda', '/mais', '/nutricao',
         `/nutricao/formula/${formulaId}`, '/nutricao/formula/nova', '/nutricao/ingrediente/novo', '/estoque', '/trato', '/financeiro', '/sanidade', '/simular', '/relatorios', '/nuvem', '/cotacoes', '/funcionarios', '/funcionarios/novo'];
       const semVoltar = [], semMic = [];
       for (const t of telas) {
@@ -481,6 +545,14 @@ function confere(cond, msg) {
       }
       confere(semVoltar.length === 0, 'botão Voltar em todas as telas' + (semVoltar.length ? ' (falta em ' + semVoltar.join(', ') + ')' : ''));
       confere(semMic.length === 0, 'microfone em todos os campos de escrever' + (semMic.length ? ' (falta em ' + semMic.join(' | ') + ')' : ''));
+      await p2.goto(URL + '#/simular');
+      await p2.getByRole('radio', { name: /Comparar produtos/ }).click();
+      await p2.getByRole('radio', { name: /Dois rótulos/ }).click();
+      const semMicCmp = await p2.evaluate(() => [...document.querySelectorAll('main input, main select, main textarea')]
+        .filter((e) => !['checkbox', 'file', 'hidden', 'radio'].includes(e.type) && e.offsetParent !== null)
+        .filter((e) => !e.closest('.com-mic')?.querySelector(':scope > .mic'))
+        .map((e) => e.name || e.getAttribute('aria-label') || e.id));
+      confere(semMicCmp.length === 0, 'Simulação › Comparar produtos: microfone em todos os campos' + (semMicCmp.length ? ' (falta em ' + semMicCmp.join(', ') + ')' : ''));
       await p2.goto(URL);
       confere(!(await p2.getByRole('button', { name: 'Voltar', exact: true }).count()), 'Início não tem Voltar');
       await p2.goto(URL + '#/fazenda');

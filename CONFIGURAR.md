@@ -72,6 +72,7 @@ supabase secrets set CRON_SECRET=uma-senha-longa-e-aleatoria
 
 - `APP_ORIGIN` é só o começo do endereço do app (sem `/boiforte-app/`). Outros sites não conseguem usar a função pelo navegador; a proteção principal é o login e a cota no banco.
 - A chave da Anthropic é criada em https://console.anthropic.com. Cada pessoa pode ler até 30 fotos por dia.
+- Sempre que a pasta `supabase/functions` mudar (ex.: a foto da balança com o lote todo), rode de novo `supabase functions deploy ler-foto`. Não precisa de migração.
 - As cotações vêm das páginas de indicadores do Cepea/Esalq. Antes de abrir ao público, confira as
   condições de uso do Cepea (citar a fonte é obrigatório; o app já mostra "Fonte: Cepea/Esalq").
   Para trocar as fontes sem mexer no código: `supabase secrets set FONTES_COTACOES='[...]'` (ver `supabase/functions/_shared/cotacoes.ts`).
