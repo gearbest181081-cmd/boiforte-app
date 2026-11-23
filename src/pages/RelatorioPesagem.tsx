@@ -8,7 +8,7 @@ import { fmtData, hojeISO } from '../calc';
 import { montarRelatorioPesagem } from '../relatorioPesagem';
 import { compartilharArquivo, fmtCelula, gerarPdf, gerarXlsx, linkWhatsApp, type Celula } from '../exportar';
 import { GraficoCrescimento, GraficoGmd } from '../components/Grafico';
-import { Indicador, Topo, useAviso } from '../components/ui';
+import { CampoEscolha, Indicador, Topo, useAviso } from '../components/ui';
 
 const MIME = { pdf: 'application/pdf', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' } as const;
 const fmt = (c: Celula) => (c == null || c === '' ? '—' : fmtCelula(c));
@@ -39,8 +39,8 @@ export function RelatorioPesagem() {
     nomeFazenda: dados.prop?.nome, rendimento: dados.config.rendimento, hoje: hojeISO(),
   }) : null), [dados, animalId]);
 
-  if (dados === undefined) return <Topo titulo="Relatório de pesagem" voltar />;
-  if (dados === null || !rel) return (<><Topo titulo="Relatório de pesagem" voltar /><main><p>Não encontrei este lote ou animal.</p><Link to="/lotes" className="btn sec largo">Ver os lotes</Link></main></>);
+  if (dados === undefined) return <Topo titulo="Relatório de pesagem" />;
+  if (dados === null || !rel) return (<><Topo titulo="Relatório de pesagem" /><main><p>Não encontrei este lote ou animal.</p><Link to="/lotes" className="btn sec largo">Ver os lotes</Link></main></>);
 
   const { lote, animais, pesagens } = dados;
   const pesados = animais.filter((a) => pesagens.some((p) => p.pesos?.some((x) => x.animalId === a.id)))
@@ -69,7 +69,7 @@ export function RelatorioPesagem() {
 
   return (
     <>
-      <Topo titulo="Relatório de pesagem" voltar />
+      <Topo titulo="Relatório de pesagem" />
       <main>
         {nova && (
           <div className="alerta bom" data-testid="pesagemSalva"><span className="ic">✅</span><div><b>Pesagem salva no celular</b>Veja como o {animalId ? 'animal' : 'lote'} está ganhando peso e mande o relatório pelo WhatsApp.</div></div>
@@ -77,12 +77,10 @@ export function RelatorioPesagem() {
         <p className="mudo" style={{ marginTop: 0 }}>{lote.nome}{dados.prop ? ` · ${dados.prop.nome}` : ''}{rel.pontos.length ? ` · última pesagem ${fmtData(rel.pontos[rel.pontos.length - 1].data)}` : ''}</p>
 
         {pesados.length > 0 && (
-          <label className="campo"><span>Relatório de</span>
-            <select name="animal" value={animalId ?? ''} onChange={(e) => escolherAnimal(e.target.value)}>
-              <option value="">Lote todo ({pesados.length} animais)</option>
-              {pesados.map((a) => <option key={a.id} value={a.id}>Animal {a.brinco}</option>)}
-            </select>
-          </label>
+          <CampoEscolha rotulo="Relatório de" nome="animal" valor={animalId ?? ''} aoMudar={escolherAnimal}>
+            <option value="">Lote todo ({pesados.length} animais)</option>
+            {pesados.map((a) => <option key={a.id} value={a.id}>Animal {a.brinco}</option>)}
+          </CampoEscolha>
         )}
 
         <div className="cartao">

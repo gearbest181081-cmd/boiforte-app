@@ -5,7 +5,7 @@ import { useTudo } from '../hooks';
 import { CRITERIOS, montarRelatorio, type Criterio } from '../relatorios';
 import { compartilharArquivo, fmtCelula, gerarPdf, gerarXlsx, linkWhatsApp, type Celula } from '../exportar';
 import { hojeISO } from '../calc';
-import { Opcoes, Topo, useAviso } from '../components/ui';
+import { CampoEscolha, Opcoes, Topo, useAviso } from '../components/ui';
 import { periodoDatas, type Periodo } from './Financeiro';
 
 const fmt = (c: Celula) => (c == null ? '—' : fmtCelula(c));
@@ -55,11 +55,9 @@ export function Relatorios() {
         <h2>Período do caixa</h2>
         <Opcoes valor={periodo} aoMudar={setPeriodo} opcoes={[{ valor: 'mes', rotulo: 'Este mês' }, { valor: 'ano', rotulo: 'Este ano' }, { valor: 'safra', rotulo: 'Safra (jul–jun)' }, { valor: 'tudo', rotulo: 'Tudo' }]} />
         <h2>Ranking</h2>
-        <label className="campo"><span>Ordenar lotes por</span>
-          <select name="criterio" value={criterio} onChange={(e) => setCriterio(e.target.value as Criterio)}>
-            {Object.entries(CRITERIOS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-          </select>
-        </label>
+        <CampoEscolha rotulo="Ordenar lotes por" nome="criterio" valor={criterio} aoMudar={(v) => setCriterio(v as Criterio)}>
+          {Object.entries(CRITERIOS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </CampoEscolha>
         <label className="campo" style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           <input type="checkbox" checked={encerrados} onChange={(e) => setEncerrados(e.target.checked)} style={{ width: 24, height: 24 }} />
           <span>Incluir lotes já vendidos</span>
