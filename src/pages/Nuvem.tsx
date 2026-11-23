@@ -5,7 +5,7 @@ import { db } from '../db';
 import { NOMES_TABELA } from '../nuvem/nomes';
 import {
   aceitarConvite, apagarMinhaConta, cancelarConvite, confirmarCodigo, convitesPendentes, criarConvite, criarFazenda, equipe, minhasFazendas, mudarPapel, nuvemConfigurada, pedirCodigo,
-  removerMembro, sair, usuarioAtual, type ConvitePendente, type Membro, type MinhaFazenda,
+  NOME_PLANO, planoDaFazenda, removerMembro, sair, usuarioAtual, type ConvitePendente, type Membro, type MinhaFazenda, type PlanoFazenda,
 } from '../nuvem/cliente';
 import { PAPEIS, type Papel } from '../nuvem/esquema';
 import { desligarFazenda, ligarFazenda, temDadosLocais, tentarDeNovo } from '../nuvem/sinc';
@@ -131,8 +131,8 @@ function Escolher({ email, aoSair }: { email: string; aoSair: () => void }) {
           <h2>Suas fazendas na nuvem</h2>
           {lista.map((f) => (
             <div key={f.fazenda_id} className="cartao linha-lote">
-              <span>{f.nome}<div className="mudo">{PAPEIS[f.papel].nome}</div></span>
-              <button className="btn pequeno" disabled={ocupado} onClick={() => usar(f)}>Usar neste celular</button>
+              <span>{f.nome}<div className="mudo">{PAPEIS[f.papel].nome}{f.bloqueado ? ' · pausado: a equipe passou do limite do plano. Fale com o dono.' : ''}</div></span>
+              <button className="btn pequeno" disabled={ocupado || f.bloqueado} onClick={() => usar(f)}>Usar neste celular</button>
             </div>
           ))}
         </>
@@ -219,7 +219,9 @@ function Equipe({ fazendaId, souDono }: { fazendaId: string; souDono: boolean })
   const [papel, setPapel] = useState<Papel>('vaqueiro');
   const [codigo, setCodigo] = useState<string | null>(null);
   const [pendentes, setPendentes] = useState<ConvitePendente[]>([]);
+  const [plano, setPlano] = useState<PlanoFazenda | null>(null);
   const carregar = useCallback(() => {
+    planoDaFazenda(fazendaId).then(setPlano).catch(() => setPlano(null));
     equipe(fazendaId).then(setLista).catch(() => setLista(null));
     if (souDono) convitesPendentes(fazendaId).then(setPendentes).catch(() => setPendentes([]));
   }, [fazendaId, souDono]);
@@ -236,6 +238,7 @@ function Equipe({ fazendaId, souDono }: { fazendaId: string; souDono: boolean })
       carregar();
     } catch (e) { aviso((e as Error).message, true); }
   };
+  const semVaga = !!plano && plano.pessoas + plano.convites_abertos >= plano.limite;
   const mudar = async (m: Membro, p: Papel) => {
     try { await mudarPapel(fazendaId, m.usuario_id, p); carregar(); } catch (e) { aviso((e as Error).message, true); }
   };
@@ -246,10 +249,19 @@ function Equipe({ fazendaId, souDono }: { fazendaId: string; souDono: boolean })
   return (
     <>
       <h2>Equipe</h2>
-      {lista === null && <p className="mudo">A equipe aparece quando houver internet.</p>}
+      {plano && (
+        <p className="mudo" data-testid="planoEquipe">
+          Plano {NOME_PLANO[plano.plano] ?? plano.plano}: {plano.pessoas} de {plano.limite} pessoas
+          {souDono && plano.convites_abertos > 0 ? ` (e ${plano.convites_abertos} convite(s) em aberto)` : ''}.
+        </p>
+      )}
+      {plano?.eu_pausado && (
+        <div className="alerta atencao"><span className="ic">⏸️</span><div><b>Seu acesso está pausado.</b> A equipe passou do limite do plano da fazenda. Peça ao dono para liberar uma vaga ou aumentar o plano. Os dados deste celular continuam aqui.</div></div>
+      )}
+      {lista === null && !plano?.eu_pausado && <p className="mudo">A equipe aparece quando houver internet.</p>}
       {lista?.map((m) => (
         <div key={m.usuario_id} className="cartao">
-          <div className="linha-lote"><b>{m.nome || 'Sem nome'}{m.eu ? ' (você)' : ''}</b><span className="etiqueta">{PAPEIS[m.papel].nome}</span></div>
+          <div className="linha-lote"><b>{m.nome || 'Sem nome'}{m.eu ? ' (você)' : ''}</b><span className="etiqueta">{PAPEIS[m.papel].nome}{m.bloqueado ? ' · pausado' : ''}</span></div>
           {souDono && !m.eu && (
             <div className="botoes" style={{ margin: '8px 0 0' }}>
               <select aria-label={`Papel de ${m.nome}`} value={m.papel} onChange={(e) => mudar(m, e.target.value as Papel)}>
@@ -280,7 +292,9 @@ function Equipe({ fazendaId, souDono }: { fazendaId: string; souDono: boolean })
             </select>
           </label>
           <p className="mudo">{PAPEIS[papel].texto}</p>
-          {!codigo ? <button className="btn largo" onClick={convidar}>Gerar código de convite</button> : (
+          {!codigo && semVaga ? (
+            <p className="mudo" data-testid="semVaga">Sem vaga: o plano {NOME_PLANO[plano!.plano]} permite {plano!.limite} pessoas, contando os convites em aberto. Cancele um convite, tire alguém ou aumente o plano.</p>
+          ) : !codigo ? <button className="btn largo" onClick={convidar}>Gerar código de convite</button> : (
             <>
               <p style={{ fontSize: 30, letterSpacing: 4, textAlign: 'center', fontWeight: 700, margin: '8px 0' }} data-testid="codigoConvite">{codigo}</p>
               <p className="mudo">Vale por 7 dias e para uma pessoa só. Ela instala o BoiForte, entra com o e-mail e digita o código em Mais › Nuvem e equipe.</p>

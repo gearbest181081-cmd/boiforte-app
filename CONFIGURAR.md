@@ -20,6 +20,22 @@ No *SQL Editor* do Supabase, rode **na ordem** o conteúdo de cada arquivo de `s
 
 (Ou, com o Supabase CLI: `supabase link` e `supabase db push`.)
 
+### Plano de cada fazenda (Básico / Pro)
+
+Fazenda nova começa no **Básico**. Os dois planos incluem quem assina + 1 pessoa; cada pessoa a mais é paga (`usuarios_extras`). As fazendas que já existiam quando a migração
+`20261123140000_planos_usuarios.sql` rodou viraram **Pro** com vaga para todos que já estavam nelas.
+Enquanto não há cobrança automática, mude o plano no *SQL Editor*:
+
+```sql
+-- ver as fazendas
+select id, nome, plano, usuarios_extras from public.fazendas order by nome;
+-- Pro com 2 pessoas extras (4 no total). Básico sem extra: 'basico', 0
+select public.definir_plano('<id da fazenda>', 'pro', 2);
+```
+
+Se o plano diminuir, quem passar do limite fica pausado (ninguém é apagado) até o dono tirar alguém
+ou o plano aumentar.
+
 ## 3. Login por código no e-mail
 
 Em *Authentication*:

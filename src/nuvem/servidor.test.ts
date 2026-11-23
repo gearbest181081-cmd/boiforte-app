@@ -38,6 +38,7 @@ describe('servidor', () => {
     eva = await s.novoUsuario('eva@x');
     fa = await s.rpc<string>(ana, 'criar_fazenda', { p_nome: 'Boa Vista', meu_nome: 'Ana' });
     fb = await s.rpc<string>(beto, 'criar_fazenda', { p_nome: 'Santa Rita', meu_nome: 'Beto' });
+    await s.pg.query(`select public.definir_plano($1, 'pro', 3)`, [fa]); // equipe maior nos testes
     const r = await enviar(ana, fa, [prop(1), lote(2, 1)]);
     expect(r.every((x) => x.ok)).toBe(true);
   }, 30000);
@@ -265,6 +266,7 @@ describe('servidor: correções da auditoria', () => {
     dono = await s.novoUsuario('dono@x');
     vaq = await s.novoUsuario('vaq@x');
     f = await s.rpc<string>(dono, 'criar_fazenda', { p_nome: 'Canaã', meu_nome: 'Dono' });
+    await s.pg.query(`select public.definir_plano($1, 'pro', 3)`, [f]);
     const r = await enviar(dono, f, [
       put('propriedades', 1, { nome: 'Sede' }),
       ing(2, 1.5), ing(3, 4),
@@ -363,5 +365,124 @@ describe('servidor: correções da auditoria', () => {
     await s.pg.query(`insert into public.limites (usuario_id, tipo, janela, contagem)
       values ('00000000-0000-0000-0000-000000000000', 'foto_total', to_timestamp(floor(extract(epoch from now()) / 86400) * 86400), 300)`);
     await expect(s.rpc(dono, 'pode_usar_foto', {})).rejects.toThrow('limite de hoje');
+  });
+});
+
+// Limite de pessoas por plano: Básico e Pro têm quem assina + 1; cada pessoa a mais é paga. Tudo conferido no banco.
+describe('servidor: limite de pessoas por plano', () => {
+  let s: Servidor;
+  let n = 0;
+  const nova = () => s.novoUsuario(`p${++n}@x`);
+  const convidar = (dono: string, f: string, papel = 'vaqueiro') => s.rpc<string>(dono, 'criar_convite', { f, p_papel: papel });
+  const entrar = async (dono: string, f: string, papel = 'vaqueiro') => { const u = await nova(); await s.rpc(u, 'aceitar_convite', { p_codigo: await convidar(dono, f, papel) }); return u; };
+  const plano = (u: string, f: string) => s.rpc<{ plano: string; limite: number; pessoas: number; convites_abertos: number; eu_pausado: boolean }[]>(u, 'plano_da_fazenda', { f }).then((r) => r[0]);
+  const definir = (f: string, p: string, extras = 0) => s.pg.query(`select public.definir_plano($1, $2, $3)`, [f, p, extras]);
+  const fazenda = async (nome: string, p = 'basico', extras = 0) => { const dono = await nova(); const f = await s.rpc<string>(dono, 'criar_fazenda', { p_nome: nome, meu_nome: 'Dono' }); await definir(f, p, extras); return { dono, f }; };
+
+  beforeAll(async () => { s = await subirServidor(); }, 30000);
+
+  it('fazenda nova é Básico: quem assina + 1; o código seguinte nem é gerado', async () => {
+    const dono = await nova();
+    const f = await s.rpc<string>(dono, 'criar_fazenda', { p_nome: 'Básica' });
+    expect(await plano(dono, f)).toMatchObject({ plano: 'basico', limite: 2, pessoas: 1, convites_abertos: 0, eu_pausado: false });
+    const c = await convidar(dono, f);
+    await expect(convidar(dono, f)).rejects.toThrow('Sem vaga'); // o convite em aberto ocupa a vaga
+    await s.rpc(await nova(), 'aceitar_convite', { p_codigo: c });
+    expect((await plano(dono, f)).pessoas).toBe(2);
+    await expect(convidar(dono, f)).rejects.toThrow('Sem vaga');
+  });
+
+  it('cada pessoa extra contratada abre uma vaga, no Básico e no Pro', async () => {
+    for (const p of ['basico', 'pro']) {
+      const { dono, f } = await fazenda('Extra ' + p, p);
+      await entrar(dono, f);
+      await expect(convidar(dono, f)).rejects.toThrow('Sem vaga');
+      await definir(f, p, 2);
+      await entrar(dono, f); await entrar(dono, f);
+      expect(await plano(dono, f)).toMatchObject({ plano: p, limite: 4, pessoas: 4 });
+      await expect(convidar(dono, f)).rejects.toThrow('Sem vaga');
+    }
+  });
+
+  it('a trava do banco segura mesmo com códigos gerados antes de o plano diminuir', async () => {
+    const { dono, f } = await fazenda('Diminuiu', 'pro', 1);
+    const cods = [await convidar(dono, f), await convidar(dono, f)];
+    await definir(f, 'pro');
+    const [a, b] = [await nova(), await nova()];
+    expect(await s.rpc(a, 'aceitar_convite', { p_codigo: cods[0] })).toBe(f);
+    await expect(s.rpc(b, 'aceitar_convite', { p_codigo: cods[1] })).rejects.toThrow('equipe desta fazenda está completa');
+    // o código não foi gasto: serve quando abrir vaga
+    await s.rpc(dono, 'remover_membro', { f, usuario: a });
+    expect(await s.rpc(b, 'aceitar_convite', { p_codigo: cods[1] })).toBe(f);
+  });
+
+  it('a trava vale até para gravação direta no banco (qualquer caminho)', async () => {
+    const { f } = await fazenda('Direta');
+    const ins = async () => s.pg.query(`insert into public.membros (fazenda_id, usuario_id, papel) values ($1, $2, 'vaqueiro')`, [f, await nova()]);
+    await ins();
+    expect(String(await ins().catch((x) => x))).toMatch(/completa/);
+  });
+
+  it('o app não muda o próprio plano', async () => {
+    const dono = await nova();
+    const f = await s.rpc<string>(dono, 'criar_fazenda', { p_nome: 'Esperta' });
+    const tentativas = [
+      `update public.fazendas set plano = 'pro', usuarios_extras = 48`,
+      `select public.definir_plano('${f}', 'pro', 48)`,
+      `select public.bf_reaplicar_limite('${f}')`,
+      `update public.membros set bloqueado = false`,
+    ];
+    for (const sql of tentativas) {
+      const e = await s.como(dono, () => s.pg.query(sql).then(() => null, (x) => x));
+      expect(String(e), sql).toMatch(/permission denied|row-level security/);
+    }
+    expect((await plano(dono, f)).plano).toBe('basico');
+    await expect(definir(f, 'ouro')).rejects.toThrow('desconhecido');
+    await expect(definir(f, 'pro', 49)).rejects.toThrow('0 a 48');
+  });
+
+  it('plano diminuiu: quem passou do limite fica pausado (sem baixar, enviar nem foto) até abrir vaga', async () => {
+    const { dono, f } = await fazenda('Venceu', 'pro', 3);
+    const [v1, v2, v3] = [await entrar(dono, f), await entrar(dono, f), await entrar(dono, f)];
+    await definir(f, 'pro', 0);
+    // dono e o primeiro a entrar continuam; os outros dois pausam
+    expect(await s.rpc<unknown[]>(v1, 'baixar_alteracoes', { f, desde: 0 })).toBeDefined();
+    await expect(s.rpc(v2, 'baixar_alteracoes', { f, desde: 0 })).rejects.toThrow('não faz parte');
+    await expect(s.rpc(v3, 'enviar_alteracoes', { f, ops: [] })).rejects.toThrow('não faz parte');
+    const fz = await s.como(v2, () => s.pg.query('select id from public.fazendas'));
+    expect(fz.rows).toHaveLength(0);
+    expect(await plano(v2, f)).toMatchObject({ eu_pausado: true, limite: 2, pessoas: 4 });
+    expect((await s.rpc<{ bloqueado: boolean }[]>(v2, 'minhas_fazendas', {}))[0].bloqueado).toBe(true);
+    const eq = await s.rpc<{ usuario_id: string; bloqueado: boolean }[]>(dono, 'equipe', { f });
+    expect(eq.filter((x) => x.bloqueado).map((x) => x.usuario_id).sort()).toEqual([v2, v3].sort());
+    // pausado sai sozinho; o dono tira o v1: o v2 volta
+    await s.rpc(v3, 'remover_membro', { f, usuario: v3 });
+    await s.rpc(dono, 'remover_membro', { f, usuario: v1 });
+    expect(await plano(v2, f)).toMatchObject({ eu_pausado: false, pessoas: 2 });
+    expect(await s.rpc<unknown[]>(v2, 'baixar_alteracoes', { f, desde: 0 })).toBeDefined();
+  });
+
+  it('pausado não usa a leitura por foto', async () => {
+    const { dono, f } = await fazenda('Foto', 'pro', 1);
+    const [a, b] = [await entrar(dono, f), await entrar(dono, f)];
+    await definir(f, 'pro', 0);
+    await expect(s.rpc(b, 'pode_usar_foto', {})).rejects.toThrow('Ligue o celular');
+    expect(await s.rpc(a, 'pode_usar_foto', {})).toBe(true);
+  });
+
+  it('o dono nunca fica pausado, nem quando outro é promovido a dono', async () => {
+    const { dono, f } = await fazenda('Donos', 'pro', 1);
+    const [a, b] = [await entrar(dono, f, 'gerente'), await entrar(dono, f, 'gerente')];
+    await definir(f, 'pro', 0); // b pausa
+    await s.rpc(dono, 'mudar_papel', { f, usuario: b, p_papel: 'dono' }); // b passa à frente de a
+    const eq = await s.rpc<{ usuario_id: string; bloqueado: boolean }[]>(dono, 'equipe', { f });
+    expect(eq.find((x) => x.usuario_id === b)!.bloqueado).toBe(false);
+    expect(eq.find((x) => x.usuario_id === a)!.bloqueado).toBe(true);
+    expect(eq.find((x) => x.usuario_id === dono)!.bloqueado).toBe(false);
+  });
+
+  it('quem não é da fazenda não vê o plano dela', async () => {
+    const { f } = await fazenda('Fechada');
+    await expect(plano(await nova(), f)).rejects.toThrow('não faz parte');
   });
 });
