@@ -1,7 +1,19 @@
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, excluirPropriedade, type Modulo, type Propriedade } from '../db';
-import { CampoNumero, CampoTexto, num, Topo, useAviso } from '../components/ui';
+import { CampoNumero, CampoTexto, Entrada, num, Topo, useAviso } from '../components/ui';
+
+const UFS: Record<string, string> = {
+  acre: 'AC', alagoas: 'AL', amapa: 'AP', amazonas: 'AM', bahia: 'BA', ceara: 'CE', 'distrito federal': 'DF', 'espirito santo': 'ES', goias: 'GO',
+  maranhao: 'MA', 'mato grosso': 'MT', 'mato grosso do sul': 'MS', 'minas gerais': 'MG', para: 'PA', paraiba: 'PB', parana: 'PR', pernambuco: 'PE',
+  piaui: 'PI', 'rio de janeiro': 'RJ', 'rio grande do norte': 'RN', 'rio grande do sul': 'RS', rondonia: 'RO', roraima: 'RR', 'santa catarina': 'SC',
+  'sao paulo': 'SP', sergipe: 'SE', tocantins: 'TO',
+};
+/** "Mato Grosso do Sul" (falado ou escrito) vira "MS"; o resto fica com até 2 letras. */
+export function sigla(v: string): string {
+  const s = v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z ]/g, '').replace(/\s+/g, ' ').trim();
+  return UFS[s] ?? v.replace(/\s/g, '').slice(0, 2).toUpperCase();
+}
 
 export function Fazenda() {
   const props = useLiveQuery(() => db.propriedades.toArray());
@@ -14,7 +26,7 @@ export function Fazenda() {
           <div className="dica">Comece cadastrando sua fazenda. Depois, se quiser, separe em módulos e piquetes.</div>
         )}
         {props?.map((p) => <CartaoPropriedade key={p.id} p={p} />)}
-        {novo || props?.length === 0 ? <FormPropriedade aoSalvar={() => setNovo(false)} /> : (
+        {novo || props?.length === 0 ? <FormPropriedade aoSalvar={() => setNovo(false)} aoCancelar={props?.length ? () => setNovo(false) : undefined} /> : (
           <button className="btn sec largo" onClick={() => setNovo(true)}>+ Outra fazenda</button>
         )}
       </main>
@@ -22,7 +34,7 @@ export function Fazenda() {
   );
 }
 
-function FormPropriedade({ aoSalvar }: { aoSalvar: () => void }) {
+function FormPropriedade({ aoSalvar, aoCancelar }: { aoSalvar: () => void; aoCancelar?: () => void }) {
   const aviso = useAviso();
   const [nome, setNome] = useState('');
   const [municipio, setMunicipio] = useState('');
@@ -39,11 +51,14 @@ function FormPropriedade({ aoSalvar }: { aoSalvar: () => void }) {
       <h3>Nova fazenda</h3>
       <CampoTexto rotulo="Nome da fazenda" valor={nome} aoMudar={setNome} nome="fazendaNome" />
       <div className="grade">
-        <CampoTexto rotulo="Município" valor={municipio} aoMudar={setMunicipio} voz={false} />
-        <CampoTexto rotulo="UF" valor={uf} aoMudar={(v) => setUf(v.slice(0, 2))} voz={false} />
+        <CampoTexto rotulo="Município" valor={municipio} aoMudar={setMunicipio} nome="fazendaMunicipio" />
+        <CampoTexto rotulo="UF" valor={uf} aoMudar={(v) => setUf(sigla(v))} nome="fazendaUf" dica="Ex.: MS, MT, GO" />
       </div>
       <CampoNumero rotulo="Área total" valor={area} aoMudar={setArea} unidade="ha" />
-      <button className="btn largo" onClick={salvar}>Salvar fazenda</button>
+      <div className="botoes">
+        <button className="btn" onClick={salvar}>Salvar fazenda</button>
+        {aoCancelar && <button className="btn sec" onClick={aoCancelar}>Cancelar</button>}
+      </div>
     </div>
   );
 }
@@ -70,7 +85,7 @@ function CartaoPropriedade({ p }: { p: Propriedade }) {
       {modulos?.map((m) => <BlocoModulo key={m.id} m={m} />)}
       <hr />
       <div className="com-mic">
-        <input placeholder="Novo módulo / retiro" value={nomeMod} onChange={(e) => setNomeMod(e.target.value)} aria-label="Nome do novo módulo" />
+        <Entrada placeholder="Novo módulo / retiro" valor={nomeMod} aoMudar={setNomeMod} aria-label="Nome do novo módulo" rotuloVoz="nome do módulo" className="cresce" />
         <button className="btn pequeno" onClick={addMod}>+ Módulo</button>
       </div>
       <div className="botoes"><button className="btn perigo pequeno" onClick={apagar}>Apagar fazenda</button></div>
@@ -124,7 +139,7 @@ function BlocoModulo({ m }: { m: Modulo }) {
           <CampoTexto rotulo="Nome do piquete" valor={nome} aoMudar={setNome} />
           <div className="grade">
             <CampoNumero rotulo="Área" valor={area} aoMudar={setArea} unidade="ha" />
-            <CampoTexto rotulo="Capim" valor={capim} aoMudar={setCapim} voz={false} />
+            <CampoTexto rotulo="Capim" valor={capim} aoMudar={setCapim} />
           </div>
           <div className="botoes"><button className="btn pequeno" onClick={add}>Salvar piquete</button><button className="btn sec pequeno" onClick={() => setAberto(false)}>Cancelar</button></div>
         </div>

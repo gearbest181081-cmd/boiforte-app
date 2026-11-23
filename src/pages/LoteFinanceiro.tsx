@@ -4,7 +4,7 @@ import { db, desfazerSaida, registrarCompraLote, registrarSaida, type Lote } fro
 import { analisarLotes, useTudo } from '../hooks';
 import { calcularVenda, NOMES_CATEGORIA } from '../financeiro';
 import { fmtData, fmtNum, fmtPct, hojeISO } from '../calc';
-import { CampoNumero, num, Opcoes, useAviso } from '../components/ui';
+import { CampoData, CampoNumero, CampoTexto, num, Opcoes, useAviso } from '../components/ui';
 import { rs } from './Nutricao';
 
 export function LoteFinanceiro({ lote }: { lote: Lote }) {
@@ -92,7 +92,7 @@ function FormCompra({ lote, aoTerminar }: { lote: Lote; aoTerminar: () => void }
       <CampoNumero rotulo="Comissão" valor={com} aoMudar={setCom} unidade="%" nome="compraComissao" />
       <CampoNumero rotulo="Frete do lote" valor={frete} aoMudar={setFrete} unidade="R$" nome="compraFrete" />
       <CampoNumero rotulo="NF + GTA" valor={nf} aoMudar={setNf} unidade="R$" nome="compraNf" />
-      <label className="campo"><span>Data</span><input type="date" value={data} onChange={(e) => setData(e.target.value)} /></label>
+      <CampoData rotulo="Data" valor={data} aoMudar={setData} nome="compraData" />
       {p > 0 && <p><b>Total: {rs(lote.qtdCabecas * p * (1 + c) + f + n)}</b> <span className="mudo">({rs((lote.qtdCabecas * p * (1 + c) + f + n) / Math.max(1, lote.qtdCabecas))} por cabeça)</span></p>}
       <div className="botoes"><button className="btn" onClick={salvar}>Salvar compra</button><button className="btn sec" onClick={aoTerminar}>Cancelar</button></div>
     </div>
@@ -125,7 +125,7 @@ function FormSaida({ lote, precoArroba, rendimento, comissao, pesoSugerido, aoTe
       <Opcoes valor={tipo} aoMudar={setTipo} opcoes={[{ valor: 'venda', rotulo: 'Venda' }, { valor: 'morte', rotulo: 'Morte' }]} />
       <div style={{ height: 12 }} />
       <CampoNumero rotulo="Cabeças" valor={cab} aoMudar={setCab} unidade="cab" nome="saidaCab" dica={`O lote tem ${lote.qtdCabecas}.`} />
-      <label className="campo"><span>Data</span><input type="date" value={data} onChange={(e) => setData(e.target.value)} /></label>
+      <CampoData rotulo="Data" valor={data} aoMudar={setData} nome="saidaData" />
       <CampoNumero rotulo="Peso médio de saída" valor={peso} aoMudar={setPeso} unidade="kg" nome="saidaPeso" />
       {tipo === 'venda' && (
         <>
@@ -134,7 +134,7 @@ function FormSaida({ lote, precoArroba, rendimento, comissao, pesoSugerido, aoTe
           {modo === 'arroba' && <CampoNumero rotulo="Rendimento de carcaça" valor={rend} aoMudar={setRend} unidade="%" nome="saidaRend" />}
           <CampoNumero rotulo="Comissão" valor={com} aoMudar={setCom} unidade="%" nome="saidaComissao" />
           <CampoNumero rotulo="Frete" valor={frete} aoMudar={setFrete} unidade="R$" nome="saidaFrete" />
-          <label className="campo"><span>Comprador (opcional)</span><input value={comprador} onChange={(e) => setComprador(e.target.value)} /></label>
+          <CampoTexto rotulo="Comprador (opcional)" valor={comprador} aoMudar={setComprador} nome="saidaComprador" />
           {v && v.bruto > 0 && <p><b>Líquido: {rs(v.liquido)}</b> <span className="mudo">({rs(v.liquidoCab)} por cabeça{modo === 'arroba' ? `, ${fmtNum(v.arrobasCab, 2)} @/cab` : ''})</span></p>}
         </>
       )}

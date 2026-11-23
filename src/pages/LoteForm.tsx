@@ -4,7 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { criarLote, db, FASES, type Controle, type Fase, type Sexo } from '../db';
 import { hojeISO } from '../calc';
 import { TIPOS } from '../nutricao';
-import { CampoNumero, CampoTexto, num, Opcoes, Topo, useAviso } from '../components/ui';
+import { CampoData, CampoEscolha, CampoNumero, CampoTexto, num, Opcoes, Topo, useAviso } from '../components/ui';
 
 /** GMD de referência por fase (tabela de referência da planilha, ajustável). */
 export const GMD_SUGERIDO: Record<Fase, number> = { cria: 0.7, recria: 0.6, engorda_pasto: 0.75, tip: 0.95, confinamento: 1.35 };
@@ -96,11 +96,9 @@ export function LoteForm() {
         <CampoTexto rotulo="Nome do lote" valor={f.nome} aoMudar={set('nome')} nome="nome" dica='Ex.: "Macho 1º lote" ou "Novilhas TIP"' />
 
         {props && props.length > 1 && (
-          <label className="campo"><span>Fazenda</span>
-            <select value={f.propriedadeId} onChange={(e) => setF((x) => ({ ...x, propriedadeId: Number(e.target.value), piqueteId: 0 }))}>
-              {props.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
-            </select>
-          </label>
+          <CampoEscolha rotulo="Fazenda" nome="fazenda" valor={f.propriedadeId} aoMudar={(v) => setF((x) => ({ ...x, propriedadeId: Number(v), piqueteId: 0 }))}>
+            {props.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+          </CampoEscolha>
         )}
 
         <div className="campo"><span style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Fase</span>
@@ -120,7 +118,7 @@ export function LoteForm() {
 
         {f.controle === 'lote' && <CampoNumero rotulo="Quantidade de cabeças" valor={f.qtd} aoMudar={set('qtd')} unidade="cab" nome="qtd" />}
 
-        <label className="campo"><span>Data de entrada</span><input type="date" value={f.data} onChange={(e) => set('data')(e.target.value)} /></label>
+        <CampoData rotulo="Data de entrada" valor={f.data} aoMudar={set('data')} nome="dataEntrada" />
 
         {!editando && f.controle === 'lote' && (
           <CampoNumero rotulo="Peso médio na entrada" valor={f.pesoEntrada} aoMudar={set('pesoEntrada')} unidade="kg" nome="pesoEntrada" dica="Vira a primeira pesagem do lote. Pode deixar em branco e pesar depois." />
@@ -133,27 +131,23 @@ export function LoteForm() {
         <CampoNumero rotulo="GMD esperado" valor={f.gmdMeta} aoMudar={set('gmdMeta')} unidade="kg/dia" nome="gmdMeta" dica="Sugestão pela fase. O app avisa quando o lote ficar 10% abaixo." />
 
         {piquetes && piquetes.length > 0 && (
-          <label className="campo"><span>Piquete (opcional)</span>
-            <select name="piquete" value={f.piqueteId} onChange={(e) => set('piqueteId')(Number(e.target.value))}>
-              <option value={0}>Nenhum</option>
-              {piquetes.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
-            </select>
-          </label>
+          <CampoEscolha rotulo="Piquete (opcional)" nome="piquete" valor={f.piqueteId} aoMudar={(v) => set('piqueteId')(Number(v))}>
+            <option value={0}>Nenhum</option>
+            {piquetes.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+          </CampoEscolha>
         )}
 
-        <label className="campo"><span>Dieta / suplemento</span>
-          <select name="formula" value={f.formulaId} onChange={(e) => set('formulaId')(Number(e.target.value))}>
-            <option value={0}>Nenhuma (só pasto e sal)</option>
-            {formulas?.map((x) => <option key={x.id} value={x.id}>{x.nome}</option>)}
-          </select>
-          <small>{formulas?.length === 0 ? 'Crie fórmulas em Mais › Nutrição.' : 'Usada no trato do dia e no custo do lote.'}</small>
-        </label>
+        <CampoEscolha rotulo="Dieta / suplemento" nome="formula" valor={f.formulaId} aoMudar={(v) => set('formulaId')(Number(v))}
+          dica={formulas?.length === 0 ? 'Crie fórmulas em Mais › Nutrição.' : 'Usada no trato do dia e no custo do lote.'}>
+          <option value={0}>Nenhuma (só pasto e sal)</option>
+          {formulas?.map((x) => <option key={x.id} value={x.id}>{x.nome}</option>)}
+        </CampoEscolha>
         {f.formulaId ? (
           <CampoNumero rotulo="Consumo do lote" valor={f.consumo} aoMudar={set('consumo')} unidade="% PV" nome="consumoLote"
             dica={`Deixe em branco para usar o da fórmula (${String(+((formulas?.find((x) => x.id === f.formulaId)?.consumoPctPV ?? 0) * 100).toFixed(3)).replace('.', ',')}% PV). ${TIPOS[formulas?.find((x) => x.id === f.formulaId)?.tipo ?? 'outro'].descricao}`} />
         ) : null}
 
-        <label className="campo"><span>Observações</span><textarea value={f.obs} onChange={(e) => set('obs')(e.target.value)} /></label>
+        <CampoTexto rotulo="Observações" valor={f.obs} aoMudar={set('obs')} nome="loteObs" multilinha />
 
         <button className="btn largo" onClick={salvar}>Salvar lote</button>
       </main>
