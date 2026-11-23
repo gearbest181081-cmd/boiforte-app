@@ -48,6 +48,7 @@ const ESQUEMAS_BASE: Record<string, Record<string, Regra>> = {
   ingredientes: {
     id: ID(false), nome: TXT(80, true), ms: NUM(1, 100, true), pb: NUM(0, 300, true), ndt: NUM(0, 100, true), ca: NUM(0, 40, true), p: NUM(0, 25, true),
     preco: NUM(0, 100_000, true), ureia: BOOL, ureiaTeor: NUM(0, 100),
+    fb: NUM(0, 100), cobre: NUM(0, 50_000), manganes: NUM(0, 50_000), // fibra bruta em %; cobre e manganês em mg/kg
     categoria: ENUM(['ingrediente', 'nucleo', 'sal_mineral', 'sal_adensado', 'proteinado', 'proteico_energetico', 'racao'], false),
     consumo: TXT(80), diasAlerta: NUM(0, 365, false, true), ativo: BOOL, criadoEm: CRIADO,
   },

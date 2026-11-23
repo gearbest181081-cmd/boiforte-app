@@ -212,6 +212,13 @@ function confere(cond, msg) {
     }
     confere((await page.getByTestId('custoKg').innerText()).includes('1,874'), 'custo da RIP = R$ 1,874/kg (igual à planilha)');
     confere(await page.getByText('Fórmula dentro das faixas de referência.').isVisible(), 'RIP dentro das faixas');
+    confere((await page.getByTestId('nut-pb').innerText()).includes('Faixa: 16 a 24%'), 'faixa adequada da PB para RIP embaixo do resultado');
+    const cu = await page.getByTestId('nut-cobre').innerText();
+    confere(cu.includes('Faixa:') && cu.includes('Incompleto'), 'cobre aparece com faixa e avisa que o núcleo não informou');
+    confere((await page.getByTestId('nut-fb').innerText()).includes('até 10%'), 'fibra bruta com faixa da RIP');
+    await page.locator('select[name=tipo]').selectOption('tip');
+    confere((await page.getByTestId('nut-pb').innerText()).includes('Faixa: 13 a 18%'), 'faixa muda quando o tipo vira TIP');
+    await page.locator('select[name=tipo]').selectOption('rip');
     await foto('10-formula');
     await page.getByRole('button', { name: 'Salvar fórmula' }).click();
     await page.getByRole('link', { name: /RIP teste/ }).waitFor();
@@ -324,7 +331,7 @@ function confere(cond, msg) {
     confere(true, 'custo fixo cadastrado');
     await foto('16-financeiro');
 
-    console.log('15. Simulações "E se"');
+    console.log('15. Simulação');
     await page.goto(URL + '#/simular');
     await page.locator('input[name=simPeso]').fill('300');
     await page.locator('input[name=simAlvo]').fill('450');
@@ -341,6 +348,18 @@ function confere(cond, msg) {
     await page.getByRole('radio', { name: 'Comprar gado' }).click();
     confere(/Prejuízo de R\$\s608,53/.test(await page.getByTestId('resultadoCompra').innerText()), 'simulador de compra igual à planilha (− R$ 608,53/cab)');
     await foto('17-simular');
+    await page.getByRole('radio', { name: /Comparar produtos/ }).click();
+    await page.getByRole('radio', { name: /Dois rótulos/ }).click();
+    await page.locator('input[name=cmpNome0]').fill('Prot A');
+    await page.locator('input[name=cmpPreco0]').fill('2,4');
+    await page.locator('input[name=cmpPb0]').fill('25');
+    await page.locator('input[name=cmpNome1]').fill('Prot B');
+    await page.locator('input[name=cmpPreco1]').fill('3,6');
+    await page.locator('input[name=cmpPb1]').fill('40');
+    confere((await page.getByTestId('melhorTipo').innerText()).includes('Prot B'), 'comparar: o proteinado com 40% de PB é o mais adequado');
+    const mc = await page.getByTestId('melhorCusto').innerText();
+    confere(mc.includes('Prot B') && /R\$\s9,00/.test(mc), 'comparar: melhor custo-benefício = R$ 9,00 por kg de proteína');
+    await foto('17b-comparar');
 
     console.log('16. Relatórios em PDF e Excel');
     await page.goto(URL + '#/relatorios');
@@ -457,6 +476,14 @@ function confere(cond, msg) {
       }
       confere(semVoltar.length === 0, 'botão Voltar em todas as telas' + (semVoltar.length ? ' (falta em ' + semVoltar.join(', ') + ')' : ''));
       confere(semMic.length === 0, 'microfone em todos os campos de escrever' + (semMic.length ? ' (falta em ' + semMic.join(' | ') + ')' : ''));
+      await p2.goto(URL + '#/simular');
+      await p2.getByRole('radio', { name: /Comparar produtos/ }).click();
+      await p2.getByRole('radio', { name: /Dois rótulos/ }).click();
+      const semMicCmp = await p2.evaluate(() => [...document.querySelectorAll('main input, main select, main textarea')]
+        .filter((e) => !['checkbox', 'file', 'hidden', 'radio'].includes(e.type) && e.offsetParent !== null)
+        .filter((e) => !e.closest('.com-mic')?.querySelector(':scope > .mic'))
+        .map((e) => e.name || e.getAttribute('aria-label') || e.id));
+      confere(semMicCmp.length === 0, 'Simulação › Comparar produtos: microfone em todos os campos' + (semMicCmp.length ? ' (falta em ' + semMicCmp.join(', ') + ')' : ''));
       await p2.goto(URL);
       confere(!(await p2.getByRole('button', { name: 'Voltar', exact: true }).count()), 'Início não tem Voltar');
       await p2.goto(URL + '#/fazenda');

@@ -235,6 +235,17 @@ table.tab td.n, table.tab th.n { text-align: right; }
 details.cartao summary { font-weight: 700; cursor: pointer; min-height: 32px; }
 hr { border: 0; border-top: 1px solid var(--borda); margin: 16px 0; }
 @media (max-width: 480px) { .grade > .campo { grid-column: 1 / -1; } }
+
+/* Resultado de nutrientes com faixa adequada */
+.grade.nutrientes { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 420px) { .grade.nutrientes { grid-template-columns: 1fr 1fr; } }
+.indicador.nut { display: flex; flex-direction: column; gap: 4px; }
+.indicador.nut.ruim { border-color: var(--alerta); border-width: 2px; }
+.indicador.nut.atencao { border-color: var(--aviso); }
+.indicador.nut .faixa { font-size: 13px; color: var(--texto-2); line-height: 1.3; }
+.indicador.nut .faixa b { color: var(--texto); font-weight: 700; }
+.indicador.nut .etiqueta { align-self: flex-start; margin: 2px 0 0; }
+.etiqueta.bom { background: var(--ok-claro); color: var(--ok); }
 .com-mic > .cresce { flex: 1; min-width: 0; }
 .linha-ingrediente { display: grid; grid-template-columns: 1fr 36px; gap: 6px 8px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--borda); align-items: center; }
 .linha-ingrediente > .com-mic:last-of-type, .linha-ingrediente > small { grid-column: 1 / -1; }
