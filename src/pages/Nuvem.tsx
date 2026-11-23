@@ -4,20 +4,22 @@ import { useNavigate } from 'react-router-dom';
 import { db } from '../db';
 import { NOMES_TABELA } from '../nuvem/nomes';
 import {
-  aceitarConvite, apagarMinhaConta, cancelarConvite, confirmarCodigo, convitesPendentes, criarConvite, criarFazenda, equipe, minhasFazendas, mudarPapel, nuvemConfigurada, pedirCodigo,
-  NOME_PLANO, planoDaFazenda, removerMembro, sair, usuarioAtual, type ConvitePendente, type Membro, type MinhaFazenda, type PlanoFazenda,
+  aceitarConvite, apagarMinhaConta, cancelarConvite, convitesPendentes, criarConvite, criarFazenda, equipe, minhasFazendas, mudarPapel, nuvemConfigurada,
+  NOME_PLANO, planoDaFazenda, removerMembro, sair, type ConvitePendente, type Membro, type MinhaFazenda, type PlanoFazenda,
 } from '../nuvem/cliente';
 import { PAPEIS, type Papel } from '../nuvem/esquema';
 import { desligarFazenda, ligarFazenda, temDadosLocais, tentarDeNovo } from '../nuvem/sinc';
 import { sincronizarAgora, useEstadoNuvem } from '../nuvem/useNuvem';
 import { linkWhatsApp } from '../exportar';
 import { CampoTexto, Topo, useAviso } from '../components/ui';
+import { Entrar } from '../components/Entrar';
+import { marcarDono, useSessao } from '../nuvem/sessao';
 
 export function Nuvem() {
-  const [usuario, setUsuario] = useState<{ id: string; email: string } | null | undefined>(undefined);
+  // Quem entrou vem da sessão guardada no celular (a tela de entrada do app já pediu o e-mail).
+  const { conta: usuario } = useSessao();
   const est = useEstadoNuvem();
-  const recarregar = useCallback(() => { usuarioAtual().then(setUsuario).catch(() => setUsuario(null)); }, []);
-  useEffect(recarregar, [recarregar]);
+  const recarregar = useCallback(() => {}, []);
 
   let corpo;
   if (!nuvemConfigurada()) {
@@ -27,8 +29,8 @@ export function Nuvem() {
         <p className="mudo">Esta versão do app ainda não está ligada a um servidor. Tudo continua funcionando no celular, sem internet.</p>
       </div>
     );
-  } else if (usuario === undefined || !est) corpo = null;
-  else if (!usuario) corpo = <Entrar aoEntrar={recarregar} />;
+  } else if (!est) corpo = null;
+  else if (!usuario) corpo = <Entrar />;
   else if (!est.fazenda) corpo = <Escolher email={usuario.email} aoSair={recarregar} />;
   else corpo = <Ligado aoSair={recarregar} />;
 
@@ -40,40 +42,6 @@ export function Nuvem() {
         {corpo}
       </main>
     </>
-  );
-}
-
-function Entrar({ aoEntrar }: { aoEntrar: () => void }) {
-  const aviso = useAviso();
-  const [email, setEmail] = useState('');
-  const [codigo, setCodigo] = useState('');
-  const [enviado, setEnviado] = useState(false);
-  const [ocupado, setOcupado] = useState(false);
-  const pedir = async () => {
-    setOcupado(true);
-    try { await pedirCodigo(email); setEnviado(true); aviso('Código enviado. Olhe seu e-mail.'); }
-    catch (e) { aviso((e as Error).message, true); } finally { setOcupado(false); }
-  };
-  const confirmar = async () => {
-    setOcupado(true);
-    try { await confirmarCodigo(email, codigo); aoEntrar(); }
-    catch (e) { aviso((e as Error).message, true); } finally { setOcupado(false); }
-  };
-  return (
-    <div className="cartao">
-      <h3>Entrar</h3>
-      <p className="mudo">Sem senha: mandamos um código de 6 números para o seu e-mail.</p>
-      <label className="campo"><span>Seu e-mail</span><input name="email" type="email" inputMode="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={enviado} /></label>
-      {!enviado ? <button className="btn largo" disabled={ocupado} onClick={pedir}>Mandar código</button> : (
-        <>
-          <label className="campo"><span>Código que chegou no e-mail</span><input name="codigo" inputMode="numeric" autoComplete="one-time-code" maxLength={8} value={codigo} onChange={(e) => setCodigo(e.target.value.replace(/\D/g, ''))} /></label>
-          <div className="botoes">
-            <button className="btn" disabled={ocupado} onClick={confirmar}>Entrar</button>
-            <button className="btn sec" onClick={() => { setEnviado(false); setCodigo(''); }}>Trocar e-mail</button>
-          </div>
-        </>
-      )}
-    </div>
   );
 }
 
@@ -208,7 +176,7 @@ function ApagarConta({ aoSair }: { aoSair: () => void }) {
     const t = window.prompt('Isto apaga sua conta e as fazendas na nuvem que são só suas. Os dados deste celular continuam aqui. Para confirmar, escreva APAGAR');
     if (t == null) return;
     if (t.trim().toUpperCase() !== 'APAGAR') return aviso('Não apaguei: escreva APAGAR para confirmar.', true);
-    try { await apagarMinhaConta(); await desligarFazenda(); aviso('Conta apagada.'); aoSair(); } catch (e) { aviso((e as Error).message, true); }
+    try { await apagarMinhaConta(); await desligarFazenda(); marcarDono(null); aviso('Conta apagada.'); aoSair(); } catch (e) { aviso((e as Error).message, true); }
   };
   return <p style={{ marginTop: 24, textAlign: 'center' }}><button className="btn perigo pequeno" onClick={apagar}>Apagar minha conta</button></p>;
 }

@@ -29,10 +29,36 @@ function confere(cond, msg) {
   page.on('pageerror', (e) => erros.push(e.message));
   page.on('dialog', (d) => d.accept());
   const foto = (n) => page.screenshot({ path: path.join(FOTOS, n + '.png'), fullPage: true });
+  // O teste não fala com o servidor de verdade: toda chamada à nuvem falha como se estivesse sem sinal.
+  await ctx.route(/supabase\.co/, (r) => r.abort());
+  // Sessão de mentira guardada no celular (como a biblioteca guarda depois da entrada pelo e-mail).
+  const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const sessaoFalsa = (id, email) => {
+    const exp = Math.floor(Date.now() / 1000) + 30 * 24 * 3600;
+    return JSON.stringify({
+      access_token: `${b64({ alg: 'HS256', typ: 'JWT' })}.${b64({ sub: id, email, role: 'authenticated', exp })}.x`,
+      token_type: 'bearer', expires_in: 30 * 24 * 3600, expires_at: exp, refresh_token: 'teste-' + id,
+      user: { id, aud: 'authenticated', role: 'authenticated', email, app_metadata: {}, user_metadata: {}, created_at: '2026-11-23T00:00:00Z' },
+    });
+  };
+  const entrarComo = (id, email) => page.evaluate((v) => localStorage.setItem('boiforte-sessao', v), sessaoFalsa(id, email));
 
   try {
-    console.log('1. Primeira abertura');
+    console.log('0. Tela de entrada');
     await page.goto(URL);
+    const nuvemNoBuild = await page.getByRole('button', { name: 'Mandar e-mail de entrada' }).waitFor({ timeout: 4000 }).then(() => true, () => false);
+    if (nuvemNoBuild) {
+      confere(!(await page.locator('nav.baixo').count()), 'sem entrar, o app não mostra o menu nem os dados');
+      await page.locator('input[name=email]').fill('produtor@exemplo.com');
+      await page.getByRole('button', { name: 'Mandar e-mail de entrada' }).click();
+      await page.getByText('Sem internet agora').waitFor();
+      confere(true, 'sem sinal, a entrada avisa em português simples');
+      await foto('00-entrada');
+      await entrarComo('11111111-1111-4111-8111-111111111111', 'produtor@exemplo.com');
+      await page.reload();
+    } else console.log('  (build sem nuvem: o app abre direto)');
+
+    console.log('1. Primeira abertura');
     await page.getByText('Bem-vindo ao BoiForte').waitFor();
     confere(true, 'tela de boas-vindas aparece');
     await foto('01-boas-vindas');
@@ -334,11 +360,11 @@ function confere(cond, msg) {
 
     console.log('17. Nuvem e cotações sem estar logado');
     await page.goto(URL + '#/nuvem');
-    await page.getByRole('heading', { name: /Nuvem ainda não ligada|^Entrar$/ }).first().waitFor();
-    confere(true, 'tela da nuvem: pede para entrar (ou explica que não está ligada)');
+    await page.getByText(/Nuvem ainda não ligada|Entrou como produtor@exemplo.com/).first().waitFor();
+    confere(true, 'tela da nuvem: mostra a conta que entrou (ou explica que não está ligada)');
     await page.goto(URL + '#/cotacoes');
-    await page.getByText('Entre na nuvem para receber as cotações').waitFor();
-    confere(true, 'cotações pedem para entrar na nuvem');
+    await page.getByText(nuvemNoBuild ? 'Sem atualizar agora' : 'Entre na nuvem para receber as cotações').waitFor();
+    confere(true, 'cotações: sem sinal, avisa e mostra as guardadas');
     await page.goto(URL + '#/nutricao/ingrediente/novo');
     await page.getByRole('button', { name: 'Salvar ingrediente' }).waitFor();
     await page.getByRole('button', { name: /Tirar foto da tabela nutricional/ }).click();
@@ -366,6 +392,32 @@ function confere(cond, msg) {
     await foto('08-inicio-exemplo');
     await page.emulateMedia({ colorScheme: 'dark' });
     await foto('09-escuro');
+    await page.emulateMedia({ colorScheme: 'light' });
+
+    if (nuvemNoBuild) {
+      console.log('19. Perfil, sair e outra conta no mesmo celular');
+      await page.getByRole('button', { name: /^Perfil de / }).click();
+      await page.getByRole('dialog', { name: 'Seu perfil' }).getByText('produtor@exemplo.com').waitFor();
+      confere(true, 'perfil no canto de cima mostra a conta');
+      await foto('20-perfil');
+      await page.getByRole('button', { name: 'Sair da conta' }).click();
+      await page.getByRole('button', { name: 'Mandar e-mail de entrada' }).waitFor();
+      confere(true, 'depois de sair, volta para a tela de entrada');
+      await page.context().setOffline(true);
+      await entrarComo('11111111-1111-4111-8111-111111111111', 'produtor@exemplo.com');
+      await page.reload().catch(() => {});
+      await page.getByText('Fêmea — 4º lote').waitFor();
+      confere(true, 'sem internet, quem já entrou abre o app direto com os dados');
+      await page.context().setOffline(false);
+      await entrarComo('22222222-2222-4222-8222-222222222222', 'outra@exemplo.com');
+      await page.reload();
+      await page.getByTestId('outraConta').waitFor();
+      confere(!(await page.getByText('Fêmea — 4º lote').count()), 'outra conta no mesmo celular não vê os dados de quem usava antes');
+      await foto('21-outra-conta');
+      await page.getByRole('button', { name: /Voltar e entrar com/ }).click();
+      await page.getByRole('button', { name: 'Mandar e-mail de entrada' }).waitFor();
+      confere(true, 'pode voltar sem apagar nada');
+    }
 
     confere(erros.length === 0, 'nenhum erro de JavaScript' + (erros.length ? ': ' + erros.join(' | ') : ''));
   } catch (e) {

@@ -11,11 +11,13 @@ const CHAVE_PUBLICA = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefi
 
 export const nuvemConfigurada = () => !!(URL_NUVEM && CHAVE_PUBLICA && /^https:\/\//.test(URL_NUVEM));
 
+export const CHAVE_SESSAO = 'boiforte-sessao';
+
 let cliente: Promise<SupabaseClient> | null = null;
 export function sb(): Promise<SupabaseClient> {
   if (!nuvemConfigurada()) return Promise.reject(new Error('A nuvem ainda não foi configurada neste app.'));
   cliente ??= import('@supabase/supabase-js').then(({ createClient }) =>
-    createClient(URL_NUVEM!, CHAVE_PUBLICA!, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: 'boiforte-sessao' } }));
+    createClient(URL_NUVEM!, CHAVE_PUBLICA!, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: CHAVE_SESSAO } }));
   return cliente;
 }
 
@@ -58,6 +60,23 @@ export async function usuarioAtual(): Promise<{ id: string; email: string } | nu
   const { data } = await (await sb()).auth.getSession(); // lê do aparelho: funciona sem internet
   const u = data.session?.user;
   return u ? { id: u.id, email: u.email ?? '' } : null;
+}
+
+export interface Conta { id: string; email: string }
+
+/**
+ * Conta guardada neste aparelho, lida direto do armazenamento (sem internet e sem esperar a biblioteca).
+ * A biblioteca só apaga a sessão guardada quando a pessoa sai ou quando o servidor diz que ela não vale mais;
+ * sem sinal ela continua guardada, então o app segue aberto no pasto mesmo com a entrada vencida.
+ * Isto só decide o que a TELA mostra: quem libera os dados da nuvem é o servidor, conferindo a sessão.
+ */
+export function contaGuardada(): Conta | null {
+  if (!nuvemConfigurada()) return null;
+  try {
+    const s = JSON.parse(localStorage.getItem(CHAVE_SESSAO) ?? 'null');
+    const u = s?.user;
+    return s?.refresh_token && typeof u?.id === 'string' ? { id: u.id, email: typeof u.email === 'string' ? u.email : '' } : null;
+  } catch { return null; }
 }
 
 export async function sair() { await (await sb()).auth.signOut({ scope: 'local' }); }

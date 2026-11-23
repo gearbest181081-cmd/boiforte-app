@@ -22,6 +22,15 @@ O que já está protegido:
 | Dinheiro e sanidade inconsistentes | Compra, venda/baixa (com volta das cabeças ao desfazer) e aplicação com custo são transações atômicas; valores e datas passam pela validação do banco. |
 | Perda de dados | Pedido de armazenamento persistente ao navegador e cópia de segurança em arquivo. |
 
+### Tela de entrada (login)
+
+Com o app ligado ao servidor, ele só abre depois de entrar com o e-mail. A sessão fica guardada no aparelho,
+então o app abre direto (inclusive sem internet) até a pessoa tocar em "Sair da conta" ou o servidor recusar a sessão.
+A tela de entrada protege a **tela**, não os dados: quem protege os dados da nuvem continua sendo o servidor, que confere
+a sessão em cada chamada. Os dados guardados no próprio celular não são criptografados.
+Se outra conta entrar no mesmo celular, o app não mostra os dados de quem usava antes: pede para apagá-los do celular
+ou voltar para a outra conta.
+
 ### Dependências
 
 As versões são fixas (sem `^`). Desde 23/11/2026 o app usa `react-router-dom` 7.18.6 e `npm audit --omit=dev` não aponta nada.
