@@ -33,6 +33,16 @@ select id, nome, plano, usuarios_extras from public.fazendas order by nome;
 select public.definir_plano('<id da fazenda>', 'pro', 2);
 ```
 
+A leitura por foto é só do Pro: 150 por mês por fazenda (volta no dia 1º, horário de Brasília).
+Para vender um pacote extra, aumente a cota do mês daquela fazenda:
+
+```sql
+select public.definir_cota_foto('<id da fazenda>', 250); -- 150 do plano + 100 do pacote
+```
+
+Existe também um teto de 300 leituras por dia no sistema todo (proteção de custo). Com muitas fazendas
+no Pro, aumente esse número numa migração nova.
+
 Se o plano diminuir, quem passar do limite fica pausado (ninguém é apagado) até o dono tirar alguém
 ou o plano aumentar.
 

@@ -10,7 +10,10 @@ describe('leitura por foto (regras do servidor)', () => {
     expect(() => validarPedido({ tipo: 'rotulo', imagem: img, mime: 'image/gif' })).toThrow('JPG');
     expect(() => validarPedido({ tipo: 'rotulo', imagem: img + '<script>', mime: 'image/png' })).toThrow('inválida');
     expect(() => validarPedido({ tipo: 'rotulo', imagem: 'A'.repeat(6_000_001), mime: 'image/png' })).toThrow('grande');
-    expect(validarPedido({ tipo: 'balanca', imagem: img, mime: 'image/webp', extra: 1 })).toEqual({ tipo: 'balanca', imagem: img, mime: 'image/webp' });
+    const fazenda = '10000000-0000-4000-8000-000000000001';
+    expect(() => validarPedido({ tipo: 'balanca', imagem: img, mime: 'image/webp' })).toThrow('fazenda');
+    expect(() => validarPedido({ tipo: 'balanca', imagem: img, mime: 'image/webp', fazenda: "x' or 1=1" })).toThrow('fazenda');
+    expect(validarPedido({ tipo: 'balanca', imagem: img, mime: 'image/webp', fazenda, extra: 1 })).toEqual({ tipo: 'balanca', imagem: img, mime: 'image/webp', fazenda });
   });
 
   it('só deixa passar números plausíveis do rótulo', () => {

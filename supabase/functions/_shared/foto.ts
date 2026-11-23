@@ -10,7 +10,7 @@ export const PB_POR_UREIA = 2.81;
 export const MIMES = ['image/jpeg', 'image/png', 'image/webp'] as const;
 export const MAX_BASE64 = 6_000_000; // ~4,5 MB de imagem
 
-export interface PedidoFoto { tipo: TipoFoto; imagem: string; mime: (typeof MIMES)[number] }
+export interface PedidoFoto { tipo: TipoFoto; imagem: string; mime: (typeof MIMES)[number]; fazenda: string }
 
 export function validarPedido(corpo: unknown): PedidoFoto {
   const c = corpo as Record<string, unknown> | null;
@@ -20,7 +20,9 @@ export function validarPedido(corpo: unknown): PedidoFoto {
   if (typeof c.imagem !== 'string' || c.imagem.length < 100) throw new Error('Foto vazia.');
   if (c.imagem.length > MAX_BASE64) throw new Error('Foto grande demais.');
   if (!/^[A-Za-z0-9+/]+={0,2}$/.test(c.imagem)) throw new Error('Foto inválida.');
-  return { tipo: c.tipo, imagem: c.imagem, mime: c.mime as PedidoFoto['mime'] };
+  // A fazenda decide o plano e a cota; o banco confere se a pessoa é mesmo dela.
+  if (typeof c.fazenda !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(c.fazenda)) throw new Error('Ligue o celular a uma fazenda na nuvem.');
+  return { tipo: c.tipo, imagem: c.imagem, mime: c.mime as PedidoFoto['mime'], fazenda: c.fazenda };
 }
 
 const num = { type: ['number', 'null'] } as const;

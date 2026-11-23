@@ -1,5 +1,5 @@
 // Função "ler-foto": lê o rótulo de um núcleo/suplemento ou o visor de uma balança a partir de uma foto.
-// Segurança: exige login, exige ser de uma fazenda, cota diária por pessoa e teto geral no banco (pode_usar_foto),
+// Segurança: exige login, ser da fazenda e plano Pro; cota mensal da fazenda, diária por pessoa e teto geral no banco (pode_usar_foto),
 // e a chave da IA fica só aqui no servidor. O CORS (APP_ORIGIN) só impede outros sites de usar a função pelo navegador
 // de alguém; não é a proteção principal, porque fora do navegador qualquer um escolhe o cabeçalho Origin.
 // A resposta da IA é limpa por limparLeitura antes de voltar; o app ainda mostra tudo para conferir.
@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
   let pedido;
   try { pedido = validarPedido(await req.json()); } catch (e) { return resposta({ erro: (e as Error).message }, 400, origem); }
 
-  const { error: ec } = await sb.rpc('pode_usar_foto');
+  const { error: ec } = await sb.rpc('pode_usar_foto', { f: pedido.fazenda });
   if (ec) return resposta({ erro: ec.message }, 429, origem);
 
   try {

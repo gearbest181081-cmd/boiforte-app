@@ -219,10 +219,10 @@ describe('servidor', () => {
   });
   it('foto: só quem é de uma fazenda, e no máximo 30 por dia', async () => {
     const sem = await s.novoUsuario('sem@x');
-    await expect(s.rpc(null, 'pode_usar_foto', {})).rejects.toThrow();
-    await expect(s.rpc(sem, 'pode_usar_foto', {})).rejects.toThrow('Ligue o celular');
-    for (let i = 0; i < 30; i++) expect(await s.rpc(ana, 'pode_usar_foto', {})).toBe(true);
-    await expect(s.rpc(ana, 'pode_usar_foto', {})).rejects.toThrow('Muitas tentativas');
+    await expect(s.rpc(null, 'pode_usar_foto', { f: fa })).rejects.toThrow();
+    await expect(s.rpc(sem, 'pode_usar_foto', { f: fa })).rejects.toThrow('Ligue o celular');
+    for (let i = 0; i < 30; i++) expect(await s.rpc(ana, 'pode_usar_foto', { f: fa })).toBe(149 - i);
+    await expect(s.rpc(ana, 'pode_usar_foto', { f: fa })).rejects.toThrow('Muitas tentativas');
   });
 
   it('cotações: o app só lê; o servidor grava e descarta número absurdo', async () => {
@@ -364,7 +364,7 @@ describe('servidor: correções da auditoria', () => {
   it('A2: leitura por foto tem teto para o sistema todo', async () => {
     await s.pg.query(`insert into public.limites (usuario_id, tipo, janela, contagem)
       values ('00000000-0000-0000-0000-000000000000', 'foto_total', to_timestamp(floor(extract(epoch from now()) / 86400) * 86400), 300)`);
-    await expect(s.rpc(dono, 'pode_usar_foto', {})).rejects.toThrow('limite de hoje');
+    await expect(s.rpc(dono, 'pode_usar_foto', { f })).rejects.toThrow('limite de hoje');
   });
 });
 
@@ -466,8 +466,8 @@ describe('servidor: limite de pessoas por plano', () => {
     const { dono, f } = await fazenda('Foto', 'pro', 1);
     const [a, b] = [await entrar(dono, f), await entrar(dono, f)];
     await definir(f, 'pro', 0);
-    await expect(s.rpc(b, 'pode_usar_foto', {})).rejects.toThrow('Ligue o celular');
-    expect(await s.rpc(a, 'pode_usar_foto', {})).toBe(true);
+    await expect(s.rpc(b, 'pode_usar_foto', { f })).rejects.toThrow('Ligue o celular');
+    expect(await s.rpc(a, 'pode_usar_foto', { f })).toBe(149);
   });
 
   it('o dono nunca fica pausado, nem quando outro é promovido a dono', async () => {
@@ -484,5 +484,69 @@ describe('servidor: limite de pessoas por plano', () => {
   it('quem não é da fazenda não vê o plano dela', async () => {
     const { f } = await fazenda('Fechada');
     await expect(plano(await nova(), f)).rejects.toThrow('não faz parte');
+  });
+});
+
+// Leitura por foto conforme o plano: Básico sem foto; Pro com 150 por mês por fazenda.
+describe('servidor: leitura por foto por plano', () => {
+  let s: Servidor;
+  let n = 0;
+  const nova = () => s.novoUsuario(`f${++n}@x`);
+  const fazenda = async (plano: string) => {
+    const dono = await nova();
+    const f = await s.rpc<string>(dono, 'criar_fazenda', { p_nome: 'F' + n });
+    await s.pg.query(`select public.definir_plano($1, $2, 3)`, [f, plano]);
+    return { dono, f };
+  };
+  const foto = (u: string, f: string) => s.rpc<number>(u, 'pode_usar_foto', { f });
+  const usadas = (f: string, total: number) => s.pg.query(`insert into public.limites (usuario_id, tipo, janela, contagem)
+    values ($1, 'foto_mes', public.bf_inicio_mes(), $2) on conflict (usuario_id, tipo, janela) do update set contagem = excluded.contagem`, [f, total]);
+
+  beforeAll(async () => { s = await subirServidor(); }, 30000);
+
+  it('Básico não usa a leitura por foto', async () => {
+    const { dono, f } = await fazenda('basico');
+    await expect(foto(dono, f)).rejects.toThrow('plano Pro');
+    const p = await s.rpc<{ fotos_limite: number }[]>(dono, 'plano_da_fazenda', { f });
+    expect(p[0].fotos_limite).toBe(0);
+  });
+
+  it('Pro: 150 por mês na fazenda, somando todas as pessoas; a recusa não gasta cota', async () => {
+    const { dono, f } = await fazenda('pro');
+    const c = await s.rpc<string>(dono, 'criar_convite', { f, p_papel: 'vaqueiro' });
+    const vaq = await nova();
+    await s.rpc(vaq, 'aceitar_convite', { p_codigo: c });
+    expect(await foto(dono, f)).toBe(149);
+    expect(await foto(vaq, f)).toBe(148);
+    await usadas(f, 149);
+    expect(await foto(vaq, f)).toBe(0);
+    await expect(foto(dono, f)).rejects.toThrow('150 leituras');
+    await expect(foto(vaq, f)).rejects.toThrow('150 leituras');
+    const p = await s.rpc<{ fotos_usadas: number; fotos_limite: number }[]>(dono, 'plano_da_fazenda', { f });
+    expect(p[0]).toMatchObject({ fotos_usadas: 150, fotos_limite: 150 }); // as recusas não contaram
+    // pacote extra: o servidor aumenta a cota
+    await s.pg.query(`select public.definir_cota_foto($1, 250)`, [f]);
+    expect(await foto(dono, f)).toBe(99);
+  });
+
+  it('não dá para gastar a cota de outra fazenda nem usar a de uma fazenda Pro alheia', async () => {
+    const pro = await fazenda('pro');
+    const bas = await fazenda('basico');
+    await expect(foto(bas.dono, pro.f)).rejects.toThrow('Ligue o celular');
+    const p = await s.rpc<{ fotos_usadas: number }[]>(pro.dono, 'plano_da_fazenda', { f: pro.f });
+    expect(p[0].fotos_usadas).toBe(0);
+  });
+
+  it('o app não muda a própria cota', async () => {
+    const { dono, f } = await fazenda('pro');
+    for (const sql of [`select public.definir_cota_foto('${f}', 99999)`, `update public.fazendas set cota_foto_mes = 99999`, `delete from public.limites`]) {
+      const e = await s.como(dono, () => s.pg.query(sql).then(() => null, (x) => x));
+      expect(String(e), sql).toMatch(/permission denied|row-level security/);
+    }
+  });
+
+  it('o mês vira no horário de Brasília', async () => {
+    const r = await s.pg.query<{ ok: boolean }>(`select public.bf_inicio_mes() = (date_trunc('month', now() at time zone 'America/Sao_Paulo') at time zone 'America/Sao_Paulo') ok`);
+    expect(r.rows[0].ok).toBe(true);
   });
 });

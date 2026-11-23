@@ -67,7 +67,7 @@ export async function sair() { await (await sb()).auth.signOut({ scope: 'local' 
 /** bloqueado: a pessoa está "pausada" porque a equipe passou do limite do plano (decidido no servidor). */
 export interface MinhaFazenda { fazenda_id: string; nome: string; papel: Papel; bloqueado?: boolean }
 export interface Membro { usuario_id: string; nome: string; papel: Papel; entrou_em: string; eu: boolean; bloqueado?: boolean }
-export interface PlanoFazenda { plano: 'basico' | 'pro'; usuarios_extras: number; limite: number; pessoas: number; convites_abertos: number; eu_pausado: boolean }
+export interface PlanoFazenda { plano: 'basico' | 'pro'; usuarios_extras: number; limite: number; pessoas: number; convites_abertos: number; eu_pausado: boolean; fotos_usadas?: number; fotos_limite?: number }
 export const NOME_PLANO: Record<string, string> = { basico: 'Básico', pro: 'Pro' };
 
 export const minhasFazendas = () => rpc<MinhaFazenda[]>('minhas_fazendas', {});
@@ -113,8 +113,8 @@ export async function ultimasCotacoes(): Promise<Cotacao[]> {
 }
 
 /** Manda a foto para o servidor ler (rótulo do núcleo ou visor da balança). */
-export async function lerFoto<T>(tipo: 'rotulo' | 'balanca', imagemBase64: string, mime: string): Promise<T> {
-  const { data, error } = await (await sb()).functions.invoke('ler-foto', { body: { tipo, imagem: imagemBase64, mime } });
+export async function lerFoto<T>(fazenda: string, tipo: 'rotulo' | 'balanca', imagemBase64: string, mime: string): Promise<T> {
+  const { data, error } = await (await sb()).functions.invoke('ler-foto', { body: { fazenda, tipo, imagem: imagemBase64, mime } });
   if (error) {
     const corpo = await (error as { context?: Response }).context?.json?.().catch(() => null);
     throw erro({ message: corpo?.erro ?? error.message });
