@@ -1,6 +1,8 @@
-import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { melhorNumero, ouvir, vozDisponivel } from '../voz';
+import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { escolherOpcaoFalada, melhorData, melhorNumero, ouvir, textoFalado, vozDisponivel, type FormatoTexto } from '../voz';
+import { hojeISO } from '../calc';
+import { telaDeCima } from '../navegacao';
 import { Perfil } from './Perfil';
 
 // ---------- Ícones (desenhados aqui para funcionar sem internet) ----------
@@ -13,6 +15,8 @@ const caminhos: Record<string, ReactNode> = {
   cocho: <><path d="M3 10h18l-2 8H5z" /><path d="M6 10V7M18 10V7M9 14h6" /></>,
   mic: <><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3" /></>,
   mais_sinal: <path d="M12 5v14M5 12h14" />,
+  voltar: <path d="M15 5l-7 7 7 7" />,
+  fechar: <path d="M6 6l12 12M18 6L6 18" />,
 };
 export function Icone({ nome }: { nome: keyof typeof caminhos | string }) {
   return (
@@ -43,12 +47,22 @@ export function AvisoProvider({ children }: { children: ReactNode }) {
 export const useAviso = () => useContext(AvisoCtx);
 
 // ---------- Topo ----------
-export function Topo({ titulo, voltar }: { titulo: string; voltar?: boolean }) {
+/**
+ * Cabeçalho de toda tela. O botão "Voltar" aparece em todas, menos no Início.
+ * Volta para a tela anterior; se o app foi aberto direto nesta tela, vai para a tela "de cima".
+ */
+export function Topo({ titulo, voltar = true, paraOnde }: { titulo: string; voltar?: boolean; paraOnde?: string }) {
   const nav = useNavigate();
+  const { pathname } = useLocation();
   const online = useOnline();
+  const mostrarVoltar = voltar && pathname !== '/';
+  const irVoltar = () => {
+    if ((window.history.state?.idx ?? 0) > 0) nav(-1);
+    else nav(paraOnde ?? telaDeCima(pathname), { replace: true });
+  };
   return (
     <header className="topo">
-      {voltar && <button className="voltar" aria-label="Voltar" onClick={() => ((window.history.state?.idx ?? 0) > 0 ? nav(-1) : nav('/', { replace: true }))}>‹</button>}
+      {mostrarVoltar && <button type="button" className="voltar" onClick={irVoltar}><Icone nome="voltar" /><span>Voltar</span></button>}
       <h1>{titulo}</h1>
       {!online && <span className="offline" title="Tudo continua sendo salvo no celular">Sem internet</span>}
       <Perfil />
@@ -66,59 +80,173 @@ export function useOnline() {
   return on;
 }
 
+// ---------- Voz: explicação nos 3 primeiros usos e faixa "pode falar" ----------
+/** O que o campo espera ouvir (muda o exemplo da explicação). */
+export type TipoVoz = 'numero' | 'texto' | 'data' | 'escolha' | 'pesagem' | 'email' | 'codigo' | 'digitos';
+
+const CHAVE_USOS_MIC = 'boiforte-mic-usos';
+export const VEZES_DICA_MIC = 3;
+export function usosMic(): number {
+  try { return Number(localStorage.getItem(CHAVE_USOS_MIC)) || 0; } catch { return VEZES_DICA_MIC; }
+}
+function gravarUsosMic(n: number) {
+  try { localStorage.setItem(CHAVE_USOS_MIC, String(n)); } catch { /* sem armazenamento: segue sem contar */ }
+}
+/** Faz a explicação do microfone aparecer de novo nas próximas 3 vezes. */
+export function mostrarDicaMicDeNovo() { gravarUsosMic(0); }
+
+const EXEMPLOS: Record<TipoVoz, ReactNode> = {
+  numero: <>Fale o número: <b>“trezentos e vinte”</b>. Com vírgula: <b>“trezentos e vinte vírgula cinco”</b> ou <b>“trezentos e vinte e meio”</b>.</>,
+  texto: <>Fale normalmente, como numa conversa: <b>“Retiro de cima”</b>. O que você falar vira texto no campo.</>,
+  data: <>Fale <b>“hoje”</b>, <b>“ontem”</b> ou a data: <b>“15 de março”</b>.</>,
+  escolha: <>Fale o nome da opção que você quer na lista. Ex.: <b>“milho”</b>.</>,
+  pesagem: <>Fale o brinco e o peso: <b>“brinco 12 peso 318”</b>. Sem brinco, fale só o peso: <b>“318”</b>.</>,
+  email: <>Fale o e-mail assim: <b>“joao arroba gmail ponto com”</b>.</>,
+  codigo: <>Fale as letras e os números do código, um por um.</>,
+  digitos: <>Fale os números um por um: <b>“um, dois, três…”</b>.</>,
+};
+
+type PedidoDica = { tipo: TipoVoz; comecar: () => void };
+type VozCtxT = { ensinar?: (p: PedidoDica) => void; ouvindo: (parar: (() => void) | null) => void };
+const VozCtx = createContext<VozCtxT>({ ouvindo: () => {} });
+
+/** Fica em volta do app: mostra a explicação do microfone e a faixa "pode falar" enquanto ouve. */
+export function VozProvider({ children }: { children: ReactNode }) {
+  const [dica, setDica] = useState<PedidoDica | null>(null);
+  const [parar, setParar] = useState<(() => void) | null>(null);
+  const ctx = useMemo<VozCtxT>(() => ({ ensinar: setDica, ouvindo: (p) => setParar(() => p) }), []);
+  return (
+    <VozCtx.Provider value={ctx}>
+      {children}
+      {dica && <DicaMic pedido={dica} aoFechar={() => setDica(null)} />}
+      {parar && (
+        <button type="button" className="faixa-ouvindo" onClick={parar}>
+          <span className="ponto" aria-hidden="true" /> Pode falar agora… <u>tocar aqui para parar</u>
+        </button>
+      )}
+    </VozCtx.Provider>
+  );
+}
+
+function DicaMic({ pedido, aoFechar }: { pedido: PedidoDica; aoFechar: () => void }) {
+  const usos = usosMic();
+  const botao = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    botao.current?.focus();
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') aoFechar(); };
+    window.addEventListener('keydown', esc);
+    return () => window.removeEventListener('keydown', esc);
+  }, [aoFechar]);
+  const falar = (nuncaMais?: boolean) => {
+    gravarUsosMic(nuncaMais ? VEZES_DICA_MIC : usos + 1);
+    aoFechar();
+    pedido.comecar();
+  };
+  return (
+    <div className="folha-fundo" onClick={aoFechar}>
+      <div className="folha" role="dialog" aria-modal="true" aria-labelledby="dica-mic-titulo" data-testid="dicaMic" onClick={(e) => e.stopPropagation()}>
+        <div className="linha-lote">
+          <h2 id="dica-mic-titulo">Como escrever falando</h2>
+          <button type="button" className="fechar" aria-label="Fechar" onClick={aoFechar}><Icone nome="fechar" /></button>
+        </div>
+        <ol className="passos-mic">
+          <li><span className="mic"><Icone nome="mic" /></span><div><b>1. Toque no microfone verde</b>ao lado do campo.</div></li>
+          <li><span className="mic ouvindo"><Icone nome="mic" /></span><div><b>2. Ficou vermelho? Pode falar.</b>Fale perto do celular, com calma.{usos === 0 && <> Se o celular perguntar se pode usar o microfone, toque em <b style={{ display: 'inline' }}>Permitir</b>.</>}</div></li>
+          <li><span className="mic ok" aria-hidden="true">✓</span><div><b>3. Confira o que apareceu no campo.</b>Se saiu errado, toque no microfone de novo ou digite.</div></li>
+        </ol>
+        <div className="dica"><b>Para este campo:</b> {EXEMPLOS[pedido.tipo]}</div>
+        <button ref={botao} type="button" className="btn largo" onClick={() => falar()}><Icone nome="mic" /> Entendi, falar agora</button>
+        <button type="button" className="btn sec largo" style={{ marginTop: 10 }} onClick={() => falar(true)}>Já sei usar, não mostrar mais</button>
+        <p className="mudo" style={{ fontSize: 14, marginTop: 10, textAlign: 'center' }}>
+          Esta explicação aparece nas {VEZES_DICA_MIC} primeiras vezes ({Math.min(usos + 1, VEZES_DICA_MIC)} de {VEZES_DICA_MIC}). Sem internet, em muitos celulares a voz não funciona: digite.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // ---------- Botão de microfone ----------
-export function BotaoMic({ aoOuvir, rotulo = 'Falar' }: { aoOuvir: (texto: string) => void; rotulo?: string }) {
+export function BotaoMic({ aoOuvir, rotulo = 'Falar', tipo = 'texto', grande }: {
+  aoOuvir: (texto: string) => void; rotulo?: string; tipo?: TipoVoz; grande?: string;
+}) {
   const [ouvindo, setOuvindo] = useState(false);
   const aviso = useAviso();
+  const voz = useContext(VozCtx);
   const parar = useRef<() => void>();
   if (!vozDisponivel()) return null;
-  const clicar = async () => {
-    if (ouvindo) { parar.current?.(); return; }
+  const comecar = async () => {
     setOuvindo(true);
     const o = ouvir();
     parar.current = o.parar;
+    voz.ouvindo(o.parar);
     try { aoOuvir(await o.promessa); }
     catch (e) { aviso((e as Error).message, true); }
-    finally { setOuvindo(false); }
+    finally { setOuvindo(false); voz.ouvindo(null); }
+  };
+  const clicar = () => {
+    if (ouvindo) { parar.current?.(); return; }
+    if (voz.ensinar && usosMic() < VEZES_DICA_MIC) voz.ensinar({ tipo, comecar });
+    else comecar();
   };
   return (
-    <button type="button" className={`mic ${ouvindo ? 'ouvindo' : ''}`} onClick={clicar} aria-label={ouvindo ? 'Parar de ouvir' : rotulo} title={rotulo}>
-      <Icone nome="mic" />
+    <button type="button" className={`mic ${grande ? 'grande' : ''} ${ouvindo ? 'ouvindo' : ''}`} onClick={clicar} aria-label={ouvindo ? 'Parar de ouvir' : rotulo} title={rotulo}>
+      <Icone nome="mic" />{grande && <span>{ouvindo ? 'Ouvindo… toque para parar' : grande}</span>}
     </button>
   );
 }
 
-// ---------- Campo numérico com voz ----------
-export function CampoNumero({ rotulo, valor, aoMudar, unidade, dica, nome, min, passo }: {
-  rotulo: string; valor: string; aoMudar: (v: string) => void; unidade?: string; dica?: string; nome?: string; min?: number; passo?: string;
-}) {
+// ---------- Campos que se escrevem falando ----------
+type FormatoVoz = 'numero' | FormatoTexto;
+type PropsEntrada = Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'> & {
+  valor: string; aoMudar: (v: string) => void;
+  /** Como ler o que foi falado. false tira o microfone (só para campos que não são de escrever). */
+  voz?: FormatoVoz | false;
+  /** Nome do campo para o botão do microfone ("Falar peso"). */
+  rotuloVoz?: string;
+  unidade?: string;
+  multilinha?: boolean;
+};
+
+/** Caixa de texto com microfone ao lado. Base de todos os campos de escrever do app. */
+export function Entrada({ valor, aoMudar, voz = 'texto', rotuloVoz, unidade, multilinha, className, ...resto }: PropsEntrada) {
   const aviso = useAviso();
+  const numero = voz === 'numero';
+  const ouviu = (t: string) => {
+    if (numero) {
+      const n = melhorNumero(t);
+      if (n == null) aviso(`Não entendi um número em "${t.split('|')[0]}". Tente de novo.`, true);
+      else aoMudar(String(n).replace('.', ','));
+      return;
+    }
+    const v = textoFalado(t, voz || 'texto');
+    // Em caixa grande (observações) o que se fala é acrescentado; nos outros campos, substitui.
+    aoMudar(multilinha && valor.trim() ? `${valor.trim()} ${v}` : v);
+  };
+  const tipoVoz: TipoVoz = numero ? 'numero' : voz || 'texto';
+  const rotulo = rotuloVoz ? `Falar ${rotuloVoz.toLowerCase()}` : 'Falar';
+  return (
+    <div className={`com-mic ${multilinha ? 'alto' : ''} ${className ?? ''}`}>
+      {multilinha
+        ? <textarea id={resto.id} name={resto.name} aria-label={resto['aria-label']} placeholder={resto.placeholder} value={valor} onChange={(e) => aoMudar(e.target.value)} />
+        : <input type="text" autoComplete="off" {...(numero ? { inputMode: 'decimal' as const } : {})} {...resto} value={valor}
+            onChange={(e) => aoMudar(numero ? e.target.value.replace(/[^\d.,-]/g, '') : e.target.value)} />}
+      {unidade && <span className="unidade">{unidade}</span>}
+      {voz !== false && <BotaoMic tipo={tipoVoz} rotulo={rotulo} aoOuvir={ouviu} />}
+    </div>
+  );
+}
+
+// ---------- Campo numérico com voz ----------
+export function CampoNumero({ rotulo, valor, aoMudar, unidade, dica, nome, rotuloAcessivel }: {
+  rotulo: string; valor: string; aoMudar: (v: string) => void; unidade?: string; dica?: string; nome?: string; min?: number; passo?: string;
+  /** Nome para leitor de tela quando o rótulo visível é genérico (ex.: "kg para Lote 5"). */
+  rotuloAcessivel?: string;
+}) {
   const id = useId();
   return (
     <div className="campo">
       <label htmlFor={id}>{rotulo}</label>
-      <div className="com-mic">
-        <input
-          id={id}
-          name={nome}
-          inputMode="decimal"
-          type="text"
-          autoComplete="off"
-          value={valor}
-          min={min}
-          step={passo}
-          onChange={(e) => aoMudar(e.target.value.replace(/[^\d.,-]/g, ''))}
-        />
-        {unidade && <span className="unidade">{unidade}</span>}
-        <BotaoMic
-          rotulo={`Falar ${rotulo.toLowerCase()}`}
-          aoOuvir={(t) => {
-            const n = melhorNumero(t);
-            if (n == null) aviso(`Não entendi um número em "${t.split('|')[0]}". Tente de novo.`, true);
-            else aoMudar(String(n).replace('.', ','));
-          }}
-        />
-      </div>
+      <Entrada id={id} name={nome} aria-label={rotuloAcessivel} valor={valor} aoMudar={aoMudar} voz="numero" unidade={unidade} rotuloVoz={rotulo} />
       {dica && <small>{dica}</small>}
     </div>
   );
@@ -132,17 +260,84 @@ export function num(v: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-export function CampoTexto({ rotulo, valor, aoMudar, dica, nome, tipo = 'text', voz = true }: {
-  rotulo: string; valor: string; aoMudar: (v: string) => void; dica?: string; nome?: string; tipo?: string; voz?: boolean;
+export function CampoTexto({ rotulo, valor, aoMudar, dica, nome, tipo = 'text', voz = true, multilinha, formato, placeholder, maxLength, autoComplete, inputMode, aoEnter }: {
+  rotulo: string; valor: string; aoMudar: (v: string) => void; dica?: ReactNode; nome?: string; tipo?: string;
+  /** Deixe sempre ligado: todo campo de escrever tem microfone. */
+  voz?: boolean;
+  /** Caixa grande para observações (o que se fala é acrescentado ao texto). */
+  multilinha?: boolean;
+  /** Como ler a fala: texto livre, e-mail, código ou só números. */
+  formato?: FormatoTexto;
+  placeholder?: string; maxLength?: number; autoComplete?: string; inputMode?: InputHTMLAttributes<HTMLInputElement>['inputMode']; aoEnter?: () => void;
+}) {
+  const id = useId();
+  const f: FormatoTexto = formato ?? (tipo === 'email' ? 'email' : 'texto');
+  return (
+    <div className="campo">
+      <label htmlFor={id}>{rotulo}</label>
+      <Entrada id={id} name={nome} type={tipo} valor={valor} aoMudar={aoMudar} voz={voz ? f : false} rotuloVoz={rotulo} multilinha={multilinha}
+        placeholder={placeholder} maxLength={maxLength} autoComplete={autoComplete ?? 'off'} inputMode={inputMode}
+        onKeyDown={aoEnter ? (e) => { if (e.key === 'Enter') aoEnter(); } : undefined} />
+      {dica && <small>{dica}</small>}
+    </div>
+  );
+}
+
+/** Campo de data com microfone ("hoje", "ontem", "15 de março"). */
+export function EntradaData({ valor, aoMudar, rotuloVoz = 'data', ...resto }: Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'> & {
+  valor: string; aoMudar: (v: string) => void; rotuloVoz?: string;
+}) {
+  const aviso = useAviso();
+  return (
+    <div className="com-mic">
+      <input type="date" {...resto} value={valor} onChange={(e) => aoMudar(e.target.value)} />
+      <BotaoMic tipo="data" rotulo={`Falar ${rotuloVoz.toLowerCase()}`} aoOuvir={(t) => {
+        const d = melhorData(t, hojeISO());
+        if (d) aoMudar(d);
+        else aviso(`Não entendi a data em "${t.split('|')[0]}". Fale “hoje”, “ontem” ou “15 de março”.`, true);
+      }} />
+    </div>
+  );
+}
+
+export function CampoData({ rotulo, valor, aoMudar, nome, dica }: { rotulo: string; valor: string; aoMudar: (v: string) => void; nome?: string; dica?: ReactNode }) {
+  const id = useId();
+  return (
+    <div className="campo">
+      <label htmlFor={id}>{rotulo}</label>
+      <EntradaData id={id} name={nome} valor={valor} aoMudar={aoMudar} rotuloVoz={rotulo} />
+      {dica && <small>{dica}</small>}
+    </div>
+  );
+}
+
+/** Lista de escolha (select) com microfone: fala o nome da opção e ela é escolhida. */
+export function Escolha({ valor, aoMudar, children, rotuloVoz = 'opção', ...resto }: Omit<SelectHTMLAttributes<HTMLSelectElement>, 'value' | 'onChange'> & {
+  valor: string | number; aoMudar: (v: string) => void; rotuloVoz?: string;
+}) {
+  const aviso = useAviso();
+  const ref = useRef<HTMLSelectElement>(null);
+  return (
+    <div className="com-mic">
+      <select ref={ref} {...resto} value={valor} onChange={(e) => aoMudar(e.target.value)}>{children}</select>
+      <BotaoMic tipo="escolha" rotulo={`Falar ${rotuloVoz.toLowerCase()}`} aoOuvir={(t) => {
+        const opcoes = Array.from(ref.current?.options ?? []).filter((o) => !o.disabled).map((o) => ({ valor: o.value, texto: o.text }));
+        const v = escolherOpcaoFalada(t, opcoes);
+        if (v != null) aoMudar(v);
+        else aviso(`Não achei "${t.split('|')[0]}" na lista. Fale de novo ou toque na lista para escolher.`, true);
+      }} />
+    </div>
+  );
+}
+
+export function CampoEscolha({ rotulo, valor, aoMudar, nome, dica, children }: {
+  rotulo: string; valor: string | number; aoMudar: (v: string) => void; nome?: string; dica?: ReactNode; children: ReactNode;
 }) {
   const id = useId();
   return (
     <div className="campo">
       <label htmlFor={id}>{rotulo}</label>
-      <div className="com-mic">
-        <input id={id} name={nome} type={tipo} value={valor} onChange={(e) => aoMudar(e.target.value)} />
-        {voz && tipo === 'text' && <BotaoMic rotulo={`Falar ${rotulo.toLowerCase()}`} aoOuvir={(t) => aoMudar(t.split('|')[0])} />}
-      </div>
+      <Escolha id={id} name={nome} valor={valor} aoMudar={aoMudar} rotuloVoz={rotulo}>{children}</Escolha>
       {dica && <small>{dica}</small>}
     </div>
   );

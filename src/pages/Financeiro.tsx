@@ -4,7 +4,7 @@ import { db } from '../db';
 import { useTudo } from '../hooks';
 import { CATEGORIAS_DESPESA, CATEGORIAS_RECEITA, drePeriodo, fluxoCaixa, mesNome, NOMES_CATEGORIA, type Categoria } from '../financeiro';
 import { fmtData, hojeISO } from '../calc';
-import { CampoNumero, CampoTexto, num, Opcoes, Topo, useAviso } from '../components/ui';
+import { CampoData, CampoEscolha, CampoNumero, CampoTexto, num, Opcoes, Topo, useAviso } from '../components/ui';
 import { rs } from './Nutricao';
 
 export type Periodo = 'mes' | 'ano' | 'safra' | 'tudo';
@@ -120,21 +120,17 @@ function Lancamentos() {
         <div className="cartao">
           <Opcoes valor={tipo} aoMudar={(t) => { setTipo(t); setCategoria(t === 'despesa' ? 'outros' : 'outras_receitas'); }} opcoes={[{ valor: 'despesa', rotulo: 'Despesa' }, { valor: 'receita', rotulo: 'Receita' }]} />
           <div style={{ height: 12 }} />
-          <label className="campo"><span>Categoria</span>
-            <select name="categoria" value={categoria} onChange={(e) => setCategoria(e.target.value as Categoria)}>
-              {Object.entries(cats).filter(([k]) => k !== 'compra_animais' && k !== 'venda_animais').map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </select>
-            <small>Compra e venda de gado se lançam dentro do lote. Insumos se lançam no Estoque.</small>
-          </label>
+          <CampoEscolha rotulo="Categoria" nome="categoria" valor={categoria} aoMudar={(v) => setCategoria(v as Categoria)}
+            dica="Compra e venda de gado se lançam dentro do lote. Insumos se lançam no Estoque.">
+            {Object.entries(cats).filter(([k]) => k !== 'compra_animais' && k !== 'venda_animais').map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </CampoEscolha>
           <CampoNumero rotulo="Valor" valor={valor} aoMudar={setValor} unidade="R$" nome="lancValor" />
-          <label className="campo"><span>Data</span><input type="date" value={data} onChange={(e) => setData(e.target.value)} /></label>
+          <CampoData rotulo="Data" valor={data} aoMudar={setData} nome="lancData" />
           <CampoTexto rotulo="Descrição" valor={desc} aoMudar={setDesc} nome="lancDesc" />
-          <label className="campo"><span>De qual lote?</span>
-            <select name="lancLote" value={loteId} onChange={(e) => setLoteId(Number(e.target.value))}>
-              <option value={0}>Geral da fazenda (ratear por cabeça)</option>
-              {lotes?.filter((l) => !l.encerrado).map((l) => <option key={l.id} value={l.id}>{l.nome}</option>)}
-            </select>
-          </label>
+          <CampoEscolha rotulo="De qual lote?" nome="lancLote" valor={loteId} aoMudar={(v) => setLoteId(Number(v))}>
+            <option value={0}>Geral da fazenda (ratear por cabeça)</option>
+            {lotes?.filter((l) => !l.encerrado).map((l) => <option key={l.id} value={l.id}>{l.nome}</option>)}
+          </CampoEscolha>
           <div className="botoes"><button className="btn" onClick={salvar}>Salvar lançamento</button><button className="btn sec" onClick={() => setNovo(false)}>Cancelar</button></div>
         </div>
       ) : <button className="btn largo" onClick={() => setNovo(true)} style={{ marginBottom: 14 }}>+ Novo lançamento</button>}
@@ -191,7 +187,7 @@ function Fixos() {
         <h3>Novo custo fixo</h3>
         <CampoTexto rotulo="Nome" valor={nome} aoMudar={setNome} nome="fixoNome" />
         <CampoNumero rotulo="Valor por mês" valor={valor} aoMudar={setValor} unidade="R$" nome="fixoValor" />
-        <label className="campo"><span>Desde</span><input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} /></label>
+        <CampoData rotulo="Desde" valor={desde} aoMudar={setDesde} nome="fixoDesde" />
         <button className="btn largo" onClick={salvar}>Salvar custo fixo</button>
       </div>
     </>
