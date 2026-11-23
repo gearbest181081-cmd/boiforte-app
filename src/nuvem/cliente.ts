@@ -80,6 +80,16 @@ export const mudarPapel = (f: string, usuario: string, papel: Papel) => rpc<void
 export async function apagarMinhaConta() { await rpc<void>('apagar_minha_conta', { confirmar: 'APAGAR' }); await sair(); }
 export const removerMembro = (f: string, usuario: string) => rpc<void>('remover_membro', { f, usuario });
 
+export interface ConvitePendente { codigo: string; papel: Papel; expira_em: string }
+/** Convites ainda não usados (só o dono enxerga, pela regra do servidor). */
+export async function convitesPendentes(f: string): Promise<ConvitePendente[]> {
+  const { data, error } = await (await sb()).from('convites').select('codigo, papel, expira_em')
+    .eq('fazenda_id', f).is('usado_por', null).gt('expira_em', new Date().toISOString()).order('criado_em');
+  if (error) throw erro(error);
+  return (data ?? []) as ConvitePendente[];
+}
+export const cancelarConvite = (f: string, codigo: string) => rpc<void>('cancelar_convite', { f, p_codigo: codigo });
+
 // ---------- sincronização ----------
 
 export const transporteNuvem: Transporte = {

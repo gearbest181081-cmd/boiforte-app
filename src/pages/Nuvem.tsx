@@ -4,8 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { db } from '../db';
 import { NOMES_TABELA } from '../nuvem/nomes';
 import {
-  aceitarConvite, apagarMinhaConta, confirmarCodigo, criarConvite, criarFazenda, equipe, minhasFazendas, mudarPapel, nuvemConfigurada, pedirCodigo,
-  removerMembro, sair, usuarioAtual, type Membro, type MinhaFazenda,
+  aceitarConvite, apagarMinhaConta, cancelarConvite, confirmarCodigo, convitesPendentes, criarConvite, criarFazenda, equipe, minhasFazendas, mudarPapel, nuvemConfigurada, pedirCodigo,
+  removerMembro, sair, usuarioAtual, type ConvitePendente, type Membro, type MinhaFazenda,
 } from '../nuvem/cliente';
 import { PAPEIS, type Papel } from '../nuvem/esquema';
 import { desligarFazenda, ligarFazenda, temDadosLocais, tentarDeNovo } from '../nuvem/sinc';
@@ -218,10 +218,23 @@ function Equipe({ fazendaId, souDono }: { fazendaId: string; souDono: boolean })
   const [lista, setLista] = useState<Membro[] | null>(null);
   const [papel, setPapel] = useState<Papel>('vaqueiro');
   const [codigo, setCodigo] = useState<string | null>(null);
-  const carregar = useCallback(() => { equipe(fazendaId).then(setLista).catch(() => setLista(null)); }, [fazendaId]);
+  const [pendentes, setPendentes] = useState<ConvitePendente[]>([]);
+  const carregar = useCallback(() => {
+    equipe(fazendaId).then(setLista).catch(() => setLista(null));
+    if (souDono) convitesPendentes(fazendaId).then(setPendentes).catch(() => setPendentes([]));
+  }, [fazendaId, souDono]);
   useEffect(carregar, [carregar]);
   const convidar = async () => {
-    try { setCodigo(await criarConvite(fazendaId, papel)); } catch (e) { aviso((e as Error).message, true); }
+    try { setCodigo(await criarConvite(fazendaId, papel)); carregar(); } catch (e) { aviso((e as Error).message, true); }
+  };
+  const cancelar = async (c: ConvitePendente) => {
+    if (!window.confirm(`Cancelar o convite ${c.codigo}? Quem tiver o código não vai conseguir entrar.`)) return;
+    try {
+      await cancelarConvite(fazendaId, c.codigo);
+      if (codigo === c.codigo) setCodigo(null);
+      aviso('Convite cancelado.');
+      carregar();
+    } catch (e) { aviso((e as Error).message, true); }
   };
   const mudar = async (m: Membro, p: Papel) => {
     try { await mudarPapel(fazendaId, m.usuario_id, p); carregar(); } catch (e) { aviso((e as Error).message, true); }
@@ -247,6 +260,17 @@ function Equipe({ fazendaId, souDono }: { fazendaId: string; souDono: boolean })
           )}
         </div>
       ))}
+      {souDono && pendentes.length > 0 && (
+        <div className="cartao">
+          <h3>Convites ainda não usados</h3>
+          {pendentes.map((c) => (
+            <div key={c.codigo} className="linha-lote" style={{ margin: '6px 0' }}>
+              <span><b style={{ letterSpacing: 2 }}>{c.codigo}</b><div className="mudo">{PAPEIS[c.papel].nome} · vale até {new Date(c.expira_em).toLocaleDateString('pt-BR')}</div></span>
+              <button className="btn perigo pequeno" onClick={() => cancelar(c)}>Cancelar</button>
+            </div>
+          ))}
+        </div>
+      )}
       {souDono && (
         <div className="cartao">
           <h3>Chamar alguém</h3>

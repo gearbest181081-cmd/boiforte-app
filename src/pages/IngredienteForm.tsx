@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { db, excluirIngrediente } from '../db';
 import { CampoNumero, CampoTexto, num, Topo, useAviso } from '../components/ui';
 import { BotaoFoto } from '../components/Foto';
+import { useVeDinheiro } from '../nuvem/useNuvem';
 import { TIPOS, type CategoriaIngrediente, type TipoFormula } from '../nutricao';
 import type { LeituraRotulo } from '../../supabase/functions/_shared/foto';
 
@@ -25,6 +26,7 @@ const prontoDe = (c: CategoriaIngrediente) => CATEGORIAS.find((x) => x.valor ===
 export function IngredienteForm() {
   const { id } = useParams();
   const editando = id != null && id !== 'novo';
+  const veDinheiro = useVeDinheiro();
   const nav = useNavigate();
   const aviso = useAviso();
   const [nome, setNome] = useState('');
@@ -113,7 +115,7 @@ export function IngredienteForm() {
         <CampoTexto rotulo="Nome" valor={nome} aoMudar={setNome} nome="ingNome" />
         <div className="dica">Valores na matéria natural (como no rótulo do saco).</div>
         <div className="grade">
-          {CAMPOS.map(([k, r, u]) => <CampoNumero key={k} rotulo={r} valor={v[k]} aoMudar={(x) => setV((s) => ({ ...s, [k]: x }))} unidade={u === 'R$/kg' ? 'R$' : u} nome={`ing_${k}`} />)}
+          {CAMPOS.filter(([k]) => veDinheiro || k !== 'preco').map(([k, r, u]) => <CampoNumero key={k} rotulo={r} valor={v[k]} aoMudar={(x) => setV((s) => ({ ...s, [k]: x }))} unidade={u === 'R$/kg' ? 'R$' : u} nome={`ing_${k}`} />)}
         </div>
         {categoria === 'ingrediente' ? (
           <label className="campo" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>

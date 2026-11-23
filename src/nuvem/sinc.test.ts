@@ -115,8 +115,9 @@ describe('sincronização entre celulares', () => {
     const n = await contar(C);
     expect(n.lancamentos + n.vendas + n.custosFixos).toBe(0);
     expect(n.lotes).toBeGreaterThan(0);
+    expect((await db.ingredientes.toArray()).every((i) => i.preco === 0)).toBe(true); // preços não chegam ao vaqueiro
     const lote = (await db.lotes.toArray()).find((l) => l.controle === 'lote' && !l.encerrado)!;
-    await registrarFornecimento({ loteId: lote.id!, data: '2026-11-19', kgFornecido: 20, kgPrevisto: 20, cabecas: lote.qtdCabecas, pesoRef: 240 });
+    await registrarFornecimento({ loteId: lote.id!, data: '2030-01-15', kgFornecido: 20, kgPrevisto: 20, cabecas: lote.qtdCabecas, pesoRef: 240 });
     await salvarEventoSanitario({ loteId: lote.id!, data: '2026-11-19', feito: true, tipo: 'vermifugo', produto: 'Ivermectina', qtdAnimais: 10, custo: 80 });
     await registrarSaida(lote.id!, { data: '2026-11-19', tipo: 'morte', cabecas: 1 });
     const r2 = await sincronizar(transporte(caio));
@@ -126,6 +127,9 @@ describe('sincronização entre celulares', () => {
     await sincronizar(transporte(ana));
     expect((await db.sanidade.toArray()).filter((e) => e.produto === 'Ivermectina')).toHaveLength(1);
     expect((await db.lancamentos.toArray()).some((l) => l.origem === 'sanidade' && l.valor === 80)).toBe(true);
+    // o celular do vaqueiro não tem os preços; o custo do trato foi calculado no servidor
+    const trato = (await db.fornecimentos.toArray()).find((x) => x.data === '2030-01-15');
+    expect(trato?.custo).toBeGreaterThan(0);
   }, 30000);
 
   it('sem internet nada se perde: fica na fila', async () => {
