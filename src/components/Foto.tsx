@@ -5,7 +5,7 @@ import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { lerFoto, nuvemConfigurada } from '../nuvem/cliente';
 import { useEstadoNuvem } from '../nuvem/useNuvem';
-import { useOnline } from './ui';
+import { AvisoIA, useOnline } from './ui';
 import type { TipoFoto } from '../../supabase/functions/_shared/foto';
 
 /** Diminui a foto para no máximo 1600 px e devolve JPEG em base64 (sem o prefixo data:). */
@@ -58,6 +58,7 @@ export function BotaoFoto<T>({ tipo, rotulo, aoLer, aoErro, sempre }: {
       <button className="btn sec largo" disabled={lendo || !online} onClick={() => ref.current?.click()}>
         {lendo ? 'Lendo a foto…' : online ? rotulo : `${rotulo} (precisa de internet)`}
       </button>
+      <AvisoIA />
     </>
   );
 }

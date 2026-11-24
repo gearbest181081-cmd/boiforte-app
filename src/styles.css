@@ -278,6 +278,11 @@ button.link { background: none; border: 0; padding: 4px 0; color: var(--verde); 
 .passos-entrada { margin: 0 0 14px; padding-left: 22px; }
 .passos-entrada li { margin-bottom: 6px; }
 
+/* Informativos fixos (nutrição e IA) */
+.informativo { border: 1px solid var(--borda); border-left: 4px solid var(--ouro); background: var(--cartao); color: var(--texto);
+  border-radius: 12px; padding: 10px 12px; margin: 10px 0; display: flex; gap: 10px; align-items: flex-start; font-size: 15px; }
+.informativo b { display: block; font-size: 16px; }
+.informativo .ic { font-size: 20px; line-height: 1.2; }
 /* Equipe: passo a passo para liberar um funcionário e o que cada papel pode fazer */
 .passos { list-style: none; counter-reset: passo; padding: 0; margin: 0; display: grid; gap: 16px; }
 .passos > li { counter-increment: passo; position: relative; padding-left: 44px; }

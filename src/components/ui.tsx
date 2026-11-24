@@ -387,6 +387,27 @@ export function Opcoes<T extends string>({ valor, aoMudar, opcoes, tres }: {
   );
 }
 
+// ---------- Informativos fixos ----------
+/** Informativo das telas de nutrição e de simulação de nutrição. */
+export function AvisoNutricao() {
+  return (
+    <div className="informativo" role="note" data-testid="avisoNutricao">
+      <span className="ic" aria-hidden>ℹ️</span>
+      <div><b>Informativo</b>Consulte um profissional da Nutrição Animal.</div>
+    </div>
+  );
+}
+
+/** Informativo das telas que usam Inteligência Artificial (leitura por foto). */
+export function AvisoIA() {
+  return (
+    <div className="informativo" role="note" data-testid="avisoIA">
+      <span className="ic" aria-hidden>🤖</span>
+      <div><b>Resultado gerado por Inteligência Artificial!</b>Confira os números antes de salvar.</div>
+    </div>
+  );
+}
+
 export function Indicador({ rotulo, valor, sub }: { rotulo: string; valor: ReactNode; sub?: string }) {
   return (
     <div className="indicador">
