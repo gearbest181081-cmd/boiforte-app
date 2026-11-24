@@ -85,6 +85,7 @@ export function Mais() {
         <div className="grade" style={{ marginBottom: 12 }}>
           <Link to="/anotacoes" className="btn sec">Anotações e tarefas</Link>
           <Link to="/fazenda" className="btn sec">Fazenda</Link>
+          <Link to="/pasto" className="btn sec">Pasto e piquetes</Link>
           <Link to="/rastreabilidade" className="btn sec">Rastreabilidade</Link>
           <Link to="/nutricao" className="btn sec">Nutrição</Link>
           <Link to="/estoque" className="btn sec">Estoque</Link>

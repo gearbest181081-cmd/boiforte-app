@@ -121,6 +121,7 @@ export function LoteDetalhe() {
             {(lote.fases?.length ?? 0) > 0 && <CartaoFases lote={lote} pontos={pontos} />}
             {lote.obs && <div className="cartao"><b>Observações</b><p>{lote.obs}</p></div>}
             <div className="botoes">
+              {!lote.encerrado && papel !== 'consultor' && <Link to={`/pasto/mover?de=lote:${lote.id}`} className="btn sec pequeno">Mudar de piquete</Link>}
               {podeMudarFase && <Link to={`/lotes/${lote.id}/fase`} className="btn sec pequeno">{lote.fase === 'rip' || lote.fase === 'recria' ? 'Passar para TIP' : 'Mudar de fase'}</Link>}
               <Link to={`/lotes/${lote.id}/editar`} className="btn sec pequeno">Editar lote</Link>
               <button className="btn sec pequeno" onClick={encerrar}>{lote.encerrado ? 'Reabrir lote' : 'Encerrar lote'}</button>

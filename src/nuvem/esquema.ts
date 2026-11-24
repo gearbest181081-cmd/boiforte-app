@@ -5,7 +5,7 @@
 /** Ordem de envio: quem é referenciado vai antes de quem referencia. */
 export const ORDEM_SINC = [
   'propriedades', 'modulos', 'piquetes', 'ingredientes', 'formulas', 'lotes', 'animais', 'pesagens',
-  'batidas', 'fornecimentos', 'movimentos', 'sanidade', 'vendas', 'lancamentos', 'custosFixos', 'funcionarios', 'lembretes', 'anotacoes', 'gtas', 'config',
+  'batidas', 'fornecimentos', 'movimentos', 'sanidade', 'vendas', 'lancamentos', 'custosFixos', 'funcionarios', 'lembretes', 'anotacoes', 'ocupacoes', 'ndvi', 'gtas', 'config',
 ] as const;
 export type TabelaSinc = (typeof ORDEM_SINC)[number];
 
@@ -33,6 +33,9 @@ export const REFERENCIAS: Record<string, Referencias> = {
   lembretes: { campos: {} },
   funcionarios: { campos: {} }, // usuarioId é o id da conta (não é registro): o servidor confere que é da equipe
   anotacoes: { campos: { moduloId: 'modulos', piqueteId: 'piquetes' } },
+  // ocupanteId: lote (recria/engorda) ou grupo de manejo (cria), conforme "tipo"
+  ocupacoes: { campos: { piqueteId: 'piquetes', ocupanteId: { porCampo: 'tipo', mapa: { lote: 'lotes', grupo: 'grupos' } } } },
+  ndvi: { campos: { piqueteId: 'piquetes' } },
   gtas: { campos: { propriedadeId: 'propriedades', loteId: 'lotes' } },
 };
 
@@ -62,7 +65,7 @@ export const PERMISSOES: Record<Papel, { pode: string[]; naoPode: string[] }> = 
     naoPode: ['Chamar ou tirar pessoas da equipe do app'],
   },
   vaqueiro: {
-    pode: ['Pesar os animais', 'Lançar o trato no cocho', 'Lançar vacina e remédio', 'Fazer anotações e tarefas da ronda'],
+    pode: ['Pesar os animais', 'Lançar o trato no cocho', 'Lançar vacina e remédio', 'Fazer anotações e tarefas da ronda', 'Mudar o gado de piquete, com foto e áudio do capim'],
     naoPode: ['Ver dinheiro, preços, custos e salários', 'Mudar fórmulas da ração e configurações', 'Chamar ou tirar pessoas da equipe'],
   },
   consultor: {
@@ -79,6 +82,6 @@ export function mensagemConvite(papel: Papel, codigo: string, fazenda?: string):
 }
 
 /** Tabelas que o vaqueiro pode ver e gravar (o resto, principalmente o dinheiro e os salários dos funcionários, fica de fora). */
-export const VAQUEIRO_LE = ['propriedades', 'modulos', 'piquetes', 'lotes', 'animais', 'pesagens', 'ingredientes', 'formulas', 'movimentos', 'batidas', 'fornecimentos', 'sanidade', 'lembretes', 'config', 'anotacoes', 'gtas'] as const;
-// lotes: só a quantidade de cabeças (pesagem por brinco); lancamentos: só o custo de vacina (origem sanidade).
-export const VAQUEIRO_GRAVA = ['animais', 'pesagens', 'fornecimentos', 'movimentos', 'sanidade', 'lotes', 'lancamentos', 'anotacoes'] as const;
+export const VAQUEIRO_LE = ['propriedades', 'modulos', 'piquetes', 'lotes', 'animais', 'pesagens', 'ingredientes', 'formulas', 'movimentos', 'batidas', 'fornecimentos', 'sanidade', 'lembretes', 'config', 'anotacoes', 'ocupacoes', 'ndvi', 'gtas'] as const;
+// lotes: só a quantidade de cabeças (pesagem por brinco) e o piquete; lancamentos: só o custo de vacina (origem sanidade).
+export const VAQUEIRO_GRAVA = ['animais', 'pesagens', 'fornecimentos', 'movimentos', 'sanidade', 'lotes', 'lancamentos', 'anotacoes', 'ocupacoes'] as const;

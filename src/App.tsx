@@ -21,6 +21,7 @@ import { RelatorioPesagem } from './pages/RelatorioPesagem';
 import { Nuvem } from './pages/Nuvem';
 import { FuncionarioForm, Funcionarios } from './pages/Funcionarios';
 import { AnotacaoDetalhe, AnotacaoForm, Anotacoes } from './pages/Anotacoes';
+import { MoverGado, Pasto, PiqueteDetalhe } from './pages/Pasto';
 import { SincAutomatica } from './nuvem/useNuvem';
 import { SessaoProvider } from './nuvem/sessao';
 import { Porta } from './pages/Login';
@@ -67,6 +68,9 @@ export function App() {
               <Route path="/anotacoes/nova" element={<AnotacaoForm />} />
               <Route path="/anotacoes/:id" element={<AnotacaoDetalhe />} />
               <Route path="/anotacoes/:id/editar" element={<AnotacaoForm />} />
+              <Route path="/pasto" element={<Pasto />} />
+              <Route path="/pasto/piquete/:id" element={<PiqueteDetalhe />} />
+              <Route path="/pasto/mover" element={<MoverGado />} />
               <Route path="*" element={<Inicio />} />
             </Routes>
             <nav className="baixo" aria-label="Menu principal">

@@ -1,8 +1,10 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, excluirPropriedade, type Modulo, type Propriedade } from '../db';
-import { CampoNumero, CampoTexto, Entrada, num, Topo, useAviso } from '../components/ui';
+import { Link } from 'react-router-dom';
+import { db, excluirPiquetes, excluirPropriedade, type Modulo, type Propriedade } from '../db';
+import { lotacaoModulo, ocupantesAtuais } from '../pasto';
+import { fmtNum } from '../calc';
+import { CampoNumero, CampoTexto, Entrada, num, Opcoes, Topo, useAviso } from '../components/ui';
 
 const UFS: Record<string, string> = {
   acre: 'AC', alagoas: 'AL', amapa: 'AP', amazonas: 'AM', bahia: 'BA', ceara: 'CE', 'distrito federal': 'DF', 'espirito santo': 'ES', goias: 'GO',
@@ -100,45 +102,42 @@ function CartaoPropriedade({ p }: { p: Propriedade }) {
 function BlocoModulo({ m }: { m: Modulo }) {
   const aviso = useAviso();
   const piquetes = useLiveQuery(() => db.piquetes.where('moduloId').equals(m.id!).toArray(), [m.id]);
-  const lotesPorPiquete = useLiveQuery(async () => {
-    const ids = (piquetes ?? []).map((p) => p.id!);
-    const ls = await db.lotes.filter((l) => !l.encerrado && l.piqueteId != null && ids.includes(l.piqueteId)).toArray();
-    const mapa: Record<number, number> = {};
-    ls.forEach((l) => { mapa[l.piqueteId!] = (mapa[l.piqueteId!] ?? 0) + l.qtdCabecas; });
-    return mapa;
-  }, [piquetes]);
+  const ocupantes = useLiveQuery(() => ocupantesAtuais(), [piquetes]);
   const [nome, setNome] = useState('');
   const [area, setArea] = useState('');
   const [capim, setCapim] = useState('');
   const [aberto, setAberto] = useState(false);
+  const [ajustes, setAjustes] = useState(false);
   const add = async () => {
     if (!nome.trim()) return aviso('Dê um nome ao piquete.', true);
     await db.piquetes.add({ moduloId: m.id!, nome: nome.trim(), areaHa: num(area) ?? undefined, capim: capim.trim() || undefined, criadoEm: Date.now() });
     setNome(''); setArea(''); setCapim(''); setAberto(false);
   };
   const apagarMod = async () => {
-    if (!window.confirm(`Apagar o módulo "${m.nome}" e seus piquetes?`)) return;
-    const ids = (piquetes ?? []).map((p) => p.id!);
-    await db.transaction('rw', db.piquetes, db.modulos, db.lotes, async () => {
-      await db.lotes.filter((l) => l.piqueteId != null && ids.includes(l.piqueteId)).modify({ piqueteId: null });
-      await db.piquetes.bulkDelete(ids);
-      await db.modulos.delete(m.id!);
-    });
+    if (!window.confirm(`Apagar o módulo "${m.nome}" e seus piquetes (com o histórico de entradas, saídas e satélite)?`)) return;
+    await excluirPiquetes((piquetes ?? []).map((p) => p.id!));
+    await db.modulos.delete(m.id!);
   };
+  const lot = lotacaoModulo(piquetes ?? [], ocupantes ?? []);
   return (
     <div style={{ borderLeft: '4px solid var(--verde-claro)', paddingLeft: 12, margin: '12px 0' }}>
       <div className="linha-lote"><b>{m.nome}</b><button className="remover" aria-label="Apagar módulo" onClick={apagarMod}>×</button></div>
+      <p className="mudo" style={{ margin: '2px 0 6px' }}>
+        {m.sistema === 'continuo' ? 'Contínuo' : 'Rotacionado'}
+        {m.diasOcupacao ? ` · ${m.diasOcupacao} dias ocupado` : ''}{m.diasDescanso ? ` · ${m.diasDescanso} de descanso` : ''}
+        {lot.uaHa != null ? ` · ${fmtNum(lot.uaHa, 2)} UA/ha` : ''}{m.capacidadeUA ? ` (aguenta ${fmtNum(m.capacidadeUA, 2)})` : ''}
+      </p>
       {piquetes?.length === 0 && <p className="mudo">Sem piquetes.</p>}
       {piquetes?.map((p) => {
-        const cab = lotesPorPiquete?.[p.id!] ?? 0;
+        const quem = ocupantes?.find((o) => o.piqueteId === p.id);
         return (
-          <div key={p.id} className="linha-lote" style={{ padding: '6px 0', borderBottom: '1px solid var(--borda)' }}>
+          <Link key={p.id} to={`/pasto/piquete/${p.id}`} className="linha-lote" style={{ padding: '6px 0', borderBottom: '1px solid var(--borda)', textDecoration: 'none', color: 'inherit' }}>
             <span>{p.nome}<span className="mudo">{p.capim ? ` · ${p.capim}` : ''}{p.areaHa ? ` · ${p.areaHa} ha` : ''}</span></span>
-            <span className="mudo">{cab} cab{p.areaHa && cab ? ` · ${(cab / p.areaHa).toFixed(1).replace('.', ',')} cab/ha` : ''}</span>
-          </div>
+            <span className="mudo">{quem ? `${quem.nome} · ${quem.cabecas} cab` : 'vazio'}</span>
+          </Link>
         );
       })}
-      {aberto ? (
+      {ajustes ? <AjustesModulo m={m} fechar={() => setAjustes(false)} /> : aberto ? (
         <div style={{ marginTop: 10 }}>
           <CampoTexto rotulo="Nome do piquete" valor={nome} aoMudar={setNome} />
           <div className="grade">
@@ -148,8 +147,45 @@ function BlocoModulo({ m }: { m: Modulo }) {
           <div className="botoes"><button className="btn pequeno" onClick={add}>Salvar piquete</button><button className="btn sec pequeno" onClick={() => setAberto(false)}>Cancelar</button></div>
         </div>
       ) : (
-        <button className="btn sec pequeno" style={{ marginTop: 8 }} onClick={() => setAberto(true)}>+ Piquete</button>
+        <div className="botoes" style={{ marginTop: 8 }}>
+          <button className="btn sec pequeno" onClick={() => setAberto(true)}>+ Piquete</button>
+          <button className="btn sec pequeno" onClick={() => setAjustes(true)}>Manejo do módulo</button>
+        </div>
       )}
+    </div>
+  );
+}
+
+/** Como o módulo é manejado: rotacionado ou contínuo, dias de ocupação e descanso, capacidade de suporte. */
+function AjustesModulo({ m, fechar }: { m: Modulo; fechar: () => void }) {
+  const aviso = useAviso();
+  const t = (v?: number) => (v == null ? '' : String(v).replace('.', ','));
+  const [sistema, setSistema] = useState<'rotacionado' | 'continuo'>(m.sistema ?? 'rotacionado');
+  const [ocup, setOcup] = useState(t(m.diasOcupacao));
+  const [desc, setDesc] = useState(t(m.diasDescanso));
+  const [cap, setCap] = useState(t(m.capacidadeUA));
+  const salvar = async () => {
+    try {
+      const o = num(ocup), d = num(desc);
+      await db.modulos.update(m.id!, {
+        sistema, diasOcupacao: o ? Math.round(o) : undefined, diasDescanso: d != null ? Math.round(d) : undefined, capacidadeUA: num(cap) ?? undefined,
+      });
+      aviso('Módulo salvo.');
+      fechar();
+    } catch (e) { aviso((e as Error).message, true); }
+  };
+  return (
+    <div style={{ marginTop: 10 }}>
+      <Opcoes valor={sistema} aoMudar={setSistema} opcoes={[{ valor: 'rotacionado', rotulo: 'Rotacionado', dica: 'o gado roda nos piquetes' }, { valor: 'continuo', rotulo: 'Contínuo', dica: 'fica no mesmo pasto' }]} />
+      {sistema === 'rotacionado' && (
+        <div className="grade">
+          <CampoNumero rotulo="Dias ocupado" valor={ocup} aoMudar={setOcup} unidade="dias" nome="modOcup" dica="Quanto tempo o gado fica em cada piquete." />
+          <CampoNumero rotulo="Dias de descanso" valor={desc} aoMudar={setDesc} unidade="dias" nome="modDesc" dica="Ex.: 28 a 35 nas águas." />
+        </div>
+      )}
+      <CampoNumero rotulo="Capacidade de suporte" valor={cap} aoMudar={setCap} unidade="UA/ha" nome="modCap"
+        dica="Quantas UA (450 kg) por hectare este pasto aguenta. O app avisa quando a lotação passar disso." />
+      <div className="botoes"><button className="btn pequeno" onClick={salvar}>Salvar</button><button className="btn sec pequeno" onClick={fechar}>Cancelar</button></div>
     </div>
   );
 }

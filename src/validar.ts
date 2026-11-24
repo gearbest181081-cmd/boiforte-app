@@ -33,6 +33,10 @@ const CRIADO = NUM(0, 4102444800000, false, true);
 export const FASES_V = ['cria', 'recria', 'rip', 'engorda_pasto', 'tip', 'confinamento'] as const;
 export const CATEGORIAS_ANOTACAO_V = ['cerca', 'agua', 'cocho', 'pasto', 'animal', 'estrutura', 'outro'] as const;
 export const MAX_FOTOS_ANOTACAO = 4;
+export const MAX_MIDIAS = 4;
+export const EXTS_MIDIA_V = ['jpg', 'webm', 'ogg', 'm4a'] as const;
+const MIDIA: Record<string, Regra> = { arq: { t: 'texto', max: 36, obrigatorio: true }, ext: { t: 'enum', valores: EXTS_MIDIA_V, obrigatorio: true } };
+const MAX_PONTOS = 500; // o mesmo de src/pastoGeo.ts
 export const SITUACOES_CAR_V = ['ativo', 'pendente', 'cancelado', 'suspenso'] as const;
 export const FINALIDADES_GTA_V = ['abate', 'engorda', 'recria', 'reproducao', 'exposicao', 'outra'] as const;
 export const TIPOS_FORMULA_V = ['sal_mineral', 'proteinado', 'proteico_energetico', 'rip', 'tip', 'creep', 'confinamento', 'outro'] as const;
@@ -46,8 +50,15 @@ const ESQUEMAS_BASE: Record<string, Record<string, Regra>> = {
     semDesmate: BOOL, car: TXT(60), carSituacao: ENUM(SITUACOES_CAR_V, false), cib: TXT(20), itrAno: NUM(1990, 2100, false, true),
     ccir: TXT(20), ccirAno: NUM(1990, 2100, false, true), codEstab: TXT(30), ie: TXT(30),
   },
-  modulos: { id: ID(false), propriedadeId: ID(), nome: TXT(80, true), criadoEm: CRIADO },
-  piquetes: { id: ID(false), moduloId: ID(), nome: TXT(80, true), areaHa: NUM(0, 1_000_000), capim: TXT(60), criadoEm: CRIADO },
+  modulos: {
+    id: ID(false), propriedadeId: ID(), nome: TXT(80, true), sistema: ENUM(['rotacionado', 'continuo'], false),
+    diasOcupacao: NUM(1, 365, false, true), diasDescanso: NUM(0, 365, false, true), capacidadeUA: NUM(0, 50), criadoEm: CRIADO,
+  },
+  piquetes: {
+    id: ID(false), moduloId: ID(), nome: TXT(80, true), areaHa: NUM(0, 1_000_000), capim: TXT(60),
+    alturaEntrada: NUM(1, 300), alturaSaida: NUM(1, 300), kgMsCm: NUM(1, 1000),
+    contorno: { t: 'lista', max: MAX_PONTOS, item: { lat: NUM(-90, 90, true), lon: NUM(-180, 180, true) } }, criadoEm: CRIADO,
+  },
   lotes: {
     id: ID(false), propriedadeId: ID(), piqueteId: ID(false), nome: TXT(80, true), fase: ENUM(FASES_V), sexo: ENUM(['macho', 'femea', 'misto']),
     controle: ENUM(['lote', 'individual']), qtdCabecas: NUM(0, 1_000_000, true, true), dataEntrada: DATA(), pesoAlvo: NUM(0, 2000), gmdMeta: NUM(0, 5),
@@ -119,6 +130,18 @@ const ESQUEMAS_BASE: Record<string, Record<string, Regra>> = {
     urgente: BOOL, feita: BOOL, data: DATA(), feitaEm: DATA(false),
     fotos: { t: 'lista', max: MAX_FOTOS_ANOTACAO, item: { foto: TXT(36, true) } },
     autor: TXT(80), autorId: TXT(36), feitaPor: TXT(80), criadoEm: CRIADO,
+  },
+  // Ocupação do piquete. ocupanteId aponta para lotes ou grupos conforme "tipo". midias: fotos (jpg) e áudios.
+  // No servidor um gatilho recusa duas ocupações do mesmo piquete (ou do mesmo ocupante) no mesmo período.
+  ocupacoes: {
+    id: ID(false), piqueteId: ID(), tipo: ENUM(['lote', 'grupo']), ocupanteId: ID(), entrada: DATA(), saida: DATA(false),
+    cabecas: NUM(0, 1_000_000, true, true), pesoMedio: NUM(1, 2000), alturaEntrada: NUM(0, 300), alturaSaida: NUM(0, 300), massaEntrada: NUM(0, 50_000),
+    notaEntrada: TXT(1000), notaSaida: TXT(1000),
+    midiasEntrada: { t: 'lista', max: MAX_MIDIAS, item: MIDIA }, midiasSaida: { t: 'lista', max: MAX_MIDIAS, item: MIDIA }, criadoEm: CRIADO,
+  },
+  // NDVI do satélite: gravado só pelo servidor (o celular recebe pela sincronização).
+  ndvi: {
+    id: ID(false), piqueteId: ID(), data: DATA(), ndvi: NUM(-1, 1, true), min: NUM(-1, 1), max: NUM(-1, 1), nuvemPct: NUM(0, 100), criadoEm: CRIADO,
   },
   // GTA: documento de trânsito (entrada ou saída de animais). Machos + fêmeas > 0 é conferido no servidor (gatilho na migração da rastreabilidade).
   gtas: {
@@ -200,7 +223,8 @@ function limpar(esquema: Record<string, Regra>, obj: unknown, rotulo: string): R
 export const ROTULOS: Record<string, string> = {
   propriedades: 'Fazenda', modulos: 'Módulo', piquetes: 'Piquete', lotes: 'Lote', animais: 'Animal', pesagens: 'Pesagem',
   ingredientes: 'Ingrediente', formulas: 'Fórmula', movimentos: 'Estoque', batidas: 'Batida', fornecimentos: 'Fornecimento', config: 'Configuração',
-  lancamentos: 'Lançamento', custosFixos: 'Custo fixo', vendas: 'Venda', sanidade: 'Sanidade', lembretes: 'Lembrete', funcionarios: 'Funcionário', anotacoes: 'Anotação', gtas: 'GTA',
+  lancamentos: 'Lançamento', custosFixos: 'Custo fixo', vendas: 'Venda', sanidade: 'Sanidade', lembretes: 'Lembrete', funcionarios: 'Funcionário', anotacoes: 'Anotação',
+  ocupacoes: 'Ocupação do piquete', ndvi: 'NDVI', gtas: 'GTA',
 };
 
 /** Valida e devolve uma cópia limpa do registro (sem campos desconhecidos). */
