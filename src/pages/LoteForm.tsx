@@ -5,6 +5,7 @@ import { criarLote, db, FASES, type Controle, type Fase, type Sexo } from '../db
 import { hojeISO } from '../calc';
 import { TIPOS } from '../nutricao';
 import { GMD_SUGERIDO, PESO_ALVO_SUGERIDO } from '../fases';
+import { entrarNoPiquete, quemEstaNoPiquete } from '../pasto';
 import { CampoData, CampoEscolha, CampoNumero, CampoTexto, num, Opcoes, Topo, useAviso } from '../components/ui';
 
 export { GMD_SUGERIDO, PESO_ALVO_SUGERIDO };
@@ -42,10 +43,13 @@ export function LoteForm() {
   const piquetes = useLiveQuery(async () => {
     if (!f.propriedadeId) return [];
     const mods = await db.modulos.where('propriedadeId').equals(f.propriedadeId).toArray();
-    const out: { id: number; nome: string }[] = [];
+    const out: { id: number; nome: string; ocupado: boolean }[] = [];
     for (const m of mods) {
       const ps = await db.piquetes.where('moduloId').equals(m.id!).toArray();
-      ps.forEach((p) => out.push({ id: p.id!, nome: `${m.nome} › ${p.nome}` }));
+      for (const p of ps) {
+        const quem = await quemEstaNoPiquete(p.id!);
+        out.push({ id: p.id!, nome: `${m.nome} › ${p.nome}${quem ? ` (ocupado: ${quem.nome})` : ''}`, ocupado: !!quem });
+      }
     }
     return out;
   }, [f.propriedadeId]);
@@ -70,7 +74,7 @@ export function LoteForm() {
     if (f.controle === 'lote' && !(qtd > 0)) return aviso('Informe quantas cabeças tem o lote.', true);
     if (!f.propriedadeId) return aviso('Escolha a fazenda.', true);
     const dados = {
-      nome: f.nome.trim(), propriedadeId: f.propriedadeId, piqueteId: f.piqueteId || null, fase: f.fase, sexo: f.sexo, controle: f.controle,
+      nome: f.nome.trim(), propriedadeId: f.propriedadeId, fase: f.fase, sexo: f.sexo, controle: f.controle,
       qtdCabecas: Math.round(qtd), dataEntrada: f.data, pesoAlvo: num(f.pesoAlvo), gmdMeta: num(f.gmdMeta), obs: f.obs.trim() || undefined,
       formulaId: f.formulaId || null, consumoPctPV: num(f.consumo) ? num(f.consumo)! / 100 : null,
     };
@@ -81,7 +85,13 @@ export function LoteForm() {
       nav(`/lotes/${id}`, { replace: true });
     } else {
       const peso = f.controle === 'lote' ? num(f.pesoEntrada) : null;
-      const novo = await criarLote(dados, peso);
+      const novo = await criarLote({ ...dados, piqueteId: null }, peso);
+      // o piquete entra pela ocupação (um lote por piquete, com o histórico de entrada e saída)
+      if (f.piqueteId) {
+        try {
+          await entrarNoPiquete({ tipo: 'lote', ocupanteId: novo, piqueteId: f.piqueteId, data: f.data, cabecas: Math.round(qtd), pesoMedio: peso });
+        } catch (e) { aviso(`Lote salvo, mas sem piquete: ${(e as Error).message}`, true); }
+      }
       aviso('Lote salvo no celular.');
       nav(f.controle === 'individual' ? `/pesar/${novo}` : `/lotes/${novo}`, { replace: true });
     }
@@ -130,12 +140,14 @@ export function LoteForm() {
         <CampoNumero rotulo="Peso alvo (saída)" valor={f.pesoAlvo} aoMudar={set('pesoAlvo')} unidade="kg" pesoVivo nome="pesoAlvo" dica="Peso que você quer atingir para vender ou mudar de fase." />
         <CampoNumero rotulo="GMD esperado" valor={f.gmdMeta} aoMudar={set('gmdMeta')} unidade="kg/dia" nome="gmdMeta" dica="Sugestão pela fase. O app avisa quando o lote ficar 10% abaixo." />
 
-        {piquetes && piquetes.length > 0 && (
-          <CampoEscolha rotulo="Piquete (opcional)" nome="piquete" valor={f.piqueteId} aoMudar={(v) => set('piqueteId')(Number(v))}>
+        {!editando && piquetes && piquetes.length > 0 && (
+          <CampoEscolha rotulo="Piquete (opcional)" nome="piquete" valor={f.piqueteId} aoMudar={(v) => set('piqueteId')(Number(v))}
+            dica="Um piquete recebe um lote ou grupo por vez.">
             <option value={0}>Nenhum</option>
-            {piquetes.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+            {piquetes.map((p) => <option key={p.id} value={p.id} disabled={p.ocupado}>{p.nome}</option>)}
           </CampoEscolha>
         )}
+        {editando && <div className="dica">Para mudar o lote de piquete, use o botão "Mudar de piquete" na tela do lote.</div>}
 
         <CampoEscolha rotulo="Dieta / suplemento" nome="formula" valor={f.formulaId} aoMudar={(v) => set('formulaId')(Number(v))}
           dica={formulas?.length === 0 ? 'Crie fórmulas em Mais › Nutrição.' : 'Usada no trato do dia e no custo do lote.'}>

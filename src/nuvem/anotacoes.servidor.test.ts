@@ -95,9 +95,9 @@ describe('anotações no servidor', () => {
   const ver = (u: string) => s.como(u, () => s.pg.query<{ name: string }>(`select name from storage.objects where bucket_id = 'anotacoes' order by name`)).then((r) => r.rows.map((x) => x.name));
   const apagar = (u: string, nome: string) => s.como(u, () => s.pg.query(`delete from storage.objects where bucket_id = 'anotacoes' and name = $1`, [nome])).then((r) => r.affectedRows);
 
-  it('balde privado, só JPEG e até 1 MB', async () => {
+  it('balde privado, só JPEG e áudio do pasto, até 1 MB', async () => {
     const b = await s.pg.query<{ public: boolean; file_size_limit: number; allowed_mime_types: string[] }>(`select public, file_size_limit, allowed_mime_types from storage.buckets where id = 'anotacoes'`);
-    expect(b.rows[0]).toEqual({ public: false, file_size_limit: 1048576, allowed_mime_types: ['image/jpeg'] });
+    expect(b.rows[0]).toEqual({ public: false, file_size_limit: 1048576, allowed_mime_types: ['image/jpeg', 'audio/webm', 'audio/ogg', 'audio/mp4'] });
   });
 
   it('enviar foto: só quem é da fazenda e pode gravar, na pasta da fazenda, com nome certo', async () => {
