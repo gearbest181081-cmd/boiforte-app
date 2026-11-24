@@ -46,3 +46,7 @@ content_path = "./supabase/templates/nova-senha.html"
 [functions.ler-foto]
 verify_jwt = true
 
+
+# NDVI do satélite: chamada pelo Cron (cabeçalho x-cron-secret) ou pelo app (a função confere o login sozinha).
+[functions.ndvi]
+verify_jwt = false

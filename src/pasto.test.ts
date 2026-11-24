@@ -48,6 +48,8 @@ describe('contas do pasto', () => {
     const r = pressaoPastejo({ cabecas: 30, pesoMedio: 300, massaKgMsHa: 4000, areaHa: 5, dias: 3 })!;
     expect(r.pressao).toBeCloseTo(0.45, 2);
     expect(r.oferta).toBeCloseTo(74.07, 1);
+    expect(r.nivel).toBe('sobra');
+    expect(pressaoPastejo({ cabecas: 100, pesoMedio: 400, massaKgMsHa: 4000, areaHa: 5, dias: 5 })!.nivel).toBe('bom');
     expect(pressaoPastejo({ cabecas: 100, pesoMedio: 400, massaKgMsHa: 1500, areaHa: 5, dias: 7 })!.nivel).toBe('ruim');
     expect(pressaoPastejo({ cabecas: 0, pesoMedio: 400, massaKgMsHa: 1500, areaHa: 5, dias: 7 })).toBeNull();
   });

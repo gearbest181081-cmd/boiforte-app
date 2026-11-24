@@ -93,7 +93,11 @@ function CartaoModulo({ r }: { r: ResumoModulo }) {
       </div>
       {l.nivel !== 'sem_dados' && <p><span className={`etiqueta ${corLotacao(l.nivel)}`}>{l.nivel === 'alta' ? 'Lotação alta' : l.nivel === 'atencao' ? 'Perto do limite' : 'Lotação boa'}</span>{l.motivo}</p>}
       {rot && r.ideal && <p className="mudo">Com {r.estados.length} piquetes e {m.diasDescanso} dias de descanso, cada piquete deve ficar ocupado no máximo <b>{r.ideal} dias</b>.</p>}
-      {rot && r.proximo && <p>Próximo piquete: <b>{r.proximo.piquete.nome}</b>{r.proximo.diasDescanso != null ? ` (descansou ${r.proximo.diasDescanso} dias)` : ''}</p>}
+      {rot && r.proximo && (
+        <p>Próximo piquete: <b>{r.proximo.piquete.nome}</b>
+          {r.proximo.diasDescanso != null ? ` (descansou ${r.proximo.diasDescanso} dias${r.proximo.situacao === 'descansando' && m.diasDescanso ? `; faltam ${m.diasDescanso - r.proximo.diasDescanso} para o descanso planejado` : ''})` : ''}
+        </p>
+      )}
       <Avisos lista={r.alertas} />
       {r.estados.map((e) => {
         const nd = r.ndvi.get(e.piquete.id!);
@@ -174,7 +178,7 @@ export function PiqueteDetalhe() {
         {pp && (
           <p>
             Na entrada: pressão de pastejo de <b>{fmtNum(pp.pressao, 2)} kg de animal por kg de capim</b>
-            {pp.oferta != null && <> e oferta de <b>{fmtNum(pp.oferta, 1)} kg de capim por 100 kg de animal por dia</b> <span className={`etiqueta ${pp.nivel ?? ''}`}>{pp.nivel === 'ruim' ? 'Pouco capim' : pp.nivel === 'atencao' ? 'Apertado' : 'Bom'}</span></>}
+            {pp.oferta != null && <> e oferta de <b>{fmtNum(pp.oferta, 1)} kg de capim por 100 kg de animal por dia</b> <span className={`etiqueta ${pp.nivel === 'sobra' ? 'atencao' : pp.nivel ?? ''}`}>{pp.nivel === 'ruim' ? 'Pouco capim' : pp.nivel === 'atencao' ? 'Apertado' : pp.nivel === 'sobra' ? 'Sobra capim: cabe mais animal' : 'Bom'}</span></>}
             <span className="mudo"> (estimativa pela altura do capim)</span>
           </p>
         )}

@@ -125,13 +125,14 @@ export const massaPelaAltura = (alturaCm: number, kgMsCm: number) => alturaCm * 
 /**
  * Pressão de pastejo e oferta de forragem na entrada.
  * pressão = kg de peso vivo por kg de MS disponível; oferta = kg de MS por 100 kg de PV por dia de ocupação.
+ * Oferta abaixo de 4 falta capim; de 7 a 20 está boa; acima de 20 sobra capim (cabe mais animal ou o capim passa do ponto).
  */
 export function pressaoPastejo(a: { cabecas: number; pesoMedio: number; massaKgMsHa: number; areaHa: number; dias: number }) {
   const pv = a.cabecas * a.pesoMedio;
   const ms = a.massaKgMsHa * a.areaHa;
   if (!(pv > 0) || !(ms > 0)) return null;
   const oferta = a.dias > 0 ? (ms / (pv * a.dias)) * 100 : null;
-  return { pressao: pv / ms, oferta, nivel: oferta == null ? null : oferta < 4 ? 'ruim' as const : oferta < 7 ? 'atencao' as const : 'bom' as const };
+  return { pressao: pv / ms, oferta, nivel: oferta == null ? null : oferta < 4 ? 'ruim' as const : oferta < 7 ? 'atencao' as const : oferta > 20 ? 'sobra' as const : 'bom' as const };
 }
 
 /** Dias que cada piquete pode ficar ocupado para o descanso planejado fechar a volta (um grupo de animais). */
@@ -176,9 +177,13 @@ export function estadoPiquete(p: Piquete, ocupacoes: Ocupacao[], modulo: Pick<Mo
   return { piquete: p, situacao: pronto ? 'pronto' : 'descansando', ultima, diasDescanso: descanso, alertas };
 }
 
-/** Próximo piquete para entrar: livre, com descanso cumprido e, entre esses, o que descansou mais (o NDVI desempata). */
+/**
+ * Próximo piquete para entrar: livre, com descanso cumprido e, entre esses, o que descansou mais (o NDVI desempata).
+ * Se nenhum cumpriu o descanso, o que está mais perto de cumprir.
+ */
 export function sugerirProximo(estados: EstadoPiquete[], ndviAtual: Map<number, number> = new Map()): EstadoPiquete | null {
-  const livres = estados.filter((e) => e.situacao === 'pronto' || e.situacao === 'sem_uso');
+  let livres = estados.filter((e) => e.situacao === 'pronto' || e.situacao === 'sem_uso');
+  if (!livres.length) livres = estados.filter((e) => e.situacao === 'descansando');
   if (!livres.length) return null;
   return [...livres].sort((a, b) => (b.diasDescanso ?? 9999) - (a.diasDescanso ?? 9999) || (ndviAtual.get(b.piquete.id!) ?? 0) - (ndviAtual.get(a.piquete.id!) ?? 0))[0];
 }
