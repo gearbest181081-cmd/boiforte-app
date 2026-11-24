@@ -28,7 +28,7 @@ const GID: Regra = { t: 'gid' };
 export const RE_GID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const CRIADO = NUM(0, 4102444800000, false, true);
 
-export const FASES_V = ['cria', 'recria', 'engorda_pasto', 'tip', 'confinamento'] as const;
+export const FASES_V = ['cria', 'recria', 'rip', 'engorda_pasto', 'tip', 'confinamento'] as const;
 export const CATEGORIAS_ANOTACAO_V = ['cerca', 'agua', 'cocho', 'pasto', 'animal', 'estrutura', 'outro'] as const;
 export const MAX_FOTOS_ANOTACAO = 4;
 export const TIPOS_FORMULA_V = ['sal_mineral', 'proteinado', 'proteico_energetico', 'rip', 'tip', 'creep', 'confinamento', 'outro'] as const;
@@ -40,7 +40,10 @@ const ESQUEMAS_BASE: Record<string, Record<string, Regra>> = {
   lotes: {
     id: ID(false), propriedadeId: ID(), piqueteId: ID(false), nome: TXT(80, true), fase: ENUM(FASES_V), sexo: ENUM(['macho', 'femea', 'misto']),
     controle: ENUM(['lote', 'individual']), qtdCabecas: NUM(0, 1_000_000, true, true), dataEntrada: DATA(), pesoAlvo: NUM(0, 2000), gmdMeta: NUM(0, 5),
-    formulaId: ID(false), consumoPctPV: NUM(0, 0.05), encerrado: BOOL, dataSaida: DATA(false), obs: TXT(1000), criadoEm: CRIADO,
+    formulaId: ID(false), consumoPctPV: NUM(0, 0.05), encerrado: BOOL, dataSaida: DATA(false), obs: TXT(1000),
+    // histórico de fases (ex.: RIP → TIP). A dieta vai pelo nome (texto) para o histórico não quebrar se a fórmula for apagada.
+    fases: { t: 'lista', max: 30, item: { data: DATA(), de: ENUM(FASES_V), para: ENUM(FASES_V), pesoMedio: NUM(1, 2000), dieta: TXT(80) } },
+    criadoEm: CRIADO,
   },
   animais: { id: ID(false), loteId: ID(), brinco: TXT(30, true), sexo: ENUM(['macho', 'femea', 'misto'], false), raca: TXT(40), ativo: BOOL, criadoEm: CRIADO },
   pesagens: {

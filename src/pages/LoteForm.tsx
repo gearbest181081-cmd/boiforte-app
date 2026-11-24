@@ -4,11 +4,10 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { criarLote, db, FASES, type Controle, type Fase, type Sexo } from '../db';
 import { hojeISO } from '../calc';
 import { TIPOS } from '../nutricao';
+import { GMD_SUGERIDO, PESO_ALVO_SUGERIDO } from '../fases';
 import { CampoData, CampoEscolha, CampoNumero, CampoTexto, num, Opcoes, Topo, useAviso } from '../components/ui';
 
-/** GMD de referência por fase (tabela de referência da planilha, ajustável). */
-export const GMD_SUGERIDO: Record<Fase, number> = { cria: 0.7, recria: 0.6, engorda_pasto: 0.75, tip: 0.95, confinamento: 1.35 };
-export const PESO_ALVO_SUGERIDO: Record<Fase, number> = { cria: 210, recria: 360, engorda_pasto: 510, tip: 540, confinamento: 540 };
+export { GMD_SUGERIDO, PESO_ALVO_SUGERIDO };
 
 export function LoteForm() {
   const { id } = useParams();
@@ -103,6 +102,7 @@ export function LoteForm() {
 
         <div className="campo"><span style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Fase</span>
           <Opcoes valor={f.fase} aoMudar={trocarFase} opcoes={(Object.keys(FASES) as Fase[]).map((k) => ({ valor: k, rotulo: FASES[k].split(' (')[0] }))} />
+          {editando && <div className="dica" style={{ marginTop: 8 }}>Para passar o lote de RIP para TIP guardando o histórico, use o botão <b>Passar para TIP</b> na tela do lote.</div>}
         </div>
 
         <div className="campo"><span style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Sexo</span>

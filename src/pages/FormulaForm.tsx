@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, excluirFormula, garantirIngredientesPadrao, lerConfig } from '../db';
 import { avaliarFormula, batida, calcularFormula, custoArrobaNutricao, kgCabDia, TIPOS, type TipoFormula } from '../nutricao';
@@ -23,10 +23,12 @@ export function FormulaForm() {
   const ingredientes = useLiveQuery(() => db.ingredientes.toArray());
   const config = useLiveQuery(() => lerConfig());
   const [nome, setNome] = useState('');
-  const [tipo, setTipo] = useState<TipoFormula>('rip');
+  const [busca] = useSearchParams();
+  const tipoInicial = (!editando && busca.get('tipo') && busca.get('tipo')! in TIPOS ? busca.get('tipo') : 'rip') as TipoFormula; // ?tipo=tip ao vir de "Mudar de fase"
+  const [tipo, setTipo] = useState<TipoFormula>(tipoInicial);
   const [unidade, setUnidade] = useState<'pct' | 'kg'>('kg');
   const [modo, setModo] = useState<'direto' | 'batida'>('batida');
-  const [consumo, setConsumo] = useState(br(TIPOS.rip.consumoPctPV * 100, 3));
+  const [consumo, setConsumo] = useState(br(TIPOS[tipoInicial].consumoPctPV * 100, 3));
   const [linhas, setLinhas] = useState<Linha[]>([{ ingredienteId: 0, qtd: '' }]);
   const [obs, setObs] = useState('');
   const [pesoRef, setPesoRef] = useState('250');

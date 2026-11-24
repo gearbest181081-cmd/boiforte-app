@@ -8,13 +8,14 @@ import { calcularVenda, custoCompra, type Categoria } from './financeiro';
 import { LEMBRETES_PADRAO, type TipoSanidade } from './sanidade';
 import { somaDias } from './calc';
 
-export type Fase = 'cria' | 'recria' | 'engorda_pasto' | 'tip' | 'confinamento';
+export type Fase = 'cria' | 'recria' | 'rip' | 'engorda_pasto' | 'tip' | 'confinamento';
 export type Sexo = 'macho' | 'femea' | 'misto';
 export type Controle = 'lote' | 'individual';
 
 export const FASES: Record<Fase, string> = {
   cria: 'Cria',
   recria: 'Recria',
+  rip: 'RIP (recria intensiva a pasto)',
   engorda_pasto: 'Engorda a pasto',
   tip: 'TIP (terminação intensiva a pasto)',
   confinamento: 'Confinamento',
@@ -42,8 +43,11 @@ export interface Lote {
   encerrado?: boolean;
   dataSaida?: string | null; // quando o lote acabou (última venda/baixa)
   obs?: string;
+  fases?: MudancaFase[]; // histórico: cada vez que o lote mudou de fase (ex.: RIP → TIP)
   criadoEm: number;
 }
+/** Uma mudança de fase do lote. "dieta" guarda o nome da dieta que o lote comia ATÉ essa data. */
+export interface MudancaFase { data: string; de: Fase; para: Fase; pesoMedio?: number; dieta?: string }
 export interface Animal { id?: number; gid?: string; loteId: number; brinco: string; sexo?: Sexo; raca?: string; ativo: boolean; criadoEm: number }
 export interface PesoAnimal { animalId: number; peso: number }
 export interface Pesagem {

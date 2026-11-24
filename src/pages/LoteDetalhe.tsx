@@ -10,6 +10,7 @@ import { GraficoCrescimento } from '../components/Grafico';
 import { Indicador, Opcoes, Topo, useAviso } from '../components/ui';
 import { LoteFinanceiro } from './LoteFinanceiro';
 import { LoteSanidade } from './Sanidade';
+import { nomeCurtoFase, PROXIMA_FASE, trechosDeFase } from '../fases';
 import { usePapel, useVeDinheiro } from '../nuvem/useNuvem';
 
 export function LoteDetalhe() {
@@ -47,6 +48,9 @@ export function LoteDetalhe() {
   const per = periodos(pontos).reverse();
   const gmdRef = r.gmdUltimo ?? r.gmdTotal;
   const desvio = desvioMeta(gmdRef, lote.gmdMeta);
+  const podeMudarFase = !lote.encerrado && papel !== 'vaqueiro' && papel !== 'consultor';
+  // RIP (ou recria) pronta para a TIP: o botão aparece em destaque quando o lote chega perto do peso alvo.
+  const pertoDoAlvo = (lote.fase === 'rip' || lote.fase === 'recria') && !!lote.pesoAlvo && r.pesoAtual != null && r.pesoAtual >= lote.pesoAlvo * 0.95;
 
   const apagarPesagem = async (pid: number) => {
     if (!window.confirm('Apagar esta pesagem?')) return;
@@ -101,14 +105,23 @@ export function LoteDetalhe() {
               <Indicador rotulo={`Previsão ${lote.pesoAlvo ?? '—'} kg`} valor={p == null ? '—' : p.jaAtingiu ? 'Atingiu' : fmtData(p.dataPrevista)}
                 sub={p && !p.jaAtingiu ? `faltam ${p.diasFaltando} dias (GMD ${p.origemGmd === 'meta' ? 'da meta' : p.origemGmd === 'ultimo' ? 'do último período' : 'médio'})` : undefined} />
             </div>
+            {podeMudarFase && pertoDoAlvo && (
+              <div className="alerta atencao">
+                <span className="ic">🔔</span>
+                <div><b>Hora de passar para a {nomeCurtoFase(PROXIMA_FASE[lote.fase])}?</b>O lote está com {fmtKg(r.pesoAtual)}, perto do peso alvo de {fmtKg(lote.pesoAlvo)}.
+                  <div style={{ marginTop: 8 }}><Link to={`/lotes/${lote.id}/fase`} className="btn pequeno">Passar para {nomeCurtoFase(PROXIMA_FASE[lote.fase])}</Link></div></div>
+              </div>
+            )}
             <CartaoNutricao lote={lote} pontos={pontos} gmdRef={gmdRef} fornecimentos={fornecimentos} formula={formula} ingredientes={ingredientes} config={config} />
             <h2>Curva de crescimento</h2>
             <div className="cartao">
               <GraficoCrescimento pontos={pontos} gmdMeta={lote.gmdMeta} pesoAlvo={lote.pesoAlvo} projecao={p} />
             </div>
             {pesagens.length > 0 && <Link to={`/lotes/${lote.id}/relatorio`} className="btn sec largo" style={{ marginBottom: 14 }}>Relatório de pesagem (PDF, Excel, WhatsApp)</Link>}
+            {(lote.fases?.length ?? 0) > 0 && <CartaoFases lote={lote} pontos={pontos} />}
             {lote.obs && <div className="cartao"><b>Observações</b><p>{lote.obs}</p></div>}
             <div className="botoes">
+              {podeMudarFase && <Link to={`/lotes/${lote.id}/fase`} className="btn sec pequeno">{lote.fase === 'rip' || lote.fase === 'recria' ? 'Passar para TIP' : 'Mudar de fase'}</Link>}
               <Link to={`/lotes/${lote.id}/editar`} className="btn sec pequeno">Editar lote</Link>
               <button className="btn sec pequeno" onClick={encerrar}>{lote.encerrado ? 'Reabrir lote' : 'Encerrar lote'}</button>
               <button className="btn perigo pequeno" onClick={apagar}>Apagar</button>
@@ -148,6 +161,33 @@ export function LoteDetalhe() {
         {aba === 'saude' && <LoteSanidade lote={lote} />}
         {aba === 'animais' && <ListaAnimais loteId={loteId} animais={animais} pesagens={pesagens} gmdMeta={lote.gmdMeta} />}
       </main>
+    </>
+  );
+}
+
+function CartaoFases({ lote, pontos }: { lote: Parameters<typeof trechosDeFase>[0]; pontos: Parameters<typeof trechosDeFase>[1] }) {
+  const trechos = trechosDeFase(lote, pontos);
+  return (
+    <>
+      <h2>Fases do lote</h2>
+      <div className="cartao rolagem">
+        <table className="tab">
+          <thead><tr><th>Fase</th><th className="n">Dias</th><th className="n">Peso</th><th className="n">Ganho</th><th className="n">GMD</th></tr></thead>
+          <tbody>
+            {trechos.map((t, i) => (
+              <tr key={i}>
+                <td><b>{nomeCurtoFase(t.fase)}</b>
+                  <div className="mudo" style={{ fontSize: 13 }}>{fmtData(t.inicio)} a {t.fim ? fmtData(t.fim) : 'hoje'}{t.dieta ? ` · ${t.dieta}` : ''}</div></td>
+                <td className="n">{t.dias}</td>
+                <td className="n">{t.pesoInicio != null ? fmtNum(t.pesoInicio, 0) : '—'} → {t.pesoFim != null ? fmtNum(t.pesoFim, 0) : '—'}</td>
+                <td className="n">{t.ganho != null ? fmtNum(t.ganho, 0) : '—'}</td>
+                <td className="n">{t.gmd != null ? fmtGmd(t.gmd).replace(' kg/dia', '') : '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="mudo" style={{ marginTop: 10 }}>Peso médio em kg no começo e no fim de cada fase. GMD em kg/dia. A fase atual vai até a última pesagem.</p>
+      </div>
     </>
   );
 }

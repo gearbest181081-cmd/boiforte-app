@@ -118,7 +118,7 @@ export function CartaoLote({ info }: { info: LoteInfo }) {
         <span className="num">{lote.qtdCabecas} cab</span>
       </div>
       <div style={{ marginBottom: 8 }}>
-        <span className="etiqueta">{FASES[lote.fase].split(' (')[0]}</span>
+        <span className="etiqueta">{(FASES[lote.fase] ?? lote.fase).split(' (')[0]}</span>
         {lote.encerrado && <span className="etiqueta atencao">Encerrado</span>}
         {pior && <span className={`etiqueta ${pior.nivel}`}>{pior.nivel === 'ruim' ? 'Atenção' : 'Aviso'}</span>}
       </div>
