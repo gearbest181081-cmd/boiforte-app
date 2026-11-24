@@ -7,7 +7,7 @@ import {
   ativoCria, cabecas, cabecasGrupo, calcularIpm, CATEGORIAS_CRIA, custoBezerro, decisoesCria, estacaoAtualOuProxima, historicoMatriz, idadeDias, idadeTexto,
   METODOS_MONTA, projecaoDesmama, rotuloAnimal, saidaPrevista, sugestoesDescarte, TIPOS_GRUPO, uaGrupo, ultimosPesos,
 } from '../cria';
-import { desfazerDesmama } from '../criaDb';
+import { desfazerDesmama, lotacaoDaCria } from '../criaDb';
 import { fmtData, fmtKg, fmtNum, hojeISO } from '../calc';
 import { CampoData, CampoEscolha, CampoTexto, Entrada, Indicador, Opcoes, Topo, useAviso } from '../components/ui';
 import { BotaoFoto } from '../components/Foto';
@@ -336,7 +336,8 @@ function CustoBezerro({ d, hoje }: { d: DadosTelaCria; hoje: string }) {
 
 function Decisoes({ d, hoje }: { d: DadosTelaCria; hoje: string }) {
   const veDinheiro = useVeDinheiro();
-  const lista = decisoesCria({ ...d, hoje });
+  const lotacao = useLiveQuery(() => lotacaoDaCria(hoje), [hoje]);
+  const lista = decisoesCria({ ...d, hoje, lotacao });
   return (
     <>
       {lista.length === 0 && <p className="mudo">Lance as matrizes, os touros e a estação de monta para receber sugestões.</p>}
@@ -346,7 +347,7 @@ function Decisoes({ d, hoje }: { d: DadosTelaCria; hoje: string }) {
           <div><b>{x.titulo}</b>{x.texto}</div>
         </div>
       ))}
-      <div className="dica">Lotação do pasto (UA/ha e pressão de pastejo) aparece em cada grupo de manejo e no módulo de Pasto.</div>
+      <div className="dica">A lotação acima vem do <Link to="/pasto">Pasto</Link> (UA/ha do módulo onde estão os grupos). Grave a área dos piquetes e a capacidade do módulo para o aviso funcionar.</div>
       {veDinheiro && <Link to="/cria/simular" className="btn largo">Simulador da Cria</Link>}
       {veDinheiro && <p className="mudo" style={{ marginTop: 8 }}>Vender na desmama ou recriar? Reter as novilhas ou vender? Como fica o rebanho em 5 anos?</p>}
     </>

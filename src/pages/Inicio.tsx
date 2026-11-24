@@ -11,6 +11,7 @@ import { nuvemConfigurada } from '../nuvem/cliente';
 import { contarAnotacoes } from '../anotacoes';
 import { alertasCria, ativoCria, cabecas as cabecasAnimal } from '../cria';
 import { useCria } from './Cria';
+import { resumoPasto } from '../pasto';
 
 export function Inicio() {
   const props = useLiveQuery(() => db.propriedades.toArray());
@@ -21,6 +22,7 @@ export function Inicio() {
   const papel = usePapel();
   const tarefas = useLiveQuery(contarAnotacoes);
   const cria = useCria();
+  const pasto = useLiveQuery(() => resumoPasto(), []);
   const [todos, setTodos] = useState(false);
   useEffect(() => { if (props?.length) garantirLembretesPadrao().catch(() => {}); }, [props?.length]);
   if (!props || !infos) return <Topo titulo="BoiForte" voltar={false} />;
@@ -50,7 +52,7 @@ export function Inicio() {
     .map((e) => ({ nivel: e.situacao.nivel as 'ruim' | 'atencao', titulo: `Estoque: ${e.nome}`, texto: `${e.situacao.texto} Saldo de ${fmtNum(e.situacao.saldoKg, 0)} kg.${e.tipo === 'mistura' ? ' Hora de bater nova ração.' : ''}` }));
   const criaAtivos = cria ? cria.animais.filter(ativoCria) : [];
   const criaCab = criaAtivos.reduce((s, a) => s + cabecasAnimal(a), 0);
-  const alertas = ordenarAlertas([...infos.flatMap((i) => i.alertas), ...alertasEstoque, ...(tudo ? alertasInteligentes(tudo) : []),
+  const alertas = ordenarAlertas([...infos.flatMap((i) => i.alertas), ...alertasEstoque, ...(tudo ? alertasInteligentes(tudo) : []), ...(pasto ?? []).flatMap((r) => r.alertas),
     ...(cria && criaAtivos.length ? alertasCria({ ...cria, hoje: hojeISO() }) : [])]);
   const tratos = (escala ?? []).filter((l) => l.formula);
   const tratosFeitos = tratos.filter((l) => l.fornecimento).length;

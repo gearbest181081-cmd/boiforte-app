@@ -2,7 +2,8 @@
 import { db, type Animal, type Desmama, type EventoReprodutivo, type Grupo } from './db';
 import { ErroValidacao } from './validar';
 import { diasEntre, hojeISO } from './calc';
-import { ativoCria, proximaVersao, resumoPacote, type ItemDesmama } from './cria';
+import { ativoCria, cabecasGrupo, proximaVersao, resumoPacote, uaGrupo, type ItemDesmama, type LotacaoCria } from './cria';
+import { KG_UA, lotacaoAlta, ocupantesAtuais } from './pasto';
 import type { Fase } from './db';
 
 /** Piquete livre: não pode ter lote ativo nem outro grupo de manejo ativo. */
@@ -209,4 +210,30 @@ export async function desfazerDesmama(id: number) {
     for (const l of lotes) { await db.pesagens.where('loteId').equals(l).delete(); await db.lotes.delete(l); }
     await db.desmamas.delete(id);
   });
+}
+
+/**
+ * Lotação dos módulos de pasto onde há grupo da Cria (usa lotacaoAlta do Pasto).
+ * O peso do grupo vem dos animais da Cria (última pesagem ou peso de referência), não só do que foi anotado na entrada do piquete.
+ */
+export async function lotacaoDaCria(hoje = hojeISO()): Promise<LotacaoCria[]> {
+  const [modulos, piquetes, ocupacoes, ocupantes, grupos, animais, pesos] = await Promise.all([
+    db.modulos.toArray(), db.piquetes.toArray(), db.ocupacoes.toArray(), ocupantesAtuais(hoje), db.grupos.toArray(), db.animais.toArray(), db.pesosCria.toArray(),
+  ]);
+  const ajustados = ocupantes.map((o) => {
+    if (o.tipo !== 'grupo') return o;
+    const cab = cabecasGrupo(o.id, animais);
+    if (!cab) return o;
+    return { ...o, cabecas: cab, pesoMedio: (uaGrupo(o.id, animais, pesos) * KG_UA) / cab };
+  });
+  const out: LotacaoCria[] = [];
+  for (const m of modulos) {
+    const meus = piquetes.filter((p) => p.moduloId === m.id);
+    const ids = new Set(meus.map((p) => p.id));
+    const daCria = grupos.filter((g) => !g.encerrado && g.piqueteId != null && ids.has(g.piqueteId));
+    if (!daCria.length) continue;
+    const l = lotacaoAlta(m, meus, ajustados, ocupacoes.filter((o) => ids.has(o.piqueteId)));
+    if (l.nivel === 'alta' || l.nivel === 'atencao') out.push({ modulo: m.nome, grupos: daCria.map((g) => g.nome), nivel: l.nivel, motivo: l.motivo });
+  }
+  return out;
 }

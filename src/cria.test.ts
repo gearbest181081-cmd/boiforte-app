@@ -1,11 +1,11 @@
 import 'fake-indexeddb/auto';
 import { describe, it, expect, beforeEach } from 'vitest';
-import { BoiForteDB, usarBanco, db, type Animal, type EventoReprodutivo, type Estacao } from './db';
+import { BoiForteDB, usarBanco, db, excluirPropriedade, type Animal, type EventoReprodutivo, type Estacao } from './db';
 import {
   calcularIpm, cabecasGrupo, custoBezerro, decisoesCria, historicoMatriz, p205, partoNaEpoca, projecaoDesmama, projetarRebanho,
   reterNovilhas, resumoPacote, saidaPrevista, alertaPermanencia, sugestoesDescarte, tourosNecessarios, venderOuRecriar, proximaVersao,
 } from './cria';
-import { coberturaEmMassa, desfazerDesmama, desmamar, pesarCria, piqueteOcupado, registrarParto, salvarAnimalCria, salvarEvento, salvarGrupo } from './criaDb';
+import { coberturaEmMassa, desfazerDesmama, desmamar, lotacaoDaCria, pesarCria, piqueteOcupado, registrarParto, salvarAnimalCria, salvarEvento, salvarGrupo } from './criaDb';
 import { custoCriaPeriodo, carregarTudo, analisarLotes } from './hooks';
 
 const A = (x: Partial<Animal> & { id: number }): Animal => ({ brinco: String(x.id), ativo: true, criadoEm: 0, grupoId: 1, sexo: 'femea', categoria: 'matriz', ...x });
@@ -218,5 +218,30 @@ describe('Cria no banco', () => {
     const d = decisoesCria({ animais: t.animais, eventos: await db.reproducao.toArray(), pesos: [], desmamas: [], estacoes: await db.estacoes.toArray(), hoje: '2026-04-01' });
     expect(d.find((x) => x.titulo.startsWith('Comprar 1 touro'))).toBeTruthy();
     expect(d.find((x) => x.titulo.startsWith('Fazer diagnóstico de gestação em 30'))).toBeTruthy();
+  });
+  it('decisões: lotação alta no módulo onde está o grupo (contas do Pasto)', async () => {
+    const { g, pq } = await base();
+    const p = (await db.piquetes.get(pq))!;
+    await db.modulos.update(p.moduloId, { capacidadeUA: 2 });
+    await db.piquetes.update(pq, { areaHa: 10 });
+    for (let i = 0; i < 30; i++) await salvarAnimalCria({ grupoId: g, brinco: `V${i}`, sexo: 'femea', categoria: 'matriz', ativo: true });
+    const lot = await lotacaoDaCria('2026-04-01');
+    expect(lot).toHaveLength(1);
+    expect(lot[0].nivel).toBe('alta');
+    expect(lot[0].grupos).toEqual(['Vacas']);
+    const t = await carregarTudo();
+    const d = decisoesCria({ animais: t.animais, eventos: [], pesos: [], desmamas: [], estacoes: [], hoje: '2026-04-01', lotacao: lot });
+    expect(d.find((x) => x.titulo === 'Lotação alta no M' && x.nivel === 'ruim')).toBeTruthy();
+    await db.modulos.update(p.moduloId, { capacidadeUA: 5 });
+    expect(await lotacaoDaCria('2026-04-01')).toHaveLength(0);
+  });
+  it('apagar a fazenda apaga os grupos da Cria e os animais deles', async () => {
+    const { g, pid } = await base();
+    const v = await salvarAnimalCria({ grupoId: g, brinco: 'V1', sexo: 'femea', categoria: 'matriz', ativo: true });
+    await salvarEvento({ matrizId: v, data: '2026-01-01', tipo: 'monta' });
+    await excluirPropriedade(pid);
+    expect(await db.grupos.count()).toBe(0);
+    expect(await db.animais.count()).toBe(0);
+    expect(await db.reproducao.count()).toBe(0);
   });
 });

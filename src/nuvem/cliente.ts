@@ -5,7 +5,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Papel } from './esquema';
 import type { LinhaRemota, OpEnvio, Resultado, Transporte } from './sinc';
-import { ErroFoto, type ArmazemFotos, type TipoErroFoto } from '../anotacoes';
+import { ErroFoto, MIME_EXT, type ArmazemFotos, type TipoErroFoto } from '../anotacoes';
 
 const URL_NUVEM = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim();
 const CHAVE_PUBLICA = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim();
@@ -203,6 +203,18 @@ export async function lerFoto<T>(fazenda: string, tipo: 'rotulo' | 'balanca' | '
   return data as T;
 }
 
+// ---------- NDVI do satélite ----------
+
+/** Pede para buscar agora o NDVI dos piquetes da fazenda (dono/gerente; o servidor limita a 2 por hora). */
+export async function atualizarNdvi(fazenda: string): Promise<{ piquetes: number; leituras: number }> {
+  const { data, error } = await (await sb()).functions.invoke('ndvi', { body: { fazenda } });
+  if (error) {
+    const corpo = await (error as { context?: Response }).context?.json?.().catch(() => null);
+    throw new Error(corpo?.erro ?? 'Não deu para falar com o satélite agora. Tente mais tarde.');
+  }
+  return data as { piquetes: number; leituras: number };
+}
+
 // ---------- fotos das anotações (Storage) ----------
 // Balde privado "anotacoes", uma pasta por fazenda: "<fazenda>/<foto>.jpg". Quem decide quem lê, envia e
 // apaga são as regras do servidor (20261123170000_anotacoes.sql); o app só leva e traz.
@@ -226,7 +238,7 @@ function erroFoto(e: unknown): ErroFoto {
 
 export const armazemNuvem: ArmazemFotos = {
   async enviar(caminho, dados) {
-    const { error } = await (await sb()).storage.from(BALDE_FOTOS).upload(caminho, dados, { contentType: 'image/jpeg', upsert: false, cacheControl: '31536000' });
+    const { error } = await (await sb()).storage.from(BALDE_FOTOS).upload(caminho, dados, { contentType: MIME_EXT[caminho.split('.').pop() ?? ''] ?? 'image/jpeg', upsert: false, cacheControl: '31536000' });
     if (error) throw erroFoto(error);
   },
   async baixar(caminho) {

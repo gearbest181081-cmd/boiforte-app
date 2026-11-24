@@ -119,7 +119,9 @@ export class ErroFoto extends Error {
   constructor(public tipo: TipoErroFoto, msg: string) { super(msg); this.name = 'ErroFoto'; }
 }
 
-export const caminhoFoto = (fazenda: string, foto: string) => `${fazenda}/${foto}.jpg`;
+/** Caminho no Storage. ext: "jpg" (fotos) ou o formato do áudio do pasto (webm, ogg, m4a). */
+export const caminhoFoto = (fazenda: string, foto: string, ext: string = 'jpg') => `${fazenda}/${foto}.${ext}`;
+export const MIME_EXT: Record<string, string> = { jpg: 'image/jpeg', webm: 'audio/webm', ogg: 'audio/ogg', m4a: 'audio/mp4' };
 
 export interface RelatorioFotos { enviadas: number; apagadas: number; baixadas: number; erros: string[] }
 
@@ -137,7 +139,7 @@ export async function sincronizarFotos(a: ArmazemFotos, fazenda: string, podeEnv
     for (const f of (await db.fotosAnotacao.where('estado').equals('enviar').toArray()).slice(0, POR_RODADA)) {
       if (!f.dados) { await db.fotosAnotacao.delete(f.id); continue; }
       try {
-        await a.enviar(caminhoFoto(fazenda, f.id), f.dados);
+        await a.enviar(caminhoFoto(fazenda, f.id, f.ext), f.dados);
       } catch (e) {
         if (rede(e)) return rel;
         if (!(e instanceof ErroFoto && e.tipo === 'existe')) { // já estava lá: conta como enviada
@@ -153,7 +155,7 @@ export async function sincronizarFotos(a: ArmazemFotos, fazenda: string, podeEnv
       rel.enviadas++;
     }
     for (const f of (await db.fotosAnotacao.where('estado').equals('apagar').toArray()).slice(0, POR_RODADA)) {
-      try { await a.apagar(caminhoFoto(fazenda, f.id)); }
+      try { await a.apagar(caminhoFoto(fazenda, f.id, f.ext)); }
       catch (e) {
         if (rede(e)) return rel;
         // sem permissão (foto de outra pessoa) ou já não existe: não adianta tentar de novo

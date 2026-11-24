@@ -394,7 +394,10 @@ export function projetarRebanho(e: EntradaProjecao): AnoProjecao[] {
 export interface DadosCria {
   animais: Animal[]; eventos: EventoReprodutivo[]; pesos: PesoCria[]; desmamas: Desmama[]; estacoes: Estacao[]; hoje: string;
   idadeDesmama?: number;
+  /** Módulos de pasto com grupo da Cria e lotação alta ou perto do limite (vem de lotacaoDaCria, em criaDb.ts). */
+  lotacao?: LotacaoCria[];
 }
+export interface LotacaoCria { modulo: string; grupos: string[]; nivel: 'alta' | 'atencao'; motivo: string }
 
 export function tourosAtivos(animais: Animal[]): number {
   return animais.filter((a) => a.categoria === 'touro' && ativoCria(a)).reduce((s, a) => s + cabecas(a), 0);
@@ -459,6 +462,14 @@ export function decisoesCria(d: DadosCria): Decisao[] {
   // partos nos próximos 30 dias
   const partos = linhas.concat(calcularIpm(novilhas, d.eventos, d.animais, d.desmamas, d.estacoes, d.hoje))
     .filter((l) => l.hist.partoPrevisto && diasEntre(d.hoje, l.hist.partoPrevisto) <= 30 && diasEntre(d.hoje, l.hist.partoPrevisto) >= -15);
+  // lotação do pasto onde estão os grupos da Cria (contas do módulo de Pasto)
+  for (const l of d.lotacao ?? []) {
+    out.push({
+      nivel: l.nivel === 'alta' ? 'ruim' : 'atencao',
+      titulo: l.nivel === 'alta' ? `Lotação alta no ${l.modulo}` : `Lotação perto do limite no ${l.modulo}`,
+      texto: `${l.motivo} Grupo(s): ${l.grupos.join(', ')}.${l.nivel === 'alta' ? ' Venda as vacas de descarte, desmame os bezerros mais velhos ou mude um grupo de módulo.' : ''}`,
+    });
+  }
   if (partos.length) out.push({ nivel: 'atencao', titulo: `${partos.length} parto(s) previsto(s) em 30 dias`, texto: partos.slice(0, 6).map((l) => `${rotuloAnimal(l.matriz)} (${fmtData(l.hist.partoPrevisto)})`).join(', ') + '. Deixe essas vacas no piquete maternidade.', ids: partos.map((l) => l.matriz.id!) });
   return out;
 }

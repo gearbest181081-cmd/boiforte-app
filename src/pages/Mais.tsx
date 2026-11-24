@@ -86,6 +86,7 @@ export function Mais() {
           <Link to="/cria" className="btn sec">Cria</Link>
           <Link to="/anotacoes" className="btn sec">Anotações e tarefas</Link>
           <Link to="/fazenda" className="btn sec">Fazenda</Link>
+          <Link to="/pasto" className="btn sec">Pasto e piquetes</Link>
           <Link to="/nutricao" className="btn sec">Nutrição</Link>
           <Link to="/estoque" className="btn sec">Estoque</Link>
           {veDinheiro && <Link to="/financeiro" className="btn sec">Dinheiro</Link>}

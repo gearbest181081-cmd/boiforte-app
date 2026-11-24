@@ -1,7 +1,7 @@
 // Sincronização com a nuvem. O celular continua sendo o lugar onde se trabalha (funciona sem sinal);
 // quando tem internet, envia o que mudou e baixa o que outras pessoas da equipe lançaram.
 // Conflito: vale a última gravação que chegou ao servidor. O servidor confere e pode corrigir tudo.
-import { db, semAnotar, TABELAS, type Pendente } from '../db';
+import { db, semAnotar, SO_DO_SERVIDOR, TABELAS, type Pendente } from '../db';
 import { alvoDe, ORDEM_SINC, REFERENCIAS, type Papel } from './esquema';
 
 export interface OpEnvio { tabela: string; gid: string; op: 'put' | 'del'; dados?: Record<string, unknown> }
@@ -15,6 +15,8 @@ export interface FazendaNuvem { id: string; nome: string; papel: Papel }
 export interface RelatorioSinc { enviados: number; recebidos: number; erros: { tabela: string; erro: string }[] }
 
 const LOTE_ENVIO = 200;
+/** Começo da mensagem do servidor quando o piquete já tem outro lote/grupo (gatilho em 20261124150000_pasto.sql). */
+export const PIQUETE_OCUPADO = 'Piquete ocupado';
 const LOTE_BAIXA = 500;
 const ordem = (t: string) => { const i = (ORDEM_SINC as readonly string[]).indexOf(t); return i < 0 ? 99 : i; };
 const TABS_SINC = [...TABELAS, 'pendentes', 'sincEstado', 'sincEspera', 'fotosAnotacao'];
@@ -50,6 +52,7 @@ export async function ligarFazenda(f: FazendaNuvem, modo: 'enviar' | 'baixar') {
     } else {
       const em = Date.now();
       for (const t of TABELAS) {
+        if (SO_DO_SERVIDOR.has(t)) continue;
         const chaves = (await db.table(t).toCollection().primaryKeys()) as (number | string)[];
         if (chaves.length) await db.pendentes.bulkPut(chaves.map((chave) => ({ tabela: t, chave, op: 'put' as const, em })));
       }
@@ -247,7 +250,20 @@ export function sincronizar(t: Transporte): Promise<RelatorioSinc> {
     const f = await fazendaLigada();
     const rel: RelatorioSinc = { enviados: 0, recebidos: 0, erros: [] };
     if (!f) return rel;
-    if (f.papel !== 'consultor') await enviar(t, f, rel);
+    if (f.papel !== 'consultor') {
+      await enviar(t, f, rel);
+      // Troca de piquete: se o lote que entrou foi enviado antes do que saiu, o servidor recusa ("Piquete ocupado").
+      // Depois que o resto subiu, tenta de novo esses (até 2 vezes).
+      for (let i = 0; i < 2; i++) {
+        const presos = (await db.pendentes.toArray()).filter((p) => p.erro?.startsWith(PIQUETE_OCUPADO));
+        if (!presos.length || !rel.enviados) break;
+        const antes = rel.enviados;
+        await db.pendentes.bulkPut(presos.map(({ erro: _e, ...p }) => p));
+        rel.erros = rel.erros.filter((e) => !e.erro.startsWith(PIQUETE_OCUPADO));
+        await enviar(t, f, rel);
+        if (rel.enviados === antes) break;
+      }
+    }
     await baixar(t, f, rel);
     await gravarEstado('ultima', Date.now());
     return rel;

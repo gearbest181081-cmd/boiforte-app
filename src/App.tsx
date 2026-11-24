@@ -25,6 +25,7 @@ import { Cria } from './pages/Cria';
 import { AnimalCriaForm, DesmamaCria, EventoCria, GrupoCria, PesagemCria } from './pages/CriaForms';
 import { AnimalCria } from './pages/CriaAnimal';
 import { CriaSimular } from './pages/CriaSimular';
+import { MoverGado, Pasto, PiqueteDetalhe } from './pages/Pasto';
 import { SincAutomatica } from './nuvem/useNuvem';
 import { SessaoProvider } from './nuvem/sessao';
 import { Porta } from './pages/Login';
@@ -74,6 +75,9 @@ export function App() {
               <Route path="/cria/pesar" element={<PesagemCria />} />
               <Route path="/cria/desmama" element={<DesmamaCria />} />
               <Route path="/cria/simular" element={<CriaSimular />} />
+              <Route path="/pasto" element={<Pasto />} />
+              <Route path="/pasto/piquete/:id" element={<PiqueteDetalhe />} />
+              <Route path="/pasto/mover" element={<MoverGado />} />
               <Route path="*" element={<Inicio />} />
             </Routes>
             <nav className="baixo" aria-label="Menu principal">
