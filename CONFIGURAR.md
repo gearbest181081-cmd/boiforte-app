@@ -89,36 +89,28 @@ No painel do Supabase, em *Authentication*:
   manda e-mail para quem é da equipe da conta do Supabase e poucos por hora. Para clientes e funcionários receberem o
   link de primeiro acesso, o SMTP próprio é obrigatório.
 
-## 4. Funções do servidor (foto e cotações)
+## 4. Função do servidor (leitura por foto)
 
 Com o Supabase CLI (https://supabase.com/docs/guides/cli):
 
 ```
 supabase functions deploy ler-foto
-supabase functions deploy atualizar-cotacoes --no-verify-jwt
 supabase secrets set APP_ORIGIN=https://SEU-USUARIO.github.io
 supabase secrets set ANTHROPIC_API_KEY=sua-chave-da-anthropic
-supabase secrets set CRON_SECRET=uma-senha-longa-e-aleatoria
 ```
 
 - `APP_ORIGIN` é só o começo do endereço do app (sem `/boiforte-app/`). Outros sites não conseguem usar a função pelo navegador; a proteção principal é o login e a cota no banco.
 - A chave da Anthropic é criada em https://console.anthropic.com. Cada pessoa pode ler até 30 fotos por dia.
 - Sempre que a pasta `supabase/functions` mudar (ex.: a foto da balança com o lote todo), rode de novo `supabase functions deploy ler-foto`. Não precisa de migração.
-- As cotações vêm das páginas de indicadores do Cepea/Esalq. Antes de abrir ao público, confira as
-  condições de uso do Cepea (citar a fonte é obrigatório; o app já mostra "Fonte: Cepea/Esalq").
-  Para trocar as fontes sem mexer no código: `supabase secrets set FONTES_COTACOES='[...]'` (ver `supabase/functions/_shared/cotacoes.ts`).
 
 ## 5. Ligar o app à nuvem (GitHub)
 
 O endereço e a chave pública ficam no arquivo `.env.production` do repositório (já preenchido com o projeto da BoiForte).
 Se trocar de projeto, edite esse arquivo. **Nunca** coloque nele a chave secreta.
 
-No repositório, em *Settings › Secrets and variables › Actions*, aba **Secrets**: `CRON_SECRET` (a mesma senha do passo 4).
-
 E em *Settings › Pages › Source*, escolha **GitHub Actions** (se ainda não fez).
 
-Pronto: o próximo envio para `main` publica o app já com a nuvem. As cotações atualizam sozinhas de segunda a sexta às 18h30.
-Para testar na hora: *Actions › Atualizar cotações › Run workflow*.
+Pronto: o próximo envio para `main` publica o app já com a nuvem.
 
 ## 6. Conferir
 

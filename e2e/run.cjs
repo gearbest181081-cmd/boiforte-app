@@ -473,13 +473,10 @@ function confere(cond, msg) {
     confere(wa.startsWith('https://wa.me/?text=') && decodeURIComponent(wa).includes('Fazenda Boa Vista'), 'link do WhatsApp com o resumo');
     await foto('18-relatorios');
 
-    console.log('17. Nuvem e cotações sem estar logado');
+    console.log('17. Nuvem sem estar logado');
     await page.goto(URL + '#/nuvem');
     await page.getByText(/Nuvem ainda não ligada|Entrou como produtor@exemplo.com/).first().waitFor();
     confere(true, 'tela da nuvem: mostra a conta que entrou (ou explica que não está ligada)');
-    await page.goto(URL + '#/cotacoes');
-    await page.getByText(nuvemNoBuild ? 'Sem atualizar agora' : 'Entre na nuvem para receber as cotações').waitFor();
-    confere(true, 'cotações: sem sinal, avisa e mostra as guardadas');
     await page.goto(URL + '#/nutricao/ingrediente/novo');
     await page.getByRole('button', { name: 'Salvar ingrediente' }).waitFor();
     await page.getByRole('button', { name: /Tirar foto da tabela nutricional/ }).click();
@@ -623,7 +620,7 @@ function confere(cond, msg) {
       const loteId = await p2.evaluate(() => new Promise((ok) => { const r = indexedDB.open('boiforte'); r.onsuccess = () => { const t = r.result.transaction('lotes').objectStore('lotes').getAll(); t.onsuccess = () => ok(t.result[0].id); }; }));
       const formulaId = await p2.evaluate(() => new Promise((ok) => { const r = indexedDB.open('boiforte'); r.onsuccess = () => { const t = r.result.transaction('formulas').objectStore('formulas').getAll(); t.onsuccess = () => ok(t.result[0]?.id ?? 'nova'); }; }));
       const telas = ['/lotes', '/lotes/novo', `/lotes/${loteId}`, `/lotes/${loteId}/editar`, `/lotes/${loteId}/relatorio`, '/pesar', `/pesar/${loteId}`, '/fazenda', '/mais', '/nutricao',
-        `/nutricao/formula/${formulaId}`, '/nutricao/formula/nova', '/nutricao/ingrediente/novo', '/estoque', '/trato', '/financeiro', '/sanidade', '/simular', '/relatorios', '/nuvem', '/cotacoes', '/funcionarios', '/funcionarios/novo', '/anotacoes', '/anotacoes/nova'];
+        `/nutricao/formula/${formulaId}`, '/nutricao/formula/nova', '/nutricao/ingrediente/novo', '/estoque', '/trato', '/financeiro', '/sanidade', '/simular', '/relatorios', '/nuvem', '/funcionarios', '/funcionarios/novo', '/anotacoes', '/anotacoes/nova'];
       const semVoltar = [], semMic = [];
       for (const t of telas) {
         await p2.goto(URL + '#' + t);
