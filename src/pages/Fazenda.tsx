@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, excluirPropriedade, type Modulo, type Propriedade } from '../db';
 import { CampoNumero, CampoTexto, Entrada, num, Topo, useAviso } from '../components/ui';
@@ -82,6 +83,9 @@ function CartaoPropriedade({ p }: { p: Propriedade }) {
     <div className="cartao">
       <div className="linha-lote"><h3>{p.nome}</h3><span className="mudo">{nLotes ?? 0} lotes</span></div>
       <p className="mudo">{[p.municipio, p.uf].filter(Boolean).join(' / ')}{p.areaHa ? ` · ${p.areaHa} ha` : ''}</p>
+      <Link to={`/fazenda/${p.id}/documentos`} className="btn sec largo" style={{ marginBottom: 8 }}>
+        {p.lat != null || (p.contorno?.length ?? 0) >= 3 ? '📍 ' : ''}Documentos e localização (CAR, ITR, GPS)
+      </Link>
       {modulos?.map((m) => <BlocoModulo key={m.id} m={m} />)}
       <hr />
       <div className="com-mic">

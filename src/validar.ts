@@ -3,6 +3,8 @@
 // e qualquer gravação feita por código. Quando houver servidor (Etapa 4), as mesmas regras
 // serão repetidas lá; o servidor nunca vai confiar no que vier do celular.
 
+import { MAX_PONTOS_CONTORNO } from './geo';
+
 export class ErroValidacao extends Error {
   constructor(msg: string) { super(msg); this.name = 'ErroValidacao'; }
 }
@@ -31,10 +33,19 @@ const CRIADO = NUM(0, 4102444800000, false, true);
 export const FASES_V = ['cria', 'recria', 'rip', 'engorda_pasto', 'tip', 'confinamento'] as const;
 export const CATEGORIAS_ANOTACAO_V = ['cerca', 'agua', 'cocho', 'pasto', 'animal', 'estrutura', 'outro'] as const;
 export const MAX_FOTOS_ANOTACAO = 4;
+export const SITUACOES_CAR_V = ['ativo', 'pendente', 'cancelado', 'suspenso'] as const;
+export const FINALIDADES_GTA_V = ['abate', 'engorda', 'recria', 'reproducao', 'exposicao', 'outra'] as const;
 export const TIPOS_FORMULA_V = ['sal_mineral', 'proteinado', 'proteico_energetico', 'rip', 'tip', 'creep', 'confinamento', 'outro'] as const;
 
 const ESQUEMAS_BASE: Record<string, Record<string, Regra>> = {
-  propriedades: { id: ID(false), nome: TXT(120, true), municipio: TXT(80), uf: TXT(2), areaHa: NUM(0, 10_000_000), criadoEm: CRIADO },
+  propriedades: {
+    id: ID(false), nome: TXT(120, true), municipio: TXT(80), uf: TXT(2), areaHa: NUM(0, 10_000_000), criadoEm: CRIADO,
+    // Rastreabilidade / EUDR: sede, contorno (WGS84) e documentos da fazenda
+    produtor: TXT(120), lat: NUM(-90, 90), lon: NUM(-180, 180),
+    contorno: { t: 'lista', max: MAX_PONTOS_CONTORNO, item: { lat: NUM(-90, 90, true), lon: NUM(-180, 180, true) } },
+    semDesmate: BOOL, car: TXT(60), carSituacao: ENUM(SITUACOES_CAR_V, false), cib: TXT(20), itrAno: NUM(1990, 2100, false, true),
+    ccir: TXT(20), ccirAno: NUM(1990, 2100, false, true), codEstab: TXT(30), ie: TXT(30),
+  },
   modulos: { id: ID(false), propriedadeId: ID(), nome: TXT(80, true), criadoEm: CRIADO },
   piquetes: { id: ID(false), moduloId: ID(), nome: TXT(80, true), areaHa: NUM(0, 1_000_000), capim: TXT(60), criadoEm: CRIADO },
   lotes: {
@@ -108,6 +119,12 @@ const ESQUEMAS_BASE: Record<string, Record<string, Regra>> = {
     urgente: BOOL, feita: BOOL, data: DATA(), feitaEm: DATA(false),
     fotos: { t: 'lista', max: MAX_FOTOS_ANOTACAO, item: { foto: TXT(36, true) } },
     autor: TXT(80), autorId: TXT(36), feitaPor: TXT(80), criadoEm: CRIADO,
+  },
+  // GTA: documento de trânsito (entrada ou saída de animais). Machos + fêmeas > 0 é conferido no servidor (gatilho na migração da rastreabilidade).
+  gtas: {
+    id: ID(false), propriedadeId: ID(), loteId: ID(false), sentido: ENUM(['entrada', 'saida']), numero: TXT(20, true), serie: TXT(5), uf: TXT(2),
+    emissao: DATA(), finalidade: ENUM(FINALIDADES_GTA_V, false), machos: NUM(0, 100_000, true, true), femeas: NUM(0, 100_000, true, true),
+    outroNome: TXT(120), outroMunicipio: TXT(80), outroUf: TXT(2), outroCodigo: TXT(30), obs: TXT(300), criadoEm: CRIADO,
   },
 };
 
@@ -183,7 +200,7 @@ function limpar(esquema: Record<string, Regra>, obj: unknown, rotulo: string): R
 export const ROTULOS: Record<string, string> = {
   propriedades: 'Fazenda', modulos: 'Módulo', piquetes: 'Piquete', lotes: 'Lote', animais: 'Animal', pesagens: 'Pesagem',
   ingredientes: 'Ingrediente', formulas: 'Fórmula', movimentos: 'Estoque', batidas: 'Batida', fornecimentos: 'Fornecimento', config: 'Configuração',
-  lancamentos: 'Lançamento', custosFixos: 'Custo fixo', vendas: 'Venda', sanidade: 'Sanidade', lembretes: 'Lembrete', funcionarios: 'Funcionário', anotacoes: 'Anotação',
+  lancamentos: 'Lançamento', custosFixos: 'Custo fixo', vendas: 'Venda', sanidade: 'Sanidade', lembretes: 'Lembrete', funcionarios: 'Funcionário', anotacoes: 'Anotação', gtas: 'GTA',
 };
 
 /** Valida e devolve uma cópia limpa do registro (sem campos desconhecidos). */
