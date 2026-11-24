@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { anel, lerResposta, pedidoEstatistica } from '../../supabase/functions/_shared/ndvi';
+import { anel, lerResposta, pedidoEstatistica, pixelsDoPoligono } from '../../supabase/functions/_shared/ndvi';
 
 describe('NDVI (função do satélite)', () => {
   const c = [{ lat: -20.1, lon: -54.1 }, { lat: -20.1, lon: -54.11 }, { lat: -20.11, lon: -54.11 }];
@@ -23,5 +23,15 @@ describe('NDVI (função do satélite)', () => {
     };
     expect(lerResposta(r)).toEqual([{ data: '2026-11-01', ndvi: 0.712, min: 0.2, max: 0.9, nuvemPct: 10 }]);
     expect(lerResposta(null)).toEqual([]);
+  });
+  it('nuvem medida contra a área do piquete, não contra o retângulo', () => {
+    // quadrado de 0,001° (≈ 10 x 10 pixels): ~100 pixels
+    const q = anel([{ lat: -20, lon: -50 }, { lat: -20, lon: -49.999 }, { lat: -19.999, lon: -49.999 }, { lat: -19.999, lon: -50 }])!;
+    expect(pixelsDoPoligono(q)).toBeCloseTo(100, 0);
+    const resp = (n: number, sem: number) => ({ data: [{ interval: { from: '2026-11-01T00:00:00Z' }, outputs: { ndvi: { bands: { B0: { stats: { mean: 0.7, sampleCount: n, noDataCount: sem } } } } } }] });
+    // retângulo de 200 pixels, metade fora do piquete, nada de nuvem: 0% de nuvem
+    expect(lerResposta(resp(200, 100), 100)[0].nuvemPct).toBe(0);
+    // 30 pixels do piquete com nuvem
+    expect(lerResposta(resp(200, 130), 100)[0].nuvemPct).toBe(30);
   });
 });

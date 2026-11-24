@@ -13,7 +13,7 @@ import { aceitarPonto, areaHa, lerContorno, limparContorno, type Ponto } from '.
 import { CampoData, CampoEscolha, CampoNumero, CampoTexto, Indicador, num, Topo, useAviso, useOnline } from '../components/ui';
 import { CapturaMidias, VerMidias } from '../components/Midias';
 import { atualizarNdvi, nuvemConfigurada } from '../nuvem/cliente';
-import { useEstadoNuvem, usePapel } from '../nuvem/useNuvem';
+import { sincronizarAgora, useEstadoNuvem, usePapel } from '../nuvem/useNuvem';
 
 const SITUACAO: Record<EstadoPiquete['situacao'], { nome: string; classe: string }> = {
   ocupado: { nome: 'Com gado', classe: 'atencao' },
@@ -37,6 +37,15 @@ function Avisos({ lista }: { lista: { nivel: string; titulo: string; texto: stri
   );
 }
 
+/** O que dizer depois de consultar o satélite. */
+export function mensagemSatelite(r: { piquetes: number; leituras: number; falhas?: number; motivo?: string }): string {
+  const s = (n: number) => (n === 1 ? '' : 's');
+  if (!r.piquetes && r.falhas) return `O satélite não respondeu para ${r.falhas} piquete${s(r.falhas)}${r.motivo ? ` (${r.motivo})` : ''}. Tente de novo mais tarde.`;
+  if (!r.piquetes) return 'Nenhum piquete com contorno na nuvem ainda. Espere o celular sincronizar e tente de novo.';
+  if (!r.leituras) return `Satélite consultado (${r.piquetes} piquete${s(r.piquetes)}), mas não há imagem nova sem nuvem. O satélite passa a cada ~5 dias.`;
+  return `Satélite consultado: ${r.leituras} leitura${s(r.leituras)} nova${s(r.leituras)}. O gráfico aparece logo abaixo, em Satélite (NDVI).`;
+}
+
 // ---------------------------------------------------------------- lista do pasto
 
 export function Pasto() {
@@ -48,13 +57,15 @@ export function Pasto() {
   const [buscando, setBuscando] = useState(false);
   const podeSatelite = !!est?.fazenda && (papel === 'dono' || papel === 'gerente') && nuvemConfigurada();
   const semContorno = useLiveQuery(() => db.piquetes.filter((p) => !p.contorno || p.contorno.length < 3).count(), []);
+  const secaoNdvi = useRef<HTMLHeadingElement>(null);
 
   const satelite = async () => {
     if (!est?.fazenda) return;
     setBuscando(true);
     try {
       const r = await atualizarNdvi(est.fazenda.id);
-      aviso(r.piquetes ? `Satélite consultado: ${r.piquetes} piquetes, ${r.leituras} leituras novas. Elas chegam na próxima sincronização.` : 'Nenhum piquete com contorno para o satélite.');
+      aviso(mensagemSatelite(r), !r.piquetes && !!r.falhas);
+      if (r.leituras) sincronizarAgora().catch(() => {});
     } catch (e) { aviso((e as Error).message, true); } finally { setBuscando(false); }
   };
 
@@ -65,19 +76,53 @@ export function Pasto() {
         {resumo?.length === 0 && (
           <div className="dica">Cadastre os módulos e os piquetes em <Link to="/fazenda">Fazenda</Link>. Depois, mude o gado de piquete por aqui.</div>
         )}
-        {resumo && resumo.length > 0 && <Link to="/pasto/mover" className="btn largo" data-testid="moverGado">🐂 Mudar o gado de piquete</Link>}
+        {resumo && resumo.length > 0 && (
+          <div className="botoes">
+            <Link to="/pasto/mover" className="btn" data-testid="moverGado">🐂 Mudar o gado de piquete</Link>
+            <button type="button" className="btn sec" data-testid="verNdvi" onClick={() => secaoNdvi.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>🛰️ Ver NDVI</button>
+          </div>
+        )}
         {resumo?.map((r) => <CartaoModulo key={r.modulo.id} r={r} />)}
-        <h2>Satélite (NDVI)</h2>
-        <p className="mudo">
-          O NDVI mede o verde do capim pela foto do satélite Sentinel-2 (a cada ~5 dias, sem nuvem). O app compara cada piquete com ele mesmo e com os
-          vizinhos e avisa quando o verde cai antes de dar para ver a olho.
-        </p>
-        {!!semContorno && <div className="dica">{semContorno} piquete(s) sem contorno. Abra o piquete e grave o contorno andando em volta com o GPS ou importe o arquivo (KML do Google Earth).</div>}
+        <h2 ref={secaoNdvi}>Satélite (NDVI)</h2>
         {podeSatelite && (
           <button className="btn sec largo" disabled={buscando || !online} onClick={satelite}>{buscando ? 'Consultando o satélite…' : '🛰️ Atualizar o satélite agora'}</button>
         )}
+        {resumo?.map((r) => <NdviModulo key={r.modulo.id} r={r} />)}
+        {!!semContorno && <div className="dica">{semContorno} piquete(s) sem contorno. Abra o piquete e grave o contorno andando em volta com o GPS ou importe o arquivo (KML do Google Earth).</div>}
+        <p className="mudo">
+          O NDVI mede o verde do capim pela foto do satélite Sentinel-2 (a cada ~5 dias, sem nuvem): perto de 0,8 é capim fechado e verde; abaixo de 0,35
+          (faixa vermelha) é pasto rapado ou solo aparecendo. O app compara cada piquete com ele mesmo e com os vizinhos e avisa quando o verde cai.
+        </p>
       </main>
     </>
+  );
+}
+
+const nivelNdvi = (v: number) => (v < 0.35 ? { nome: 'Fraco', classe: 'ruim' } : v < 0.55 ? { nome: 'Médio', classe: 'atencao' } : { nome: 'Bom', classe: 'bom' });
+
+/** NDVI de todos os piquetes do módulo, cada um com o gráfico, sem precisar abrir o piquete. */
+function NdviModulo({ r }: { r: ResumoModulo }) {
+  const series = useLiveQuery(() => db.ndvi.where('piqueteId').anyOf(r.estados.map((e) => e.piquete.id!)).toArray(), [r.estados.map((e) => e.piquete.id).join(',')]);
+  const com = r.estados.filter((e) => r.ndvi.get(e.piquete.id!)?.atual);
+  if (!com.length) return null;
+  return (
+    <div className="cartao" data-testid="ndviModulo">
+      <h3>{r.modulo.nome}</h3>
+      {com.map((e) => {
+        const a = r.ndvi.get(e.piquete.id!)!;
+        const n = nivelNdvi(a.atual!.ndvi);
+        return (
+          <div key={e.piquete.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--borda)' }}>
+            <div className="linha-lote">
+              <span><b>{e.piquete.nome}</b> <span className={`etiqueta ${n.classe}`}>{n.nome}</span></span>
+              <span><b style={{ fontSize: '1.2em' }}>{fmtNum(a.atual!.ndvi, 2)}</b> {a.tendencia ? SETA[a.tendencia] : ''} <span className="mudo">{fmtData(a.atual!.data).slice(0, 5)}</span></span>
+            </div>
+            <GraficoNdvi serie={(series ?? []).filter((x) => x.piqueteId === e.piquete.id)} />
+            <Link to={`/pasto/piquete/${e.piquete.id}`} className="mudo">Abrir o piquete ›</Link>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 

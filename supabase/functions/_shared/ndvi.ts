@@ -44,6 +44,19 @@ export function anel(contorno: unknown): number[][] | null {
   return pts;
 }
 
+/**
+ * Quantos pixels de ~10 m cabem dentro do contorno (na grade de 0,0001° do pedido).
+ * A API conta como "sem dado" também os pixels do retângulo que ficam fora do piquete; por isso a nuvem é medida
+ * contra a área do piquete e não contra o total de pixels.
+ */
+export function pixelsDoPoligono(a: number[][]): number {
+  const lat0 = a.reduce((s, p) => s + p[1], 0) / a.length;
+  const kx = 111320 * Math.cos((lat0 * Math.PI) / 180), ky = 110574;
+  let area = 0;
+  for (let i = 0; i < a.length - 1; i++) area += a[i][0] * kx * a[i + 1][1] * ky - a[i + 1][0] * kx * a[i][1] * ky;
+  return Math.abs(area / 2) / ((0.0001 * kx) * (0.0001 * ky));
+}
+
 /** Corpo do pedido à Statistical API para um piquete. */
 export function pedidoEstatistica(contorno: unknown, ultima: string | null, hoje: string) {
   const a = anel(contorno);
@@ -67,7 +80,7 @@ export function pedidoEstatistica(contorno: unknown, ultima: string | null, hoje
 const n3 = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >= -1 && v <= 1 ? Math.round(v * 1000) / 1000 : undefined);
 
 /** Resposta da Statistical API → leituras. Intervalo sem pixel bom (tudo nuvem) fica de fora. */
-export function lerResposta(r: unknown): Leitura[] {
+export function lerResposta(r: unknown, pixels?: number): Leitura[] {
   const dados = (r as { data?: unknown[] })?.data;
   if (!Array.isArray(dados)) return [];
   const out: Leitura[] = [];
@@ -80,7 +93,8 @@ export function lerResposta(r: unknown): Leitura[] {
     const media = n3(st.mean);
     const total = Number(st.sampleCount), sem = Number(st.noDataCount);
     if (media === undefined || !(total > 0) || !(sem >= 0) || sem >= total) continue;
-    out.push({ data, ndvi: media, min: n3(st.min), max: n3(st.max), nuvemPct: Math.round((sem / total) * 1000) / 10 });
+    const fora = pixels && pixels > 0 ? Math.max(0, Math.min(1, 1 - (total - sem) / pixels)) : sem / total;
+    out.push({ data, ndvi: media, min: n3(st.min), max: n3(st.max), nuvemPct: Math.round(fora * 1000) / 10 });
   }
   return out;
 }
