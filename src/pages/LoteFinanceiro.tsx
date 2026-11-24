@@ -126,7 +126,7 @@ function FormSaida({ lote, precoArroba, rendimento, comissao, pesoSugerido, aoTe
       <div style={{ height: 12 }} />
       <CampoNumero rotulo="Cabeças" valor={cab} aoMudar={setCab} unidade="cab" nome="saidaCab" dica={`O lote tem ${lote.qtdCabecas}.`} />
       <CampoData rotulo="Data" valor={data} aoMudar={setData} nome="saidaData" />
-      <CampoNumero rotulo="Peso médio de saída" valor={peso} aoMudar={setPeso} unidade="kg" nome="saidaPeso" />
+      <CampoNumero rotulo="Peso médio de saída" valor={peso} aoMudar={setPeso} unidade="kg" pesoVivo nome="saidaPeso" />
       {tipo === 'venda' && (
         <>
           <div className="campo"><Opcoes valor={modo} aoMudar={(m) => { setModo(m); setPreco(m === 'arroba' ? String(precoArroba).replace('.', ',') : ''); }} opcoes={[{ valor: 'arroba', rotulo: 'Por arroba' }, { valor: 'cabeca', rotulo: 'Por cabeça' }]} /></div>

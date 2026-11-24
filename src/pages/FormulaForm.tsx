@@ -144,7 +144,7 @@ export function FormulaForm() {
         <CampoNumero rotulo="Consumo" valor={consumo} aoMudar={setConsumo} unidade="% PV" nome="consumo" dica="Em % do peso vivo por dia. Ex.: 0,1 para proteinado, 0,3 para proteico energético." />
         <div className="cartao">
           <div className="grade">
-            <CampoNumero rotulo="Peso do animal" valor={pesoRef} aoMudar={setPesoRef} unidade="kg" />
+            <CampoNumero rotulo="Peso do animal" valor={pesoRef} aoMudar={setPesoRef} unidade="kg" pesoVivo />
             <CampoNumero rotulo="GMD esperado" valor={gmdRef} aoMudar={setGmdRef} unidade="kg/d" />
           </div>
           <div className="grade">

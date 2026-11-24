@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { escolherOpcaoFalada, melhorData, melhorNumero, ouvir, textoFalado, vozDisponivel, type FormatoTexto } from '../voz';
+import { AVISO_PESO_EM_KG, escolherOpcaoFalada, explicarArroba, KG_POR_ARROBA_VIVA, melhorData, melhorNumero, melhorPeso, ouvir, textoFalado, vozDisponivel, type FormatoTexto } from '../voz';
 import { hojeISO } from '../calc';
 import { telaDeCima } from '../navegacao';
 import { Perfil } from './Perfil';
@@ -82,7 +82,7 @@ export function useOnline() {
 
 // ---------- Voz: explicação nos 3 primeiros usos e faixa "pode falar" ----------
 /** O que o campo espera ouvir (muda o exemplo da explicação). */
-export type TipoVoz = 'numero' | 'texto' | 'data' | 'escolha' | 'pesagem' | 'email' | 'codigo' | 'digitos';
+export type TipoVoz = 'numero' | 'peso' | 'texto' | 'data' | 'escolha' | 'pesagem' | 'email' | 'codigo' | 'digitos';
 
 const CHAVE_USOS_MIC = 'boiforte-mic-usos';
 export const VEZES_DICA_MIC = 3;
@@ -97,10 +97,11 @@ export function mostrarDicaMicDeNovo() { gravarUsosMic(0); }
 
 const EXEMPLOS: Record<TipoVoz, ReactNode> = {
   numero: <>Fale o número: <b>“trezentos e vinte”</b>. Com vírgula: <b>“trezentos e vinte vírgula cinco”</b> ou <b>“trezentos e vinte e meio”</b>.</>,
+  peso: <>Fale o peso em quilos: <b>“trezentos e vinte”</b>. Se falar em arroba (<b>“quinze arrobas”</b>), o app converte para kg: 30 kg por arroba de peso vivo.</>,
   texto: <>Fale normalmente, como numa conversa: <b>“Retiro de cima”</b>. O que você falar vira texto no campo.</>,
   data: <>Fale <b>“hoje”</b>, <b>“ontem”</b> ou a data: <b>“15 de março”</b>.</>,
   escolha: <>Fale o nome da opção que você quer na lista. Ex.: <b>“milho”</b>.</>,
-  pesagem: <>Fale o brinco e o peso: <b>“brinco 12 peso 318”</b>. Sem brinco, fale só o peso: <b>“318”</b>.</>,
+  pesagem: <>Fale o brinco e o peso: <b>“brinco 12 peso 318”</b>. Sem brinco, fale só o peso: <b>“318”</b>. Em arroba (<b>“brinco 12 peso 21 arrobas”</b>) o app converte para kg.</>,
   email: <>Fale o e-mail assim: <b>“joao arroba gmail ponto com”</b>.</>,
   codigo: <>Fale as letras e os números do código, um por um.</>,
   digitos: <>Fale os números um por um: <b>“um, dois, três…”</b>.</>,
@@ -205,13 +206,25 @@ type PropsEntrada = Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onCha
   rotuloVoz?: string;
   unidade?: string;
   multilinha?: boolean;
+  /** Peso de animal vivo em kg: se falar em arroba ("15 arrobas"), converte (30 kg por arroba de peso vivo). */
+  pesoVivo?: boolean;
 };
 
 /** Caixa de texto com microfone ao lado. Base de todos os campos de escrever do app. */
-export function Entrada({ valor, aoMudar, voz = 'texto', rotuloVoz, unidade, multilinha, className, ...resto }: PropsEntrada) {
+export function Entrada({ valor, aoMudar, voz = 'texto', rotuloVoz, unidade, multilinha, pesoVivo, className, ...resto }: PropsEntrada) {
   const aviso = useAviso();
   const numero = voz === 'numero';
   const ouviu = (t: string) => {
+    if (numero && (pesoVivo || unidade === 'kg')) {
+      // Campo em kg: "15 arrobas" vira 450 kg no peso do animal; em outro campo de kg (ração), avisa que é em kg.
+      const p = melhorPeso(t);
+      if (p && 'kg' in p && (p.arrobas == null || pesoVivo)) {
+        aoMudar(String(p.kg).replace('.', ','));
+        if (p.arrobas != null) aviso(`${explicarArroba(p.arrobas, p.kg)}. Confira.`);
+        return;
+      }
+      if (p) { aviso(AVISO_PESO_EM_KG, true); return; }
+    }
     if (numero) {
       const n = melhorNumero(t);
       if (n == null) aviso(`Não entendi um número em "${t.split('|')[0]}". Tente de novo.`, true);
@@ -222,7 +235,7 @@ export function Entrada({ valor, aoMudar, voz = 'texto', rotuloVoz, unidade, mul
     // Em caixa grande (observações) o que se fala é acrescentado; nos outros campos, substitui.
     aoMudar(multilinha && valor.trim() ? `${valor.trim()} ${v}` : v);
   };
-  const tipoVoz: TipoVoz = numero ? 'numero' : voz || 'texto';
+  const tipoVoz: TipoVoz = numero ? (pesoVivo ? 'peso' : 'numero') : voz || 'texto';
   const rotulo = rotuloVoz ? `Falar ${rotuloVoz.toLowerCase()}` : 'Falar';
   return (
     <div className={`com-mic ${multilinha ? 'alto' : ''} ${className ?? ''}`}>
@@ -237,20 +250,36 @@ export function Entrada({ valor, aoMudar, voz = 'texto', rotuloVoz, unidade, mul
 }
 
 // ---------- Campo numérico com voz ----------
-export function CampoNumero({ rotulo, valor, aoMudar, unidade, dica, nome, rotuloAcessivel }: {
+export function CampoNumero({ rotulo, valor, aoMudar, unidade, dica, nome, rotuloAcessivel, pesoVivo }: {
   rotulo: string; valor: string; aoMudar: (v: string) => void; unidade?: string; dica?: string; nome?: string; min?: number; passo?: string;
   /** Nome para leitor de tela quando o rótulo visível é genérico (ex.: "kg para Lote 5"). */
   rotuloAcessivel?: string;
+  /** Peso do animal (por cabeça) em kg: aceita arroba falada e avisa quando o número digitado parece arroba. */
+  pesoVivo?: boolean | 'total';
 }) {
   const id = useId();
+  const n = num(valor);
+  // Por cabeça, menos de 40 kg quase sempre é arroba digitada (18 @ = 540 kg).
+  const pareceArroba = pesoVivo === true && n != null && n > 0 && n < LIMITE_PARECE_ARROBA;
   return (
     <div className="campo">
       <label htmlFor={id}>{rotulo}</label>
-      <Entrada id={id} name={nome} aria-label={rotuloAcessivel} valor={valor} aoMudar={aoMudar} voz="numero" unidade={unidade} rotuloVoz={rotulo} />
+      <Entrada id={id} name={nome} aria-label={rotuloAcessivel} valor={valor} aoMudar={aoMudar} voz="numero" unidade={unidade} rotuloVoz={rotulo} pesoVivo={!!pesoVivo} />
+      {pareceArroba && (
+        <div className="alerta atencao" role="status" data-testid="pareceArroba" style={{ marginTop: 8, marginBottom: 0, flexWrap: 'wrap' }}>
+          <span>O peso é em <b style={{ display: 'inline' }}>kg</b>, não em arroba. {n} kg é muito leve: se foram {n} arrobas, são {String(Math.round(n * KG_POR_ARROBA_VIVA * 100) / 100).replace('.', ',')} kg.</span>
+          <button type="button" className="btn sec" onClick={() => aoMudar(String(Math.round(n * KG_POR_ARROBA_VIVA * 100) / 100).replace('.', ','))}>
+            Era arroba: usar {String(Math.round(n * KG_POR_ARROBA_VIVA * 100) / 100).replace('.', ',')} kg
+          </button>
+        </div>
+      )}
       {dica && <small>{dica}</small>}
     </div>
   );
 }
+
+/** Abaixo disso, o peso por cabeça digitado provavelmente está em arroba (bezerro ao nascer pesa uns 30 a 40 kg). */
+export const LIMITE_PARECE_ARROBA = 40;
 
 /** Converte o texto do campo ("320,5") em número. */
 export function num(v: string): number | null {
