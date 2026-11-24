@@ -121,6 +121,17 @@ describe('servidor', () => {
     expect(r[7].erro).toMatch(/passou de 80/);
   });
 
+  it('lote passa de RIP para TIP com o histórico de fases', async () => {
+    const fases = [{ data: '2026-10-01', de: 'rip', para: 'tip', pesoMedio: 372, dieta: 'RIP fêmeas', extra: 'x' }];
+    const r = await enviar(ana, fa, [
+      { tabela: 'lotes', gid: uuid(27), op: 'put', dados: { ...lote(27, 1).dados, fase: 'tip', fases } },
+      { tabela: 'lotes', gid: uuid(28), op: 'put', dados: { ...lote(28, 1).dados, fase: 'rip', fases: [{ data: '2026-10-01', de: 'rip', para: 'hacker' }] } },
+    ]);
+    expect(r.map((x) => x.ok)).toEqual([true, false]);
+    expect(r[0].dados!.fases).toEqual([{ data: '2026-10-01', de: 'rip', para: 'tip', pesoMedio: 372, dieta: 'RIP fêmeas' }]);
+    expect(r[1].erro).toMatch(/não permitido/);
+  });
+
   it('refaz as contas de dinheiro: valor adulterado é corrigido', async () => {
     const r = await enviar(ana, fa, [
       { tabela: 'vendas', gid: uuid(30), op: 'put', dados: { loteId: uuid(2), data: '2026-11-10', tipo: 'venda', cabecas: 10, pesoMedio: 366, modo: 'arroba', preco: 320, rendimento: 0.5, comissaoPct: 0.02, frete: 0, valorBruto: 1, valorLiquido: 9999999, criadoEm: 0 } },
@@ -170,12 +181,13 @@ describe('servidor', () => {
     const nao = await enviar(caio, fa, [
       { tabela: 'vendas', gid: uuid(41), op: 'put', dados: { loteId: uuid(2), data: '2026-11-10', tipo: 'morte', cabecas: 1, valorBruto: 0, valorLiquido: 0, criadoEm: 0 } },
       { tabela: 'lotes', gid: uuid(2), op: 'put', dados: { ...lote(2, 1).dados, qtdCabecas: 31, nome: 'Renomeado' } },
+      { tabela: 'lotes', gid: uuid(2), op: 'put', dados: { ...lote(2, 1).dados, qtdCabecas: 31, fase: 'tip', fases: [{ data: '2026-10-01', de: 'recria', para: 'tip' }] } },
       { tabela: 'lancamentos', gid: uuid(42), op: 'put', dados: { data: '2026-09-01', tipo: 'despesa', categoria: 'outros', valor: 10, origem: 'manual', criadoEm: 0 } },
       { tabela: 'lancamentos', gid: uuid(31), op: 'del' },
       { tabela: 'lotes', gid: uuid(2), op: 'del' },
       { tabela: 'config', gid: 'precoArroba', op: 'put', dados: { chave: 'precoArroba', valor: 1 } },
     ]);
-    expect(nao.map((x) => x.ok)).toEqual([false, false, false, false, false, false]);
+    expect(nao.map((x) => x.ok)).toEqual([false, false, false, false, false, false, false]); // vaqueiro não muda a fase do lote
     const vac = await enviar(caio, fa, [
       { tabela: 'sanidade', gid: uuid(44), op: 'put', dados: { loteId: uuid(2), data: '2026-11-19', feito: true, tipo: 'vacina', produto: 'Aftosa', custo: 240, criadoEm: 0 } },
       { tabela: 'lancamentos', gid: uuid(43), op: 'put', dados: { data: '2026-11-19', tipo: 'despesa', categoria: 'sanidade', valor: 240, loteId: uuid(2), origem: 'sanidade', refId: uuid(44), criadoEm: 0 } },

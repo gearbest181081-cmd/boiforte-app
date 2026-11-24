@@ -532,6 +532,22 @@ function confere(cond, msg) {
     await foto('09-escuro');
     await page.emulateMedia({ colorScheme: 'light' });
 
+    console.log('18b. Lote passa de recria (RIP) para TIP');
+    await page.locator('a.cartao', { hasText: 'Macho — 1º lote' }).click();
+    await page.getByRole('link', { name: 'Passar para TIP' }).click();
+    await page.getByRole('radio', { name: 'TIP' }).waitFor();
+    confere((await page.getByRole('radio', { name: 'TIP' }).getAttribute('aria-checked')) === 'true', 'a próxima fase sugerida é a TIP');
+    confere((await page.locator('input[name=pesoAlvoNovo]').inputValue()) === '540', 'peso alvo sugerido para a TIP');
+    await page.locator('input[name=pesoMudanca]').fill('242');
+    await foto('21-mudar-fase');
+    await page.getByRole('button', { name: 'Passar lote para TIP' }).click();
+    await page.getByRole('heading', { name: 'Fases do lote' }).waitFor();
+    const fasesTxt = await page.locator('table').filter({ hasText: 'Fase' }).first().innerText();
+    confere(/Recria/.test(fasesTxt) && /TIP/.test(fasesTxt) && /242/.test(fasesTxt), 'histórico mostra a recria e a TIP com o peso da troca');
+    confere(/TIP \(terminação intensiva a pasto\)/.test(await page.locator('main p.mudo').first().innerText()), 'lote agora está na TIP');
+    await foto('22-fases-do-lote');
+    await page.getByRole('link', { name: 'Início' }).click();
+
     if (nuvemNoBuild) {
       console.log('19. Perfil, sair e outra conta no mesmo celular');
       await page.getByRole('button', { name: /^Perfil de / }).click();

@@ -4,6 +4,7 @@ import { Inicio } from './pages/Inicio';
 import { Lotes } from './pages/Lotes';
 import { LoteForm } from './pages/LoteForm';
 import { LoteDetalhe } from './pages/LoteDetalhe';
+import { MudarFase } from './pages/MudarFase';
 import { Pesagem } from './pages/Pesagem';
 import { Fazenda } from './pages/Fazenda';
 import { Mais } from './pages/Mais';
@@ -40,6 +41,7 @@ export function App() {
               <Route path="/lotes/:id" element={<LoteDetalhe />} />
               <Route path="/lotes/:id/editar" element={<LoteForm />} />
               <Route path="/lotes/:id/relatorio" element={<RelatorioPesagem />} />
+              <Route path="/lotes/:id/fase" element={<MudarFase />} />
               <Route path="/pesar" element={<Pesagem />} />
               <Route path="/pesar/:loteId" element={<Pesagem />} />
               <Route path="/fazenda" element={<Fazenda />} />
