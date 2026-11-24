@@ -6,7 +6,7 @@
 // Segredos (só no servidor): CDSE_CLIENT_ID e CDSE_CLIENT_SECRET (conta gratuita do Copernicus Data Space), CRON_SECRET.
 // Cota gratuita do Copernicus: 10.000 pedidos e 10.000 unidades de processamento por mês; cada piquete gasta 1 pedido por rodada.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
-import { CDSE_ESTATISTICA, CDSE_TOKEN, lerResposta, pedidoEstatistica, somaDias } from '../_shared/ndvi.ts';
+import { anel, CDSE_ESTATISTICA, CDSE_TOKEN, lerResposta, pedidoEstatistica, pixelsDoPoligono, somaDias } from '../_shared/ndvi.ts';
 
 const ORIGEM = Deno.env.get('APP_ORIGIN') ?? '';
 const MAX = Math.min(Number(Deno.env.get('NDVI_MAX_PIQUETES') ?? 250) || 250, 2000);
@@ -81,7 +81,8 @@ Deno.serve(async (req) => {
   const inicio = Date.now();
   for (const p of fila) {
     if (Date.now() - inicio > 120_000) break; // a função tem tempo limitado; o resto vai na próxima rodada
-    const pedido = pedidoEstatistica(p.contorno, p.ultima, hoje);
+    // pedido do app: refaz os 120 dias (corrige leituras antigas); agendado: só desde a última leitura
+    const pedido = pedidoEstatistica(p.contorno, fazenda ? null : p.ultima, hoje);
     if (!pedido) { falhas++; motivo ??= 'contorno inválido'; console.warn('ndvi', p.gid, 'contorno inválido'); continue; }
     try {
       const r = await fetch(CDSE_ESTATISTICA, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(pedido) });
@@ -92,7 +93,7 @@ Deno.serve(async (req) => {
         console.warn('ndvi', p.gid, r.status, txt);
         continue;
       }
-      const linhas = lerResposta(await r.json());
+      const linhas = lerResposta(await r.json(), pixelsDoPoligono(anel(p.contorno)!));
       if (linhas.length) {
         const { data: n, error: eg } = await servico.rpc('gravar_ndvi', { p_fazenda: p.fazenda_id, p_piquete: p.gid, p_linhas: linhas });
         if (eg) { falhas++; motivo ??= 'gravar'; console.warn('ndvi gravar', p.gid, eg.message); continue; }
