@@ -64,8 +64,8 @@ function SimGmd({ a }: { a: AnaliseLote | null }) {
       <div className="cartao">
         <h3>Se eu mudar o GMD, quanto tempo ganho?</h3>
         <div className="grade">
-          <CampoNumero rotulo="Peso de hoje" valor={peso} aoMudar={setPeso} unidade="kg" nome="simPeso" />
-          <CampoNumero rotulo="Peso de saída" valor={alvo} aoMudar={setAlvo} unidade="kg" nome="simAlvo" />
+          <CampoNumero rotulo="Peso de hoje" valor={peso} aoMudar={setPeso} unidade="kg" pesoVivo nome="simPeso" />
+          <CampoNumero rotulo="Peso de saída" valor={alvo} aoMudar={setAlvo} unidade="kg" pesoVivo nome="simAlvo" />
           <CampoNumero rotulo="GMD de agora" valor={g1} aoMudar={setG1} unidade="kg/dia" nome="simGmd1" />
           <CampoNumero rotulo="GMD novo" valor={g2} aoMudar={setG2} unidade="kg/dia" nome="simGmd2" />
         </div>
@@ -101,7 +101,7 @@ function SimSegurar({ a, precoArroba, rendimento }: { a: AnaliseLote | null; pre
       <div className="cartao">
         <h3>Se eu segurar o lote mais uns dias com a @ travada?</h3>
         <div className="grade">
-          <CampoNumero rotulo="Peso de hoje" valor={peso} aoMudar={setPeso} unidade="kg" nome="segPeso" />
+          <CampoNumero rotulo="Peso de hoje" valor={peso} aoMudar={setPeso} unidade="kg" pesoVivo nome="segPeso" />
           <CampoNumero rotulo="GMD esperado" valor={gmd} aoMudar={setGmd} unidade="kg/dia" nome="segGmd" />
           <CampoNumero rotulo="Segurar por" valor={dias} aoMudar={setDias} unidade="dias" nome="segDias" />
           <CampoNumero rotulo="Custo por cabeça por dia" valor={custo} aoMudar={setCusto} unidade="R$" nome="segCusto" />
@@ -143,7 +143,7 @@ function SimCompra({ precoArroba, rendimento, oportunidade }: { precoArroba: num
       <div className="cartao">
         <h3>Vale a pena comprar este gado?</h3>
         <div className="grade">
-          <CampoNumero rotulo="Peso de compra" valor={v.peso} aoMudar={set('peso')} unidade="kg" nome="cpPeso" />
+          <CampoNumero rotulo="Peso de compra" valor={v.peso} aoMudar={set('peso')} unidade="kg" pesoVivo nome="cpPeso" />
           <CampoNumero rotulo="Preço por cabeça" valor={v.preco} aoMudar={set('preco')} unidade="R$" nome="cpPreco" />
           <CampoNumero rotulo="Dias até vender" valor={v.dias} aoMudar={set('dias')} unidade="dias" nome="cpDias" />
           <CampoNumero rotulo="GMD esperado" valor={v.gmd} aoMudar={set('gmd')} unidade="kg/dia" nome="cpGmd" />

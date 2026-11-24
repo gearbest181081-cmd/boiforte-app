@@ -33,7 +33,7 @@ export function SimComparar() {
           { valor: 'foto', rotulo: 'Dois rótulos', dica: 'foto ou digitando' },
         ]} />
         <div className="grade" style={{ marginTop: 12 }}>
-          <CampoNumero rotulo="Peso do animal" valor={peso} aoMudar={setPeso} unidade="kg" nome="cmpPeso" />
+          <CampoNumero rotulo="Peso do animal" valor={peso} aoMudar={setPeso} unidade="kg" pesoVivo nome="cmpPeso" />
           <CampoNumero rotulo="Cabeças" valor={cab} aoMudar={setCab} nome="cmpCab" />
         </div>
       </div>

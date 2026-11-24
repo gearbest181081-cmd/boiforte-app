@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, pontosDoLote, registrarPesagemIndividual, type Animal, type Pesagem as PesagemT } from '../db';
 import { fmtGmd, fmtKg, gmd, hojeISO, media, resumo } from '../calc';
-import { lerPesagemFalada, melhorNumero } from '../voz';
+import { AVISO_PESO_EM_KG, explicarArroba, lerPesagemFalada, melhorPeso, PESAGEM_ARROBA_SEM_NUMERO } from '../voz';
 import { BotaoMic, CampoData, CampoEscolha, CampoNumero, CampoTexto, num, Opcoes, Topo, useAviso } from '../components/ui';
 import { BotaoBalanca } from '../components/Balanca';
 import { BotaoFoto } from '../components/Foto';
@@ -62,7 +62,7 @@ export function Pesagem() {
   const novaLinha = () => setLinhas((ls) => [...ls, { brinco: individual ? '' : String(ls.length + 1), peso: '' }]);
 
   /** Põe um peso na lista: no brinco dito, ou na primeira linha sem peso. */
-  const colocarPeso = (brinco: string | null, kg: number) => {
+  const colocarPeso = (brinco: string | null, kg: number, arrobas?: number) => {
     const peso = String(kg).replace('.', ',');
     setLinhas((ls) => {
       const i = brinco ? ls.findIndex((l) => l.brinco.trim().toUpperCase() === brinco.toUpperCase()) : -1;
@@ -71,7 +71,8 @@ export function Pesagem() {
       if (vazia >= 0) return ls.map((l, j) => (j === vazia ? { brinco: brinco ?? l.brinco, peso } : l));
       return [...ls, { brinco: brinco ?? (individual ? '' : String(ls.length + 1)), peso }];
     });
-    aviso(brinco ? `Brinco ${brinco}: ${fmtKg(kg)}` : `Peso lido: ${fmtKg(kg)}`);
+    const conta = arrobas != null ? ` (${explicarArroba(arrobas, kg)}). Confira.` : '';
+    aviso(brinco ? `Brinco ${brinco}: ${fmtKg(kg)}${conta}` : `Peso lido: ${fmtKg(kg)}${conta}`);
   };
   /** Foto do visor com o lote todo: preenche o total (o app divide) ou a média, se a balança já mostrar. */
   const leuLote = (r: LeituraBalancaLote) => {
@@ -89,13 +90,16 @@ export function Pesagem() {
     }
   };
   const ouviuPesagem = (texto: string) => {
+    let falouArroba = false;
     for (const t of texto.split('|')) {
       const r = lerPesagemFalada(t);
-      if (r) { colocarPeso(r.brinco, r.peso); return; }
+      if (r === PESAGEM_ARROBA_SEM_NUMERO) { falouArroba = true; continue; }
+      if (r) { colocarPeso(r.brinco, r.peso, r.arrobas); return; }
     }
-    // Só o peso ("trezentos e dezoito"): vai para a primeira linha sem peso.
-    const kg = melhorNumero(texto);
-    if (kg != null && kg > 0) { colocarPeso(null, kg); return; }
+    // Só o peso ("trezentos e dezoito" ou "18 arrobas"): vai para a primeira linha sem peso.
+    const p = melhorPeso(texto);
+    if (p && 'kg' in p && p.kg > 0) { colocarPeso(null, p.kg, p.arrobas); return; }
+    if (falouArroba || (p && 'erro' in p)) { aviso(AVISO_PESO_EM_KG, true); return; }
     aviso(`Não entendi. Fale assim: "brinco 12 peso 318".`, true);
   };
 
@@ -171,8 +175,8 @@ export function Pesagem() {
             {(modo === 'media' || modo === 'total') && !individual ? (
               <>
                 {modo === 'media'
-                  ? <CampoNumero rotulo="Peso médio por cabeça" valor={pesoMedio} aoMudar={setPesoMedio} unidade="kg" nome="pesoMedio" />
-                  : <CampoNumero rotulo="Peso total na balança" valor={pesoTotal} aoMudar={setPesoTotal} unidade="kg" nome="pesoTotal" dica="O peso de todos os animais que subiram juntos." />}
+                  ? <CampoNumero rotulo="Peso médio por cabeça" valor={pesoMedio} aoMudar={setPesoMedio} unidade="kg" pesoVivo nome="pesoMedio" />
+                  : <CampoNumero rotulo="Peso total na balança" valor={pesoTotal} aoMudar={setPesoTotal} unidade="kg" pesoVivo="total" nome="pesoTotal" dica="O peso de todos os animais que subiram juntos." />}
                 <CampoNumero rotulo="Cabeças pesadas" valor={qtd} aoMudar={setQtd} unidade="cab" nome="qtdPesada" />
                 {modo === 'total' && mediaAtual ? (
                   <div className="dica" data-testid="contaMedia">{fmtKg(num(pesoTotal), 0)} ÷ {qtdNum} cab = <b>{fmtKg(mediaAtual)} por cabeça</b></div>
