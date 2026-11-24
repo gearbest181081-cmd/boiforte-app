@@ -50,6 +50,33 @@ export const PAPEIS: Record<Papel, { nome: string; texto: string }> = {
   consultor: { nome: 'Consultor', texto: 'Só olha. Bom para o técnico ou o contador.' },
 };
 
+/** O que cada papel pode e não pode fazer, em palavras simples (a regra de verdade fica no servidor). */
+export const PERMISSOES: Record<Papel, { pode: string[]; naoPode: string[] }> = {
+  dono: {
+    pode: ['Ver e mudar tudo', 'Chamar e tirar pessoas da equipe', 'Mudar o que cada um pode fazer'],
+    naoPode: [],
+  },
+  gerente: {
+    pode: ['Tudo o que o vaqueiro faz', 'Ver e lançar o dinheiro: compras, vendas e custos', 'Cadastrar funcionários e salários', 'Mudar lotes, pastos, fórmulas e estoque'],
+    naoPode: ['Chamar ou tirar pessoas da equipe do app'],
+  },
+  vaqueiro: {
+    pode: ['Pesar os animais', 'Lançar o trato no cocho', 'Lançar vacina e remédio', 'Fazer anotações e tarefas da ronda'],
+    naoPode: ['Ver dinheiro, preços, custos e salários', 'Mudar fórmulas da ração e configurações', 'Chamar ou tirar pessoas da equipe'],
+  },
+  consultor: {
+    pode: ['Ver tudo, inclusive o dinheiro e os salários', 'Tirar relatórios'],
+    naoPode: ['Lançar ou mudar qualquer coisa', 'Chamar ou tirar pessoas da equipe'],
+  },
+};
+
+/** Texto do convite mandado no WhatsApp, com o passo a passo para quem recebe. */
+export function mensagemConvite(papel: Papel, codigo: string, fazenda?: string): string {
+  return `Você foi chamado para a equipe${fazenda ? (/^fazenda\b/i.test(fazenda.trim()) ? ` da ${fazenda.trim()}` : ` da fazenda ${fazenda.trim()}`) : ''} no BoiForte como ${PAPEIS[papel].nome.toLowerCase()}.\n\n`
+    + `Seu código: ${codigo}\n\n`
+    + `1. Abra o app BoiForte (ou instale)\n2. Entre com o seu e-mail\n3. Vá em Mais > Nuvem e equipe\n4. Digite o código e toque em "Entrar na equipe"\n\nO código vale 7 dias e só para você.`;
+}
+
 /** Tabelas que o vaqueiro pode ver e gravar (o resto, principalmente o dinheiro e os salários dos funcionários, fica de fora). */
 export const VAQUEIRO_LE = ['propriedades', 'modulos', 'piquetes', 'lotes', 'animais', 'pesagens', 'ingredientes', 'formulas', 'movimentos', 'batidas', 'fornecimentos', 'sanidade', 'lembretes', 'config', 'anotacoes'] as const;
 // lotes: só a quantidade de cabeças (pesagem por brinco); lancamentos: só o custo de vacina (origem sanidade).

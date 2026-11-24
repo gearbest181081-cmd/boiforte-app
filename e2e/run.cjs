@@ -674,6 +674,20 @@ function confere(cond, msg) {
         await p2.waitForTimeout(200);
         await mic.click(); await p2.waitForTimeout(200);
         confere(!(await p2.getByTestId('dicaMic').count()), 'do quarto uso em diante a explicação não aparece');
+        await p2.evaluate(() => { window.__fala = 'quinze arrobas'; });
+        await mic.click();
+        await esperarValor('input[name=pesoMedio]', '450');
+        confere(true, 'falar "quinze arrobas" vira 450 kg');
+        await p2.evaluate(() => { window.__fala = 'umas arrobas'; });
+        await mic.click(); await p2.waitForTimeout(300);
+        confere((await p2.locator('body').innerText()).includes('Este peso é em kg, não em arroba'), 'arroba sem número avisa que o peso é em kg');
+        await p2.locator('input[name=pesoMedio]').fill('18');
+        await p2.getByTestId('pareceArroba').waitFor();
+        await p2.getByTestId('pareceArroba').scrollIntoViewIfNeeded();
+        await p2.screenshot({ path: path.join(FOTOS, '23-parece-arroba.png') });
+        await p2.getByRole('button', { name: /Era arroba: usar 540 kg/ }).click();
+        await esperarValor('input[name=pesoMedio]', '540');
+        confere(!(await p2.getByTestId('pareceArroba').count()), '18 digitado: aviso de arroba converte para 540 kg');
       }
       await p2.evaluate(() => { window.__fala = 'fêmea'; });
       await p2.getByRole('button', { name: 'Falar lote' }).click();

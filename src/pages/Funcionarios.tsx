@@ -10,8 +10,9 @@ import { custoMensalFuncionario, folhaAtiva } from '../financeiro';
 import { fmtData, hojeISO } from '../calc';
 import { CampoData, CampoEscolha, CampoNumero, CampoTexto, num, Topo, useAviso } from '../components/ui';
 import { rs } from './Nutricao';
-import { criarConvite, equipe, mudarPapel, NOME_PLANO, planoDaFazenda, removerMembro, type Membro, type PlanoFazenda } from '../nuvem/cliente';
-import { PAPEIS, type Papel } from '../nuvem/esquema';
+import { criarConvite, equipe, mudarPapel, NOME_PLANO, planoDaFazenda, PRECO_PESSOA_EXTRA, removerMembro, type Membro, type PlanoFazenda } from '../nuvem/cliente';
+import { mensagemConvite, PAPEIS, type Papel } from '../nuvem/esquema';
+import { Permissoes } from '../components/Permissoes';
 import { useEstadoNuvem, usePapel } from '../nuvem/useNuvem';
 import { useSessao } from '../nuvem/sessao';
 import { linkWhatsApp } from '../exportar';
@@ -19,7 +20,6 @@ import { linkWhatsApp } from '../exportar';
 export const FUNCOES = ['Vaqueiro', 'Gerente', 'Tratorista', 'Campeiro', 'Retireiro', 'Serviços gerais', 'Cozinheira'];
 /** 13º (1/12) + férias com 1/3 (1/12 × 4/3), por mês, sobre o salário. */
 export const PCT_13_FERIAS = 1 / 12 + (1 / 12) * (4 / 3);
-const PRECO_PESSOA_EXTRA = 'R$ 14,90';
 
 const ativo = (f: Funcionario, hoje: string) => !f.saida || f.saida >= hoje;
 
@@ -255,7 +255,7 @@ function AcessoApp({ f, fazendaId, souDono, usuarioId, setUsuarioId, nome, telef
     } catch (e) { aviso((e as Error).message, true); }
   };
   const fone = telefone.replace(/\D/g, '');
-  const msg = (c: string) => `Convite para a equipe da fazenda no BoiForte (${PAPEIS[papelConv].nome.toLowerCase()}). Código: ${c}\nAbra o app, vá em Mais > Nuvem e equipe e digite o código.`;
+  const msg = (c: string) => mensagemConvite(papelConv, c);
   const whats = (c: string) => (fone.length >= 10 ? `https://wa.me/${fone.length <= 11 ? '55' + fone : fone}?text=${encodeURIComponent(msg(c))}` : linkWhatsApp(msg(c)));
 
   return (
@@ -271,7 +271,7 @@ function AcessoApp({ f, fazendaId, souDono, usuarioId, setUsuarioId, nome, telef
                 <CampoEscolha rotulo="Papel no app" nome="funcPapel" valor={ligado.papel} aoMudar={(v) => mudar(v as Papel)}>
                   {Object.entries(PAPEIS).map(([k, v]) => <option key={k} value={k}>{v.nome}</option>)}
                 </CampoEscolha>
-                <p className="mudo">{PAPEIS[ligado.papel].texto}</p>
+                <Permissoes papel={ligado.papel} />
                 <button className="btn perigo pequeno" onClick={tirar}>Tirar o acesso ao app</button>
               </>
             ) : <p className="mudo">Papel: {PAPEIS[ligado.papel].nome}. {PAPEIS[ligado.papel].texto}</p>}
@@ -297,7 +297,7 @@ function AcessoApp({ f, fazendaId, souDono, usuarioId, setUsuarioId, nome, telef
           <CampoEscolha rotulo="Papel no app" nome="funcPapelConvite" valor={papelConv} aoMudar={(v) => { setPapelConv(v as Papel); setCodigo(null); }}>
             {(['vaqueiro', 'gerente', 'consultor'] as Papel[]).map((p) => <option key={p} value={p}>{PAPEIS[p].nome}</option>)}
           </CampoEscolha>
-          <p className="mudo">{PAPEIS[papelConv].texto}</p>
+          <Permissoes papel={papelConv} />
           {plano && (
             <p className="mudo" data-testid="vagasPlano">Plano {NOME_PLANO[plano.plano] ?? plano.plano}: {plano.pessoas} de {plano.limite} pessoas{plano.convites_abertos ? ` e ${plano.convites_abertos} convite(s) em aberto` : ''}. Cada pessoa a mais custa {PRECO_PESSOA_EXTRA} por mês.</p>
           )}

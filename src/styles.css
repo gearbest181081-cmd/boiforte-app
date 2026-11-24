@@ -277,3 +277,15 @@ button.link { background: none; border: 0; padding: 4px 0; color: var(--verde); 
 .entrar-links { display: flex; flex-direction: column; align-items: center; gap: 2px; margin-top: 8px; }
 .passos-entrada { margin: 0 0 14px; padding-left: 22px; }
 .passos-entrada li { margin-bottom: 6px; }
+
+/* Equipe: passo a passo para liberar um funcionário e o que cada papel pode fazer */
+.passos { list-style: none; counter-reset: passo; padding: 0; margin: 0; display: grid; gap: 16px; }
+.passos > li { counter-increment: passo; position: relative; padding-left: 44px; }
+.passos > li::before { content: counter(passo); position: absolute; left: 0; top: 0; width: 32px; height: 32px; border-radius: 50%; background: var(--verde); color: var(--sobre-verde); font-weight: 700; display: flex; align-items: center; justify-content: center; font-size: 17px; }
+.passos > li.feito::before { content: "✓"; background: var(--ok); color: var(--sobre-verde); }
+.passos > li > b { display: block; font-size: 17px; margin: 4px 0 6px; }
+.passos > li.espera { opacity: .55; }
+.permissoes ul { list-style: none; padding: 0; margin: 6px 0 10px; display: grid; gap: 6px; font-size: 15px; }
+.permissoes li { display: flex; gap: 8px; align-items: flex-start; }
+.permissoes li.nao { color: var(--texto-2, inherit); }
+.codigo-convite { font-size: 30px; letter-spacing: 4px; text-align: center; font-weight: 700; margin: 8px 0; }
