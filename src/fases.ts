@@ -8,7 +8,18 @@ import type { TipoFormula } from './nutricao';
 
 /** GMD de referência por fase (tabela de referência da planilha, ajustável). */
 export const GMD_SUGERIDO: Record<Fase, number> = { cria: 0.7, recria: 0.6, rip: 0.8, engorda_pasto: 0.75, tip: 0.95, confinamento: 1.35 };
-export const PESO_ALVO_SUGERIDO: Record<Fase, number> = { cria: 210, recria: 360, rip: 390, engorda_pasto: 510, tip: 540, confinamento: 540 };
+
+/**
+ * A Cria não tem peso alvo de saída: o gado de cria é vendido por outros critérios (pedido do Luiz).
+ * As outras fases têm, com a sugestão abaixo.
+ */
+export type FaseComPesoAlvo = Exclude<Fase, 'cria'>;
+export const usaPesoAlvo = (fase: Fase): fase is FaseComPesoAlvo => fase !== 'cria';
+export const PESO_ALVO_SUGERIDO: Record<FaseComPesoAlvo, number> = { recria: 360, rip: 390, engorda_pasto: 510, tip: 540, confinamento: 540 };
+/** Peso alvo que vale para o lote. Na Cria é sempre nenhum, mesmo que um lote antigo tenha um guardado. */
+export function pesoAlvoDoLote(lote: { fase: Fase; pesoAlvo?: number | null }): number | null {
+  return usaPesoAlvo(lote.fase) && lote.pesoAlvo ? lote.pesoAlvo : null;
+}
 
 /** Para onde o lote costuma ir depois de cada fase (é só a sugestão; a pessoa escolhe). */
 export const PROXIMA_FASE: Record<Fase, Fase> = { cria: 'recria', recria: 'tip', rip: 'tip', engorda_pasto: 'tip', tip: 'confinamento', confinamento: 'tip' };
@@ -58,7 +69,7 @@ export async function mudarFase(loteId: number, d: DadosMudanca): Promise<void> 
       fase: d.para,
       formulaId: d.formulaId || null,
       consumoPctPV: null, // a dieta nova usa o consumo dela (dá para ajustar depois em Editar lote)
-      pesoAlvo: d.pesoAlvo,
+      pesoAlvo: usaPesoAlvo(d.para) ? d.pesoAlvo : null,
       gmdMeta: d.gmdMeta,
       fases: [...(lote.fases ?? []), mudanca],
     });

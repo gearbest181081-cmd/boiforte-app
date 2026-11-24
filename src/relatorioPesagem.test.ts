@@ -76,6 +76,18 @@ describe('relatório de pesagem do lote', () => {
   });
 });
 
+describe('relatório de pesagem de lote de Cria', () => {
+  it('sem previsão nem peso alvo, mesmo com um peso alvo guardado de antes', () => {
+    const r = montarRelatorioPesagem({ lote: { ...lote, nome: 'Bezerros', fase: 'cria', pesoAlvo: 450 }, pesagens: pes, animais: [], hoje: '2026-10-31' })!;
+    expect(r.projecao).toBeNull();
+    expect(r.indicadores.map((i) => i.rotulo).join(' | ')).not.toMatch(/Previsão/);
+    expect(r.alertas.map((a) => a.titulo).join(' | ')).not.toMatch(/peso alvo/);
+    expect(r.resumoTexto).not.toMatch(/Previsão|peso alvo/);
+    expect(r.blocosPdf.find((b) => b.tipo === 'curva')).toMatchObject({ pesoAlvo: null, projecao: null });
+    expect(r.indicadores.find((i) => i.rotulo === 'Meta de GMD')?.valor).toBe('0,900 kg/dia'); // o GMD esperado continua
+  });
+});
+
 describe('relatório de pesagem por cabeça', () => {
   const ind: Lote = { ...lote, id: 2, nome: 'Novilhas', controle: 'individual', qtdCabecas: 3, gmdMeta: 0.6, pesoAlvo: null };
   const animais: Animal[] = [

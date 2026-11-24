@@ -5,6 +5,7 @@ import { db, FASES, garantirLembretesPadrao } from '../db';
 import { alertasInteligentes, useEscala, useEstoque, useLotesInfo, useTudo, type LoteInfo } from '../hooks';
 import { ordenarAlertas } from '../alertas';
 import { fmtData, fmtGmd, fmtKg, fmtNum, hojeISO } from '../calc';
+import { pesoAlvoDoLote } from '../fases';
 import { Indicador, Topo } from '../components/ui';
 import { usePapel } from '../nuvem/useNuvem';
 import { nuvemConfigurada } from '../nuvem/cliente';
@@ -112,6 +113,7 @@ export function Inicio() {
 
 export function CartaoLote({ info }: { info: LoteInfo }) {
   const { lote, resumo: r, projecao: p, alertas } = info;
+  const alvo = pesoAlvoDoLote(lote); // na Cria não tem
   const pior = alertas.find((a) => a.nivel === 'ruim') ?? alertas.find((a) => a.nivel === 'atencao');
   return (
     <Link to={`/lotes/${lote.id}`} className="cartao">
@@ -127,9 +129,9 @@ export function CartaoLote({ info }: { info: LoteInfo }) {
       <div className="grade">
         <div><div className="mudo">Peso atual</div><b>{fmtKg(r.pesoAtual)}</b></div>
         <div><div className="mudo">GMD</div><b>{fmtGmd(r.gmdUltimo ?? r.gmdTotal)}</b></div>
-        {lote.pesoAlvo ? (
+        {alvo ? (
           <div style={{ gridColumn: '1 / -1' }}>
-            <div className="mudo">Chega a {lote.pesoAlvo} kg</div>
+            <div className="mudo">Chega a {alvo} kg</div>
             <b>{p == null ? '—' : p.jaAtingiu ? 'Já atingiu' : `${fmtData(p.dataPrevista)} (${p.diasFaltando} dias)`}</b>
           </div>
         ) : null}

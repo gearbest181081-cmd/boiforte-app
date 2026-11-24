@@ -6,7 +6,7 @@ import { db, FASES, pontosDoLote, type Fase } from '../db';
 import { diasEntre, fmtData, fmtKg, hojeISO, pesoEstimado, resumo } from '../calc';
 import { TIPOS } from '../nutricao';
 import { CampoData, CampoEscolha, CampoNumero, num, Opcoes, Topo, useAviso } from '../components/ui';
-import { DIETA_DA_FASE, GMD_SUGERIDO, mudarFase, nomeCurtoFase, PESO_ALVO_SUGERIDO, PROXIMA_FASE } from '../fases';
+import { DIETA_DA_FASE, GMD_SUGERIDO, mudarFase, nomeCurtoFase, PESO_ALVO_SUGERIDO, PROXIMA_FASE, usaPesoAlvo } from '../fases';
 import { usePapel } from '../nuvem/useNuvem';
 
 const virgula = (n: number) => String(n).replace('.', ',');
@@ -37,7 +37,7 @@ export function MudarFase() {
   };
   const escolherFase = (para: Fase) => setF((x) => ({
     ...x, para, formulaId: dietaSugerida(para, dados?.lote?.formulaId ?? 0),
-    pesoAlvo: String(PESO_ALVO_SUGERIDO[para]), gmdMeta: virgula(GMD_SUGERIDO[para]),
+    pesoAlvo: usaPesoAlvo(para) ? String(PESO_ALVO_SUGERIDO[para]) : '', gmdMeta: virgula(GMD_SUGERIDO[para]),
   }));
 
   // Primeira vez: sugere a próxima fase (RIP → TIP), a dieta que combina e as metas da fase.
@@ -79,7 +79,7 @@ export function MudarFase() {
     if (f.peso.trim() && !(peso && peso > 0)) return aviso('O peso médio não ficou certo. Fale ou digite de novo, em kg.', true);
     setSalvando(true);
     try {
-      await mudarFase(loteId, { data: f.data, para: f.para, formulaId: f.formulaId || null, pesoAlvo: num(f.pesoAlvo), gmdMeta: num(f.gmdMeta), pesoMedio: lote.controle === 'lote' ? peso : null });
+      await mudarFase(loteId, { data: f.data, para: f.para, formulaId: f.formulaId || null, pesoAlvo: usaPesoAlvo(f.para) ? num(f.pesoAlvo) : null, gmdMeta: num(f.gmdMeta), pesoMedio: lote.controle === 'lote' ? peso : null });
       aviso(`Pronto! O lote agora está em ${nomePara}.`);
       nav(`/lotes/${loteId}`, { replace: true });
     } catch (e) {
@@ -123,7 +123,9 @@ export function MudarFase() {
           {ordenadas.map((x) => <option key={x.id} value={x.id}>{x.nome}{x.tipo === tipoSugerido ? ' ★' : ''}</option>)}
         </CampoEscolha>
 
-        <CampoNumero rotulo="Novo peso alvo" valor={f.pesoAlvo} aoMudar={set('pesoAlvo')} unidade="kg" nome="pesoAlvoNovo" dica={`Sugestão para ${nomePara}. Pode mudar.`} />
+        {usaPesoAlvo(f.para) && (
+          <CampoNumero rotulo="Novo peso alvo" valor={f.pesoAlvo} aoMudar={set('pesoAlvo')} unidade="kg" pesoVivo nome="pesoAlvoNovo" dica={`Sugestão para ${nomePara}. Pode mudar.`} />
+        )}
         <CampoNumero rotulo="Novo GMD esperado" valor={f.gmdMeta} aoMudar={set('gmdMeta')} unidade="kg/dia" nome="gmdMetaNovo" dica="O app avisa quando o lote ficar 10% abaixo." />
 
         <div className="cartao">

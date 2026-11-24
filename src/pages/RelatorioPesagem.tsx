@@ -6,6 +6,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db, lerConfig } from '../db';
 import { fmtData, hojeISO } from '../calc';
 import { montarRelatorioPesagem } from '../relatorioPesagem';
+import { pesoAlvoDoLote } from '../fases';
 import { compartilharArquivo, fmtCelula, gerarPdf, gerarXlsx, linkWhatsApp, type Celula } from '../exportar';
 import { GraficoCrescimento, GraficoGmd } from '../components/Grafico';
 import { CampoEscolha, Indicador, Topo, useAviso } from '../components/ui';
@@ -110,7 +111,7 @@ export function RelatorioPesagem() {
 
         <h2>Curva de ganho de peso</h2>
         <div className="cartao">
-          <GraficoCrescimento pontos={rel.pontos} gmdMeta={lote.gmdMeta} pesoAlvo={lote.pesoAlvo} projecao={rel.projecao} />
+          <GraficoCrescimento pontos={rel.pontos} gmdMeta={lote.gmdMeta} pesoAlvo={pesoAlvoDoLote(lote)} projecao={rel.projecao} />
         </div>
 
         <h2>Ganho por dia em cada período</h2>

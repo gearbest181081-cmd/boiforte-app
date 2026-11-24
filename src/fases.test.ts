@@ -1,7 +1,8 @@
 import 'fake-indexeddb/auto';
 import { describe, it, expect, beforeEach } from 'vitest';
-import { BoiForteDB, usarBanco, db, criarLote } from './db';
-import { mudarFase, trechosDeFase } from './fases';
+import { BoiForteDB, usarBanco, db, criarLote, type Lote, type Pesagem } from './db';
+import { mudarFase, pesoAlvoDoLote, PESO_ALVO_SUGERIDO, trechosDeFase, usaPesoAlvo } from './fases';
+import { montarInfo } from './hooks';
 import { validarRegistro } from './validar';
 
 let n = 0;
@@ -85,5 +86,39 @@ describe('validação do histórico', () => {
     const ok = validarRegistro('lotes', { ...base, fases: [{ data: '2026-02-01', de: 'rip', para: 'tip', pesoMedio: 380, dieta: 'RIP' }] }) as any;
     expect(ok.fases).toHaveLength(1);
     expect(() => validarRegistro('lotes', { ...base, fases: [{ data: '2026-02-01', de: 'rip', para: 'xyz' }] })).toThrow();
+  });
+});
+
+describe('Cria sem peso alvo', () => {
+  it('só a Cria fica sem peso alvo, e um peso guardado antes num lote de Cria não vale', () => {
+    expect(usaPesoAlvo('cria')).toBe(false);
+    for (const f of ['recria', 'rip', 'engorda_pasto', 'tip', 'confinamento'] as const) expect(usaPesoAlvo(f)).toBe(true);
+    expect('cria' in PESO_ALVO_SUGERIDO).toBe(false);
+    expect(pesoAlvoDoLote({ fase: 'cria', pesoAlvo: 210 })).toBeNull();
+    expect(pesoAlvoDoLote({ fase: 'recria', pesoAlvo: 360 })).toBe(360);
+    expect(pesoAlvoDoLote({ fase: 'tip', pesoAlvo: null })).toBeNull();
+  });
+
+  it('passar o lote para a Cria tira o peso alvo; sair da Cria grava o novo', async () => {
+    const { id } = await loteRip();
+    await mudarFase(id, { data: '2026-04-01', para: 'cria', formulaId: null, pesoAlvo: 390, gmdMeta: 0.7 });
+    expect((await db.lotes.get(id))!.pesoAlvo).toBeNull();
+    await mudarFase(id, { data: '2026-05-01', para: 'recria', formulaId: null, pesoAlvo: 360, gmdMeta: 0.6 });
+    expect((await db.lotes.get(id))!.pesoAlvo).toBe(360);
+  });
+
+  it('lote de Cria com peso alvo guardado: sem previsão de saída e sem aviso de peso alvo', () => {
+    const lote: Lote = { id: 1, propriedadeId: 1, nome: 'Bezerros', fase: 'cria', sexo: 'misto', controle: 'lote', qtdCabecas: 20, dataEntrada: '2026-01-01', pesoAlvo: 210, gmdMeta: 0.7, criadoEm: 0 };
+    const pes: Pesagem[] = [
+      { id: 1, loteId: 1, data: '2026-01-01', tipo: 'media', pesoMedio: 150, qtdPesada: 20, criadoEm: 1 },
+      { id: 2, loteId: 1, data: '2026-04-01', tipo: 'media', pesoMedio: 215, qtdPesada: 20, criadoEm: 2 },
+    ];
+    const cria = montarInfo(lote, pes, '2026-04-02');
+    expect(cria.projecao).toBeNull();
+    expect(cria.alertas.map((a) => a.titulo).join(' | ')).not.toMatch(/peso alvo/);
+    // o mesmo lote na Recria continua com a previsão e o aviso
+    const recria = montarInfo({ ...lote, fase: 'recria' }, pes, '2026-04-02');
+    expect(recria.projecao?.jaAtingiu).toBe(true);
+    expect(recria.alertas.some((a) => /atingiu o peso alvo/.test(a.titulo))).toBe(true);
   });
 });
