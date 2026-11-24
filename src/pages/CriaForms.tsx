@@ -361,7 +361,7 @@ export function EventoCria() {
               <button type="button" className="btn sec pequeno" onClick={() => setMarcadas(lista.map((a) => a.id!))}>Marcar todas ({lista.length})</button>
               <div style={{ maxHeight: 320, overflow: 'auto', marginTop: 8 }}>
                 {lista.map((a) => (
-                  <label key={a.id} className="marcar" style={{ display: 'block' }}>
+                  <label key={a.id} className="marcar">
                     <input type="checkbox" checked={marcadas.includes(a.id!)} onChange={(e) => setMarcadas((m) => (e.target.checked ? [...m, a.id!] : m.filter((x) => x !== a.id)))} /> {rotuloAnimal(a)}
                   </label>
                 ))}
@@ -522,7 +522,7 @@ export function DesmamaCria() {
           const s = sel[a.id!];
           return (
             <div key={a.id} className="cartao" style={{ padding: '8px 12px' }}>
-              <label className="marcar" style={{ display: 'block' }}>
+              <label className="marcar">
                 <input type="checkbox" checked={!!s} onChange={(e) => setSel((x) => { const n = { ...x }; if (e.target.checked) n[a.id!] = { peso: '', destino: 'lote' }; else delete n[a.id!]; return n; })} />
                 {' '}<b>{rotuloAnimal(a)}</b> · {a.sexo === 'macho' ? 'macho' : 'fêmea'} · {Math.round((idadeDias(a, data) ?? 0) / 30.44)} meses{ult.get(a.id!) ? ` · última ${fmtKg(ult.get(a.id!)!.peso, 0)}` : ''}
               </label>

@@ -433,10 +433,10 @@ export function decisoesCria(d: DadosCria): Decisao[] {
     const falta = precisa - (temTouros - vencidos);
     out.push({ nivel: 'ruim', titulo: `Comprar ${falta} touro${falta > 1 ? 's' : ''}`, texto: `Para ${matrizes.length + novilhas.length} vacas e novilhas ${est ? `na ${est.nome} (${METODOS_MONTA[est.metodo].toLowerCase()})` : 'em monta natural'} são precisos ${precisa} touros (1 para ${VACAS_POR_TOURO}). Você tem ${temTouros}${vencidos ? `, ${vencidos} já passaram do tempo de permanência` : ''}.` });
   } else if (matrizes.length && temTouros) {
-    out.push({ nivel: 'bom', titulo: 'Touros suficientes', texto: `${temTouros} touro(s) para ${matrizes.length + novilhas.length} fêmeas${est ? ` na ${est.nome}` : ''}.` });
+    out.push({ nivel: 'bom', titulo: 'Touros suficientes', texto: `${temTouros} touro(s) para ${matrizes.length + novilhas.length} fêmea(s)${est ? ` na ${est.nome}` : ''}.` });
   }
   // novilhas de reposição: repor as que saem (descarte sugerido ou taxa de 15%) e as que morrem, com 80% de prenhez
-  if (matrizes.length) {
+  if (matrizes.length >= 5) {
     const saem = Math.max(descarte.length, Math.round(matrizes.length * 0.15)) + Math.round(matrizes.length * 0.02);
     const reter = Math.ceil(saem / 0.8);
     out.push({

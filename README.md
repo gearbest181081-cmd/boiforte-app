@@ -46,6 +46,22 @@ Aplicativo de gestão de **cria, recria e engorda** (a pasto, TIP e confinamento
 - **Balança Bluetooth** (experimental): o peso parado entra sozinho na próxima linha da pesagem.
 - **Android**: arquivos e guia para publicar na Play Store em [android/LEIAME.md](android/LEIAME.md).
 
+## Cria (separada da Recria/Engorda)
+
+- Trabalha com **grupo de manejo** em vez de lote; um piquete recebe um lote ou grupo de cada vez.
+- **Matriz** lançada uma a uma; **touro** um a um ou por lote (quantidade). Brinco, chip, SISBOV, raça, nascimento, foto, mãe e pai (rastreabilidade do nascimento à venda: na desmama o bezerro continua o mesmo registro).
+- **Estação de monta** (monta, IA, IATF, IA com repasse), cobertura em várias vacas de uma vez, **diagnóstico de gestação**, **parto** (cria o bezerro com mãe e pai) e aborto.
+- **Bezerros**: projeção da desmama (data e peso, com ou sem creep feed), pesagens e curva do nascimento à desmama, P205.
+- **Desmama**: pacote congelado e numerado no ano (versão 1, 2…) que vira lote de **Recria ou RIP** com o peso médio ponderado; fêmeas podem ficar como novilhas de reposição. Dá para desfazer enquanto o lote não teve outro lançamento.
+- **Histórico da vaca**: crias, % machos e fêmeas, intervalo entre partos, idade ao primeiro parto, parto na época certa.
+- **Período de permanência** no lugar do peso alvo, com aviso perto do fim e quando passa.
+- **IPM** (kg de bezerro desmamado ajustado a 205 dias por ano de vaca) com ranking e possíveis descartes com o motivo.
+- **Custo do bezerro desmamado** por cabeça, kg e @ (30 kg vivo): despesas lançadas nos grupos + parte da Cria nos custos gerais e na folha (a Cria entra no rateio por cabeça junto com os lotes).
+- **Decisões**: descarte, compra de touros (1 para 25), novilhas a reter, diagnóstico pendente, bezerros na idade de desmamar, partos próximos.
+- **Simulador**: vender na desmama ou recriar, reter novilhas ou vender, projeção do rebanho em 5 anos (desfrute e retenção).
+- Sanidade por grupo ou por animal; leitura do brinco pela foto.
+- Contas em `src/cria.ts`, gravações em `src/criaDb.ts`, telas em `src/pages/Cria*.tsx`. Migração `20261124160000_cria.sql`.
+
 Para ligar a nuvem, siga [CONFIGURAR.md](CONFIGURAR.md). Segurança em [SEGURANCA.md](SEGURANCA.md) e privacidade em [PRIVACIDADE.md](PRIVACIDADE.md).
 
 ## Para desenvolver
