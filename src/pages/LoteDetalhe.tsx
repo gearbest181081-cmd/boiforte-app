@@ -3,14 +3,14 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, excluirLote, FASES, lerConfig, pontosDoAnimal, pontosDoLote, SEXOS } from '../db';
 import { montarInfo } from '../hooks';
-import { arrobas, fmtData, fmtGmd, fmtKg, fmtNum, fmtPct, desvioMeta, hojeISO, periodos, pesoEstimado, resumo } from '../calc';
+import { arrobas, diasEntre, fmtData, fmtGmd, fmtKg, fmtNum, fmtPct, desvioMeta, hojeISO, periodos, pesoEstimado, resumo } from '../calc';
 import { calcularFormula, custoArrobaNutricao, kgCabDia } from '../nutricao';
 import { rs } from './Nutricao';
 import { GraficoCrescimento } from '../components/Grafico';
 import { Indicador, Opcoes, Topo, useAviso } from '../components/ui';
 import { LoteFinanceiro } from './LoteFinanceiro';
 import { LoteSanidade } from './Sanidade';
-import { nomeCurtoFase, PROXIMA_FASE, trechosDeFase } from '../fases';
+import { nomeCurtoFase, pesoAlvoDoLote, PROXIMA_FASE, trechosDeFase, usaPesoAlvo } from '../fases';
 import { usePapel, useVeDinheiro } from '../nuvem/useNuvem';
 
 export function LoteDetalhe() {
@@ -102,8 +102,14 @@ export function LoteDetalhe() {
               <Indicador rotulo="GMD desde a entrada" valor={fmtGmd(r.gmdTotal)} sub={r.diasAcompanhados ? `${r.diasAcompanhados} dias` : undefined} />
               <Indicador rotulo="Ganho total" valor={fmtKg(r.ganhoTotal)} sub="por cabeça" />
               <Indicador rotulo="Arrobas por cabeça" valor={r.pesoAtual ? `${fmtNum(arrobas(r.pesoAtual), 1)} @` : '—'} sub="carcaça, rendimento 50%" />
-              <Indicador rotulo={`Previsão ${lote.pesoAlvo ?? '—'} kg`} valor={p == null ? '—' : p.jaAtingiu ? 'Atingiu' : fmtData(p.dataPrevista)}
-                sub={p && !p.jaAtingiu ? `faltam ${p.diasFaltando} dias (GMD ${p.origemGmd === 'meta' ? 'da meta' : p.origemGmd === 'ultimo' ? 'do último período' : 'médio'})` : undefined} />
+              {usaPesoAlvo(lote.fase) ? (
+                <Indicador rotulo={`Previsão ${lote.pesoAlvo ?? '—'} kg`} valor={p == null ? '—' : p.jaAtingiu ? 'Atingiu' : fmtData(p.dataPrevista)}
+                  sub={p && !p.jaAtingiu ? `faltam ${p.diasFaltando} dias (GMD ${p.origemGmd === 'meta' ? 'da meta' : p.origemGmd === 'ultimo' ? 'do último período' : 'médio'})` : undefined} />
+              ) : (
+                // Cria não tem peso alvo: no lugar da previsão, há quantos dias o lote está na fazenda
+                <Indicador rotulo="Dias no lote" valor={String(Math.max(0, diasEntre(lote.dataEntrada, lote.encerrado && lote.dataSaida ? lote.dataSaida : hojeISO())))}
+                  sub={`desde ${fmtData(lote.dataEntrada)}`} />
+              )}
             </div>
             {podeMudarFase && pertoDoAlvo && (
               <div className="alerta atencao">
@@ -115,7 +121,7 @@ export function LoteDetalhe() {
             <CartaoNutricao lote={lote} pontos={pontos} gmdRef={gmdRef} fornecimentos={fornecimentos} formula={formula} ingredientes={ingredientes} config={config} />
             <h2>Curva de crescimento</h2>
             <div className="cartao">
-              <GraficoCrescimento pontos={pontos} gmdMeta={lote.gmdMeta} pesoAlvo={lote.pesoAlvo} projecao={p} />
+              <GraficoCrescimento pontos={pontos} gmdMeta={lote.gmdMeta} pesoAlvo={pesoAlvoDoLote(lote)} projecao={p} />
             </div>
             {pesagens.length > 0 && <Link to={`/lotes/${lote.id}/relatorio`} className="btn sec largo" style={{ marginBottom: 14 }}>Relatório de pesagem (PDF, Excel, WhatsApp)</Link>}
             {(lote.fases?.length ?? 0) > 0 && <CartaoFases lote={lote} pontos={pontos} />}

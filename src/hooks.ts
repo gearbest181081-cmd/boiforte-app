@@ -3,6 +3,7 @@ import { db, pontosDoLote, type Lote, type Pesagem } from './db';
 import { projetar, resumo, type Projecao, type Resumo } from './calc';
 import { alertasDoLote, type Alerta } from './alertas';
 import { hojeISO } from './calc';
+import { pesoAlvoDoLote } from './fases';
 
 export interface LoteInfo {
   lote: Lote;
@@ -14,12 +15,13 @@ export interface LoteInfo {
 
 export function montarInfo(lote: Lote, pesagens: Pesagem[], hoje = hojeISO()): LoteInfo {
   const pontos = pontosDoLote(pesagens);
+  const alvo = pesoAlvoDoLote(lote); // na Cria não tem: sem previsão de saída nem aviso de peso alvo
   return {
     lote,
     pesagens,
     resumo: resumo(pontos),
-    projecao: lote.pesoAlvo ? projetar(pontos, lote.pesoAlvo, lote.gmdMeta) : null,
-    alertas: alertasDoLote(lote, pontos, hoje),
+    projecao: alvo ? projetar(pontos, alvo, lote.gmdMeta) : null,
+    alertas: alertasDoLote({ ...lote, pesoAlvo: alvo }, pontos, hoje),
   };
 }
 

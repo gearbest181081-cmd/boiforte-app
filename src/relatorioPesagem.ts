@@ -4,6 +4,7 @@
 import { arrobas, desvioMeta, diasEntre, fmtData, fmtGmd, fmtKg, fmtNum, fmtPct, gmd, ordenar, periodos, projetar, resumo, type PontoPeso, type Projecao } from './calc';
 import { alertasDoLote, type Alerta } from './alertas';
 import { pontosDoAnimal, pontosDoLote, type Animal, type Lote, type Pesagem } from './db';
+import { pesoAlvoDoLote } from './fases';
 import { dataCel, type Bloco, type BlocoIndicadores, type Celula, type GraficoXlsx, type Tabela } from './exportar';
 
 export interface Indicador { rotulo: string; valor: string; sub?: string; ruim?: boolean }
@@ -101,7 +102,8 @@ export function montarRelatorioPesagem(d: DadosRelatorioPesagem): RelatorioPesag
   const pontos = animal ? pontosDoAnimal(pesagens, animal.id!) : pontosDoLote(pesagens);
   const r = resumo(pontos);
   const per = periodos(pontos);
-  const projecao = lote.pesoAlvo ? projetar(pontos, lote.pesoAlvo, lote.gmdMeta) : null;
+  const alvo = pesoAlvoDoLote(lote); // na Cria não tem peso alvo
+  const projecao = alvo ? projetar(pontos, alvo, lote.gmdMeta) : null;
   const ultimo = per.length ? per[per.length - 1] : null;
   const ultPesagem = ordenadas[ordenadas.length - 1];
   const gmdRef = r.gmdUltimo ?? r.gmdTotal;
@@ -128,9 +130,9 @@ export function montarRelatorioPesagem(d: DadosRelatorioPesagem): RelatorioPesag
     ind.push({ rotulo: 'Meta de GMD', valor: meta ? fmtGmd(meta) : 'sem meta', sub: desvio != null ? `${pctAbs(desvio)} ${desvio < 0 ? 'abaixo' : 'acima'} (último período)` : undefined, ruim: desvio != null && desvio <= -0.1 });
     const a = arrobas(r.pesoAtual, d.rendimento);
     ind.push({ rotulo: animal ? 'Arrobas' : 'Arrobas por cabeça', valor: `${fmtNum(a, 1)} @`, sub: animal ? 'carcaça' : `${fmtNum(a * lote.qtdCabecas, 0)} @ no lote (${lote.qtdCabecas} cab.)` });
-    if (lote.pesoAlvo) {
+    if (alvo) {
       ind.push({
-        rotulo: `Previsão de ${fmtNum(lote.pesoAlvo, 0)} kg`,
+        rotulo: `Previsão de ${fmtNum(alvo, 0)} kg`,
         valor: projecao == null ? '—' : projecao.jaAtingiu ? 'Já atingiu' : fmtData(projecao.dataPrevista),
         sub: projecao && !projecao.jaAtingiu ? `faltam ${projecao.diasFaltando} dias` : undefined,
       });
@@ -162,8 +164,8 @@ export function montarRelatorioPesagem(d: DadosRelatorioPesagem): RelatorioPesag
   } : null;
 
   // ---------- alertas ----------
-  const alertas = animal ? alertasDoLote({ nome: quem, pesoAlvo: lote.pesoAlvo, gmdMeta: lote.gmdMeta }, pontos, hoje).filter((a) => !/dias sem pesar/.test(a.titulo))
-    : alertasDoLote(lote, pontos, hoje);
+  const alertas = animal ? alertasDoLote({ nome: quem, pesoAlvo: alvo, gmdMeta: lote.gmdMeta }, pontos, hoje).filter((a) => !/dias sem pesar/.test(a.titulo))
+    : alertasDoLote({ ...lote, pesoAlvo: alvo }, pontos, hoje);
 
   // ---------- tabelas ----------
   const ev = tabelaEvolucao(linhas, meta, !animal);
@@ -207,7 +209,7 @@ export function montarRelatorioPesagem(d: DadosRelatorioPesagem): RelatorioPesag
   const blocosPdf: Bloco[] = [
     blocoInd,
     ...alertas.map((a): Bloco => ({ tipo: 'texto', titulo: a.titulo, texto: a.texto, nivel: a.nivel })),
-    { tipo: 'curva', titulo: 'Curva de ganho de peso', pontos, gmdMeta: meta, pesoAlvo: lote.pesoAlvo, projecao },
+    { tipo: 'curva', titulo: 'Curva de ganho de peso', pontos, gmdMeta: meta, pesoAlvo: alvo, projecao },
     { tipo: 'barras', titulo: 'GMD por período (kg/dia)', periodos: per.map((p) => ({ ate: p.ate.data, gmd: p.gmd })), gmdMeta: meta },
     ev.tabela,
     ...(tabAnimais ? [tabAnimais] : []),
@@ -221,7 +223,7 @@ export function montarRelatorioPesagem(d: DadosRelatorioPesagem): RelatorioPesag
     ultimo ? `GMD desde ${fmtData(ultimo.de.data).slice(0, 5)}: *${fmtGmd(ultimo.gmd)}* (${ganhoTxt(ultimo.ganho)} em ${ultimo.dias} dias)` : '',
     meta ? `Meta: ${fmtGmd(meta)}${desvio != null ? ` (${pctAbs(desvio)} ${desvio < 0 ? 'abaixo' : 'acima'})` : ''}` : '',
     r.gmdTotal != null ? `Desde a 1ª pesagem: ${ganhoTxt(r.ganhoTotal)} em ${r.diasAcompanhados} dias (${fmtGmd(r.gmdTotal)})` : '',
-    lote.pesoAlvo && projecao ? (projecao.jaAtingiu ? `Já atingiu o peso alvo de ${fmtNum(lote.pesoAlvo, 0)} kg.` : `Previsão de ${fmtNum(lote.pesoAlvo, 0)} kg: ${fmtData(projecao.dataPrevista)}`) : '',
+    alvo && projecao ? (projecao.jaAtingiu ? `Já atingiu o peso alvo de ${fmtNum(alvo, 0)} kg.` : `Previsão de ${fmtNum(alvo, 0)} kg: ${fmtData(projecao.dataPrevista)}`) : '',
     ...alertas.filter((a) => a.nivel === 'ruim').map((a) => `⚠️ ${a.titulo}`),
   ].filter(Boolean).join('\n');
 

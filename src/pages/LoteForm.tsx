@@ -4,7 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { criarLote, db, FASES, type Controle, type Fase, type Sexo } from '../db';
 import { hojeISO } from '../calc';
 import { TIPOS } from '../nutricao';
-import { GMD_SUGERIDO, PESO_ALVO_SUGERIDO } from '../fases';
+import { GMD_SUGERIDO, PESO_ALVO_SUGERIDO, usaPesoAlvo } from '../fases';
 import { entrarNoPiquete, quemEstaNoPiquete } from '../pasto';
 import { CampoData, CampoEscolha, CampoNumero, CampoTexto, num, Opcoes, Topo, useAviso } from '../components/ui';
 
@@ -54,7 +54,8 @@ export function LoteForm() {
     return out;
   }, [f.propriedadeId]);
 
-  const trocarFase = (fase: Fase) => setF((x) => ({ ...x, fase, gmdMeta: String(GMD_SUGERIDO[fase]).replace('.', ','), pesoAlvo: String(PESO_ALVO_SUGERIDO[fase]) }));
+  // Na Cria não tem peso alvo (a venda segue outros critérios): o campo some e o lote fica sem.
+  const trocarFase = (fase: Fase) => setF((x) => ({ ...x, fase, gmdMeta: String(GMD_SUGERIDO[fase]).replace('.', ','), pesoAlvo: usaPesoAlvo(fase) ? String(PESO_ALVO_SUGERIDO[fase]) : '' }));
 
   if (props && props.length === 0) {
     return (
@@ -75,7 +76,7 @@ export function LoteForm() {
     if (!f.propriedadeId) return aviso('Escolha a fazenda.', true);
     const dados = {
       nome: f.nome.trim(), propriedadeId: f.propriedadeId, fase: f.fase, sexo: f.sexo, controle: f.controle,
-      qtdCabecas: Math.round(qtd), dataEntrada: f.data, pesoAlvo: num(f.pesoAlvo), gmdMeta: num(f.gmdMeta), obs: f.obs.trim() || undefined,
+      qtdCabecas: Math.round(qtd), dataEntrada: f.data, pesoAlvo: usaPesoAlvo(f.fase) ? num(f.pesoAlvo) : null, gmdMeta: num(f.gmdMeta), obs: f.obs.trim() || undefined,
       formulaId: f.formulaId || null, consumoPctPV: num(f.consumo) ? num(f.consumo)! / 100 : null,
     };
     try {
@@ -137,7 +138,9 @@ export function LoteForm() {
           <div className="dica">Depois de salvar, o app abre a pesagem para você lançar o brinco e o peso de cada animal.</div>
         )}
 
-        <CampoNumero rotulo="Peso alvo (saída)" valor={f.pesoAlvo} aoMudar={set('pesoAlvo')} unidade="kg" pesoVivo nome="pesoAlvo" dica="Peso que você quer atingir para vender ou mudar de fase." />
+        {usaPesoAlvo(f.fase) && (
+          <CampoNumero rotulo="Peso alvo (saída)" valor={f.pesoAlvo} aoMudar={set('pesoAlvo')} unidade="kg" pesoVivo nome="pesoAlvo" dica="Peso que você quer atingir para vender ou mudar de fase." />
+        )}
         <CampoNumero rotulo="GMD esperado" valor={f.gmdMeta} aoMudar={set('gmdMeta')} unidade="kg/dia" nome="gmdMeta" dica="Sugestão pela fase. O app avisa quando o lote ficar 10% abaixo." />
 
         {!editando && piquetes && piquetes.length > 0 && (

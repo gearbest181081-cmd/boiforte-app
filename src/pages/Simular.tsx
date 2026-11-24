@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { analisarLotes, useTudo, type AnaliseLote } from '../hooks';
 import { seMudarGmd, seSegurar, simularCompra } from '../simulacao';
 import { fmtData, fmtNum, hojeISO, somaDias } from '../calc';
+import { pesoAlvoDoLote } from '../fases';
 import { CampoEscolha, CampoNumero, num, Opcoes, Topo } from '../components/ui';
 import { rs } from './Nutricao';
 import { SimComparar } from './Comparar';
@@ -53,7 +54,7 @@ export function Simular() {
 function SimGmd({ a }: { a: AnaliseLote | null }) {
   const gmdLote = a ? a.info.resumo.gmdUltimo ?? a.info.resumo.gmdTotal : null;
   const [peso, setPeso] = useState(txt(a?.dre.pesoAtual, 0));
-  const [alvo, setAlvo] = useState(txt(a?.info.lote.pesoAlvo, 0));
+  const [alvo, setAlvo] = useState(txt(a ? pesoAlvoDoLote(a.info.lote) : null, 0));
   const [g1, setG1] = useState(txt(gmdLote) || '0,600');
   const [g2, setG2] = useState('0,800');
   const [custo, setCusto] = useState(txt(a ? custoDiaCabeca(a) : null, 2));

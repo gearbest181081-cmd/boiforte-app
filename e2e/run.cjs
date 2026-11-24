@@ -108,7 +108,15 @@ function confere(cond, msg) {
     console.log('3. Criar lote pelo peso médio');
     await page.goto(URL + '#/lotes/novo');
     await page.locator('input[name=nome]').fill('Lote 5');
+    // Na Cria o lote não tem peso alvo (a venda segue outros critérios). Com o módulo de Cria, a Cria sai desta tela.
+    const opcaoCria = page.getByRole('radio', { name: 'Cria', exact: true });
+    if (await opcaoCria.count()) {
+      await opcaoCria.click();
+      confere(!(await page.locator('input[name=pesoAlvo]').count()), 'lote de Cria sem o campo Peso alvo');
+      await foto('02b-novo-lote-cria');
+    }
     await page.getByRole('radio', { name: /TIP/ }).click();
+    confere((await page.locator('input[name=pesoAlvo]').inputValue()) === '540', 'na TIP o Peso alvo aparece com a sugestão de 540 kg');
     await page.locator('input[name=qtd]').fill('40');
     await page.locator('input[type=date]').fill('2026-09-01');
     await page.locator('input[name=pesoEntrada]').fill('300');
