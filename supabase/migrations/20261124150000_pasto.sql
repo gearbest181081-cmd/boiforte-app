@@ -173,12 +173,12 @@ end $$;
 
 -- ---------------------------------------------------------------- 2. um ocupante por piquete
 -- Nome do piquete para a mensagem.
-create function public.bf_nome_piquete(f uuid, g text) returns text language sql stable set search_path = public, pg_temp as $$
+create or replace function public.bf_nome_piquete(f uuid, g text) returns text language sql stable set search_path = public, pg_temp as $$
   select coalesce((select r.dados->>'nome' from public.registros r where r.fazenda_id = f and r.tabela = 'piquetes' and r.gid = g), 'O piquete')
 $$;
 
 -- Lote ou grupo de manejo (cria) ativo com piquete: ninguém mais ativo pode estar no mesmo piquete.
-create function public.bf_pasto_ocupante() returns trigger
+create or replace function public.bf_pasto_ocupante() returns trigger
 language plpgsql security definer set search_path = public, pg_temp as $$
 declare
   pq text := new.dados->>'piqueteId';
@@ -199,12 +199,13 @@ begin
   return new;
 end $$;
 
+drop trigger if exists registros_pasto_ocupante on public.registros;
 create trigger registros_pasto_ocupante before insert or update on public.registros
   for each row when (new.tabela in ('lotes', 'grupos')) execute function public.bf_pasto_ocupante();
 
 -- Ocupação: datas, mídias e nenhum cruzamento no tempo (no mesmo piquete, nem do mesmo lote/grupo).
 -- Períodos [entrada, saída): sair num dia e outro entrar no mesmo dia pode. Sem saída = ainda está lá.
-create function public.bf_pasto_ocupacao() returns trigger
+create or replace function public.bf_pasto_ocupacao() returns trigger
 language plpgsql security definer set search_path = public, pg_temp as $$
 declare
   d jsonb := new.dados;
@@ -252,32 +253,35 @@ begin
   return new;
 end $$;
 
+drop trigger if exists registros_pasto_ocupacao on public.registros;
 create trigger registros_pasto_ocupacao before insert or update on public.registros
   for each row when (new.tabela = 'ocupacoes') execute function public.bf_pasto_ocupacao();
 
 -- ---------------------------------------------------------------- 5. NDVI (só o servidor grava)
 -- Quem grava pelo app (enviar_alteracoes) sempre tem atualizado_por; a função do satélite grava sem.
-create function public.bf_ndvi_so_servidor() returns trigger language plpgsql as $$
+create or replace function public.bf_ndvi_so_servidor() returns trigger language plpgsql as $$
 begin
   if new.atualizado_por is not null then perform public.bf_erro('O NDVI vem do satélite; não dá para gravar pelo app.'); end if;
   return new;
 end $$;
+drop trigger if exists registros_ndvi_so_servidor on public.registros;
 create trigger registros_ndvi_so_servidor before insert or update on public.registros
   for each row when (new.tabela = 'ndvi') execute function public.bf_ndvi_so_servidor();
 
 -- Apagou o piquete: o NDVI dele some (e desce como apagado para os celulares).
-create function public.bf_ndvi_do_piquete_apagado() returns trigger
+create or replace function public.bf_ndvi_do_piquete_apagado() returns trigger
 language plpgsql security definer set search_path = public, pg_temp as $$
 begin
   update public.registros r set excluido = true, dados = null, versao = nextval('public.registros_versao'), atualizado_em = now(), atualizado_por = null
     where r.fazenda_id = new.fazenda_id and r.tabela = 'ndvi' and not r.excluido and r.dados->>'piqueteId' = new.gid;
   return null;
 end $$;
+drop trigger if exists registros_ndvi_piquete_apagado on public.registros;
 create trigger registros_ndvi_piquete_apagado after update on public.registros
   for each row when (new.tabela = 'piquetes' and new.excluido and not old.excluido) execute function public.bf_ndvi_do_piquete_apagado();
 
 -- Piquetes com contorno para buscar o NDVI (só a função do satélite). "ultima": data do NDVI mais novo do piquete.
-create function public.piquetes_para_ndvi(p_fazenda uuid default null, p_limite integer default 2000)
+create or replace function public.piquetes_para_ndvi(p_fazenda uuid default null, p_limite integer default 2000)
 returns table (fazenda_id uuid, gid text, contorno jsonb, ultima date)
 language sql stable security definer set search_path = public, pg_temp as $$
   select p.fazenda_id, p.gid, p.dados->'contorno',
@@ -292,7 +296,7 @@ language sql stable security definer set search_path = public, pg_temp as $$
 $$;
 
 -- Grava as leituras de um piquete: [{data, ndvi, min, max, nuvemPct}]. Mesma data = atualiza (gid fixo por piquete e data).
-create function public.gravar_ndvi(p_fazenda uuid, p_piquete text, p_linhas jsonb) returns integer
+create or replace function public.gravar_ndvi(p_fazenda uuid, p_piquete text, p_linhas jsonb) returns integer
 language plpgsql security definer set search_path = public, pg_temp as $$
 declare
   l jsonb; dt date; v numeric; dados jsonb; g text; n integer := 0; existe boolean;
@@ -333,7 +337,7 @@ begin
 end $$;
 
 -- Dono ou gerente pede para atualizar o NDVI da fazenda agora (a função confere isto antes de chamar o satélite).
-create function public.pedir_ndvi(f uuid) returns boolean
+create or replace function public.pedir_ndvi(f uuid) returns boolean
 language plpgsql security definer set search_path = public, pg_temp as $$
 declare p public.papel := public.bf_papel(f);
 begin
