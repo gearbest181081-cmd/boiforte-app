@@ -570,6 +570,28 @@ function confere(cond, msg) {
     confere(/Recria/.test(fasesTxt) && /TIP/.test(fasesTxt) && /242/.test(fasesTxt), 'histórico mostra a recria e a TIP com o peso da troca');
     confere(/TIP \(terminação intensiva a pasto\)/.test(await page.locator('main p.mudo').first().innerText()), 'lote agora está na TIP');
     await foto('22-fases-do-lote');
+
+    console.log('18c. Pasto: um lote por piquete, mudar de piquete com altura do capim');
+    await page.goto(URL + '#/pasto');
+    await page.getByTestId('moduloPasto').first().waitFor();
+    const pastoTxt = await page.getByTestId('moduloPasto').filter({ hasText: 'Retiro 1' }).innerText();
+    confere(/UA\/ha/.test(pastoTxt) && /Com gado/.test(pastoTxt) && /Piquete 3/.test(pastoTxt), 'Pasto mostra lotação em UA/ha e a situação dos piquetes');
+    confere(/Próximo piquete: Piquete 3/.test(pastoTxt), 'sugere o piquete que descansou');
+    await foto('23-pasto');
+    await page.getByTestId('moverGado').click();
+    await page.locator('select[name=moverQuem]').selectOption({ label: 'Lote Macho — 1º lote' });
+    const destinos = await page.locator('select[name=moverPara] option').allInnerTexts();
+    confere(!destinos.some((t) => /Piquete 2/.test(t)) && destinos.some((t) => /Piquete 3/.test(t)), 'só oferece piquete vazio (o 2 tem as fêmeas)');
+    await page.locator('input[name=alturaSaida]').fill('30');
+    await page.locator('select[name=moverPara]').selectOption({ label: 'Retiro 1 › Piquete 3' });
+    await page.locator('input[name=alturaEntrada]').fill('88');
+    await page.getByText('Pasto rapado').waitFor();
+    await foto('24-mudar-piquete');
+    await page.getByTestId('salvarMover').click();
+    await page.getByRole('heading', { name: 'Entradas e saídas' }).waitFor();
+    const fichaTxt = await page.locator('main').innerText();
+    confere(/Macho — 1º lote/.test(fichaTxt) && /com capim de 88 cm/.test(fichaTxt) && /pressão de pastejo/.test(fichaTxt), 'ficha do piquete com a entrada, a altura e a pressão de pastejo');
+    await foto('25-ficha-piquete');
     await page.getByRole('link', { name: 'Início' }).click();
 
     if (nuvemNoBuild) {
@@ -620,7 +642,7 @@ function confere(cond, msg) {
       const loteId = await p2.evaluate(() => new Promise((ok) => { const r = indexedDB.open('boiforte'); r.onsuccess = () => { const t = r.result.transaction('lotes').objectStore('lotes').getAll(); t.onsuccess = () => ok(t.result[0].id); }; }));
       const formulaId = await p2.evaluate(() => new Promise((ok) => { const r = indexedDB.open('boiforte'); r.onsuccess = () => { const t = r.result.transaction('formulas').objectStore('formulas').getAll(); t.onsuccess = () => ok(t.result[0]?.id ?? 'nova'); }; }));
       const telas = ['/lotes', '/lotes/novo', `/lotes/${loteId}`, `/lotes/${loteId}/editar`, `/lotes/${loteId}/relatorio`, '/pesar', `/pesar/${loteId}`, '/fazenda', '/mais', '/nutricao',
-        `/nutricao/formula/${formulaId}`, '/nutricao/formula/nova', '/nutricao/ingrediente/novo', '/estoque', '/trato', '/financeiro', '/sanidade', '/simular', '/relatorios', '/nuvem', '/funcionarios', '/funcionarios/novo', '/anotacoes', '/anotacoes/nova'];
+        `/nutricao/formula/${formulaId}`, '/nutricao/formula/nova', '/nutricao/ingrediente/novo', '/estoque', '/trato', '/financeiro', '/sanidade', '/simular', '/relatorios', '/nuvem', '/funcionarios', '/funcionarios/novo', '/anotacoes', '/anotacoes/nova', '/pasto', '/pasto/mover'];
       const semVoltar = [], semMic = [];
       for (const t of telas) {
         await p2.goto(URL + '#' + t);

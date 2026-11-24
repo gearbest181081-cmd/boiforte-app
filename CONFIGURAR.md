@@ -101,7 +101,30 @@ supabase secrets set ANTHROPIC_API_KEY=sua-chave-da-anthropic
 
 - `APP_ORIGIN` é só o começo do endereço do app (sem `/boiforte-app/`). Outros sites não conseguem usar a função pelo navegador; a proteção principal é o login e a cota no banco.
 - A chave da Anthropic é criada em https://console.anthropic.com. Cada pessoa pode ler até 30 fotos por dia.
-- Sempre que a pasta `supabase/functions` mudar (ex.: a foto da balança com o lote todo), rode de novo `supabase functions deploy ler-foto`. Não precisa de migração.
+- Sempre que a pasta `supabase/functions` mudar (ex.: a foto da balança com o lote todo), rode de novo `supabase functions deploy ler-foto` (e `supabase functions deploy ndvi --no-verify-jwt`). Não precisa de migração.
+
+### NDVI do satélite (pasto)
+
+O NDVI de cada piquete vem do Sentinel-2 pelo **Copernicus Data Space Ecosystem** (da União Europeia, gratuito).
+
+1. Crie uma conta grátis em https://dataspace.copernicus.eu (botão "Register").
+2. Entre no painel do Sentinel Hub em https://shapps.dataspace.copernicus.eu/dashboard → **User settings** → **OAuth clients** → **Create**.
+   Dê um nome (ex.: BoiForte), sem data de validade, e copie o **Client ID** e o **Client secret** (o secret aparece uma vez só).
+3. Publique a função e guarde os segredos:
+
+```
+supabase functions deploy ndvi --no-verify-jwt
+supabase secrets set CDSE_CLIENT_ID=o-client-id CDSE_CLIENT_SECRET=o-client-secret
+```
+
+4. Agende a busca diária: no Supabase, **Integrations → Cron → Create job**, tipo "Supabase Edge Function", função `ndvi`,
+   método POST, todo dia às 6h (`0 9 * * *`, em UTC), com o cabeçalho `x-cron-secret` igual ao `CRON_SECRET` que já está nos segredos.
+
+- A conta gratuita dá **10.000 pedidos por mês**. Cada piquete com contorno gasta 1 pedido quando é atualizado, e a função só atualiza
+  quem não tem leitura dos últimos 5 dias, até 250 piquetes por rodada (mude com `supabase secrets set NDVI_MAX_PIQUETES=...`).
+  Na prática, dá para uns 1.500 piquetes atualizados a cada 5 dias. Passando disso, é preciso um plano pago do Copernicus/Sentinel Hub.
+- Confira os termos de uso do Copernicus para uso comercial do app (os dados Sentinel são livres, inclusive para uso comercial).
+- O dono e o gerente também podem tocar em "Atualizar o satélite agora" na tela Pasto (até 2 vezes por hora).
 
 ## 5. Ligar o app à nuvem (GitHub)
 

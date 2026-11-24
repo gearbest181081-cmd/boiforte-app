@@ -23,8 +23,44 @@ export const FASES: Record<Fase, string> = {
 export const SEXOS: Record<Sexo, string> = { macho: 'Macho', femea: 'Fêmea', misto: 'Misto' };
 
 export interface Propriedade { id?: number; gid?: string; nome: string; municipio?: string; uf?: string; areaHa?: number; criadoEm: number }
-export interface Modulo { id?: number; gid?: string; propriedadeId: number; nome: string; criadoEm: number }
-export interface Piquete { id?: number; gid?: string; moduloId: number; nome: string; areaHa?: number; capim?: string; criadoEm: number }
+/**
+ * Módulo de pastejo: o conjunto de piquetes por onde os mesmos animais rodam.
+ * sistema: rotacionado (os animais mudam de piquete) ou contínuo. diasOcupacao/diasDescanso: o planejado.
+ * capacidadeUA: quantas UA por hectare o módulo aguenta (lotação de suporte), para o aviso de lotação alta.
+ */
+export interface Modulo {
+  id?: number; gid?: string; propriedadeId: number; nome: string;
+  sistema?: 'rotacionado' | 'continuo'; diasOcupacao?: number; diasDescanso?: number; capacidadeUA?: number;
+  criadoEm: number;
+}
+/**
+ * Piquete: a variável de decisão do pasto (quem entra, quando entra, quando sai).
+ * alturaEntrada/alturaSaida: altura do capim (cm) para entrar e para tirar os animais.
+ * kgMsCm: kg de matéria seca por hectare para cada cm de capim (estima a massa de forragem pela altura).
+ * contorno: pontos {lat, lon} do piquete (o satélite usa para o NDVI).
+ */
+export interface Piquete {
+  id?: number; gid?: string; moduloId: number; nome: string; areaHa?: number; capim?: string;
+  alturaEntrada?: number; alturaSaida?: number; kgMsCm?: number; contorno?: { lat: number; lon: number }[];
+  criadoEm: number;
+}
+/** Arquivo de foto ou áudio guardado com a ocupação (o arquivo fica em fotosAnotacao e no Storage). */
+export interface Midia { arq: string; ext: ExtMidia } // arq: id do arquivo (o servidor descarta campos chamados "id")
+export type ExtMidia = 'jpg' | 'webm' | 'ogg' | 'm4a';
+/**
+ * Ocupação de um piquete: quem entrou, quando entrou e quando saiu, com a altura do capim, foto e áudio
+ * na entrada e na saída. tipo "lote" (recria/engorda) ou "grupo" (grupo de manejo da cria).
+ * Um piquete só tem um ocupante por vez (conferido no celular e no servidor).
+ */
+export interface Ocupacao {
+  id?: number; gid?: string; piqueteId: number; tipo: 'lote' | 'grupo'; ocupanteId: number;
+  entrada: string; saida?: string | null; cabecas: number; pesoMedio?: number | null;
+  alturaEntrada?: number | null; alturaSaida?: number | null; massaEntrada?: number | null;
+  notaEntrada?: string; notaSaida?: string; midiasEntrada?: Midia[]; midiasSaida?: Midia[];
+  criadoEm: number;
+}
+/** NDVI do satélite (Sentinel-2) num piquete, numa data. Quem grava é o servidor; o celular só lê. */
+export interface Ndvi { id?: number; gid?: string; piqueteId: number; data: string; ndvi: number; min?: number; max?: number; nuvemPct?: number; criadoEm?: number }
 export interface Lote {
   id?: number;
   gid?: string;
@@ -143,9 +179,9 @@ export type CategoriaAnotacao = 'cerca' | 'agua' | 'cocho' | 'pasto' | 'animal' 
  * Foto de anotação guardada no celular (não vai na cópia de segurança nem na fila de registros).
  * estado: "enviar" = ainda não subiu para a nuvem; "ok" = igual à nuvem; "apagar" = apagar da nuvem.
  */
-export interface FotoLocal { id: string; dados?: ArrayBuffer; estado: 'enviar' | 'ok' | 'apagar'; em: number; erro?: string }
+export interface FotoLocal { id: string; dados?: ArrayBuffer; estado: 'enviar' | 'ok' | 'apagar'; em: number; erro?: string; ext?: ExtMidia } // ext vazio = foto jpg
 
-export const TABELAS = ['propriedades', 'modulos', 'piquetes', 'lotes', 'animais', 'pesagens', 'ingredientes', 'formulas', 'movimentos', 'batidas', 'fornecimentos', 'config', 'lancamentos', 'custosFixos', 'vendas', 'sanidade', 'lembretes', 'funcionarios', 'anotacoes'] as const;
+export const TABELAS = ['propriedades', 'modulos', 'piquetes', 'lotes', 'animais', 'pesagens', 'ingredientes', 'formulas', 'movimentos', 'batidas', 'fornecimentos', 'config', 'lancamentos', 'custosFixos', 'vendas', 'sanidade', 'lembretes', 'funcionarios', 'anotacoes', 'ocupacoes', 'ndvi'] as const;
 
 export class BoiForteDB extends Dexie {
   propriedades!: Table<Propriedade, number>;
@@ -167,6 +203,8 @@ export class BoiForteDB extends Dexie {
   lembretes!: Table<Lembrete, number>;
   funcionarios!: Table<Funcionario, number>;
   anotacoes!: Table<Anotacao, number>;
+  ocupacoes!: Table<Ocupacao, number>;
+  ndvi!: Table<Ndvi, number>;
   fotosAnotacao!: Table<FotoLocal, string>;
   pendentes!: Table<Pendente, [string, number | string]>;
   sincEstado!: Table<{ chave: string; valor: unknown }, string>;
@@ -234,6 +272,11 @@ export class BoiForteDB extends Dexie {
       anotacoes: '++id, &gid, moduloId, piqueteId, data',
       fotosAnotacao: 'id, estado',
     });
+    // Pasto: ocupação dos piquetes (entrada/saída) e NDVI do satélite.
+    this.version(8).stores({
+      ocupacoes: '++id, &gid, piqueteId, [tipo+ocupanteId], entrada',
+      ndvi: '++id, &gid, piqueteId, data',
+    });
     this.use(middlewarePendentes);
     // Toda gravação passa pela validação, venha de onde vier.
     for (const t of TABELAS) {
@@ -268,7 +311,9 @@ export function novoGid(): string {
 }
 
 export interface Pendente { tabela: string; chave: number | string; op: 'put' | 'del'; gid?: string; em: number; erro?: string }
-const SINC = new Set<string>(TABELAS);
+// O NDVI vem só do servidor (satélite): o celular nunca manda.
+export const SO_DO_SERVIDOR = new Set<string>(['ndvi']);
+const SINC = new Set<string>(TABELAS.filter((t) => !SO_DO_SERVIDOR.has(t)));
 
 /** Marca a transação atual (e as de dentro dela) para NÃO irem para a nuvem. */
 function silenciosa(): boolean {
@@ -388,7 +433,8 @@ export function pontosDoAnimal(pesagens: Pesagem[], animalId: number): PontoPeso
 }
 
 export async function excluirLote(id: number) {
-  await db.transaction('rw', [db.lotes, db.pesagens, db.animais, db.fornecimentos, db.movimentos, db.lancamentos, db.vendas, db.sanidade], async () => {
+  await db.transaction('rw', [db.lotes, db.pesagens, db.animais, db.fornecimentos, db.movimentos, db.lancamentos, db.vendas, db.sanidade, db.ocupacoes], async () => {
+    await db.ocupacoes.where('[tipo+ocupanteId]').equals(['lote', id]).delete();
     await db.lancamentos.where('loteId').equals(id).delete();
     await db.vendas.where('loteId').equals(id).delete();
     await db.sanidade.where('loteId').equals(id).delete();
@@ -401,10 +447,23 @@ export async function excluirLote(id: number) {
   });
 }
 
+/** Apaga piquetes com o histórico de ocupação e o NDVI deles; lote que estava lá fica sem piquete. */
+export async function excluirPiquetes(ids: number[]) {
+  if (!ids.length) return;
+  const grupos = db.tables.find((t) => t.name === 'grupos'); // grupos de manejo da cria (quando existir)
+  await db.transaction('rw', [db.piquetes, db.lotes, db.ocupacoes, db.ndvi, ...(grupos ? [grupos] : [])], async () => {
+    await db.lotes.where('piqueteId').anyOf(ids).modify({ piqueteId: null });
+    if (grupos) await db.table('grupos').filter((g: { piqueteId?: number | null }) => g.piqueteId != null && ids.includes(g.piqueteId)).modify({ piqueteId: null });
+    await db.ocupacoes.where('piqueteId').anyOf(ids).delete();
+    await db.ndvi.where('piqueteId').anyOf(ids).delete();
+    await db.piquetes.bulkDelete(ids);
+  });
+}
+
 export async function excluirPropriedade(id: number) {
-  await db.transaction('rw', [db.propriedades, db.modulos, db.piquetes, db.lotes, db.pesagens, db.animais, db.fornecimentos, db.movimentos, db.lancamentos, db.vendas, db.sanidade], async () => {
+  await db.transaction('rw', [db.propriedades, db.modulos, db.piquetes, db.lotes, db.pesagens, db.animais, db.fornecimentos, db.movimentos, db.lancamentos, db.vendas, db.sanidade, db.ocupacoes, db.ndvi], async () => {
     const mods = await db.modulos.where('propriedadeId').equals(id).toArray();
-    for (const m of mods) await db.piquetes.where('moduloId').equals(m.id!).delete();
+    for (const m of mods) await excluirPiquetes(await db.piquetes.where('moduloId').equals(m.id!).primaryKeys());
     await db.modulos.where('propriedadeId').equals(id).delete();
     const lotes = await db.lotes.where('propriedadeId').equals(id).toArray();
     for (const l of lotes) {
@@ -412,6 +471,7 @@ export async function excluirPropriedade(id: number) {
       for (const f of fs) await db.movimentos.where('[origem+refId]').equals(['fornecimento', f]).delete();
       await db.fornecimentos.where('loteId').equals(l.id!).delete();
       await db.lancamentos.where('loteId').equals(l.id!).delete();
+      await db.ocupacoes.where('[tipo+ocupanteId]').equals(['lote', l.id!]).delete();
       await db.vendas.where('loteId').equals(l.id!).delete();
       await db.sanidade.where('loteId').equals(l.id!).delete();
       await db.pesagens.where('loteId').equals(l.id!).delete();
