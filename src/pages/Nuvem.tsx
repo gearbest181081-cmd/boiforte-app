@@ -1,17 +1,18 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { db } from '../db';
 import { NOMES_TABELA } from '../nuvem/nomes';
 import {
   aceitarConvite, apagarMinhaConta, cancelarConvite, convitesPendentes, criarConvite, criarFazenda, equipe, minhasFazendas, mudarPapel, nuvemConfigurada,
-  NOME_PLANO, planoDaFazenda, removerMembro, sair, type ConvitePendente, type Membro, type MinhaFazenda, type PlanoFazenda,
+  NOME_PLANO, planoDaFazenda, PRECO_PESSOA_EXTRA, removerMembro, sair, type ConvitePendente, type Membro, type MinhaFazenda, type PlanoFazenda,
 } from '../nuvem/cliente';
-import { PAPEIS, type Papel } from '../nuvem/esquema';
+import { mensagemConvite, PAPEIS, type Papel } from '../nuvem/esquema';
+import { Permissoes } from '../components/Permissoes';
 import { desligarFazenda, ligarFazenda, temDadosLocais, tentarDeNovo } from '../nuvem/sinc';
 import { sincronizarAgora, useEstadoNuvem } from '../nuvem/useNuvem';
 import { linkWhatsApp } from '../exportar';
-import { CampoEscolha, CampoTexto, Escolha, Topo, useAviso } from '../components/ui';
+import { CampoEscolha, CampoTexto, Topo, useAviso } from '../components/ui';
 import { Entrar } from '../components/Entrar';
 import { marcarDono, useSessao } from '../nuvem/sessao';
 
@@ -159,7 +160,7 @@ function Ligado({ aoSair }: { aoSair: () => void }) {
           <button className="btn sec pequeno" onClick={async () => { await tentarDeNovo(); agora(); }}>Tentar de novo</button>
         </div>
       )}
-      <Equipe fazendaId={f.id} souDono={f.papel === 'dono'} />
+      <Equipe fazendaId={f.id} nomeFazenda={f.nome} souDono={f.papel === 'dono'} />
       <button className="btn largo" style={{ marginTop: 16 }} onClick={() => nav('/', { replace: true })}>Concluir e voltar ao início</button>
       <div className="botoes" style={{ marginTop: 16 }}>
         <button className="btn sec" onClick={desligar}>Desligar este celular</button>
@@ -181,11 +182,12 @@ function ApagarConta({ aoSair }: { aoSair: () => void }) {
   return <p style={{ marginTop: 24, textAlign: 'center' }}><button className="btn perigo pequeno" onClick={apagar}>Apagar minha conta</button></p>;
 }
 
-function Equipe({ fazendaId, souDono }: { fazendaId: string; souDono: boolean }) {
+function Equipe({ fazendaId, nomeFazenda, souDono }: { fazendaId: string; nomeFazenda: string; souDono: boolean }) {
   const aviso = useAviso();
   const [lista, setLista] = useState<Membro[] | null>(null);
   const [papel, setPapel] = useState<Papel>('vaqueiro');
   const [codigo, setCodigo] = useState<string | null>(null);
+  const [mandou, setMandou] = useState(false);
   const [pendentes, setPendentes] = useState<ConvitePendente[]>([]);
   const [plano, setPlano] = useState<PlanoFazenda | null>(null);
   const carregar = useCallback(() => {
@@ -195,82 +197,121 @@ function Equipe({ fazendaId, souDono }: { fazendaId: string; souDono: boolean })
   }, [fazendaId, souDono]);
   useEffect(carregar, [carregar]);
   const convidar = async () => {
-    try { setCodigo(await criarConvite(fazendaId, papel)); carregar(); } catch (e) { aviso((e as Error).message, true); }
+    try { setCodigo(await criarConvite(fazendaId, papel)); setMandou(false); carregar(); } catch (e) { aviso((e as Error).message, true); }
   };
+  const outro = () => { setCodigo(null); setMandou(false); };
   const cancelar = async (c: ConvitePendente) => {
     if (!window.confirm(`Cancelar o convite ${c.codigo}? Quem tiver o código não vai conseguir entrar.`)) return;
     try {
       await cancelarConvite(fazendaId, c.codigo);
-      if (codigo === c.codigo) setCodigo(null);
+      if (codigo === c.codigo) outro();
       aviso('Convite cancelado.');
       carregar();
     } catch (e) { aviso((e as Error).message, true); }
   };
-  const semVaga = !!plano && plano.pessoas + plano.convites_abertos >= plano.limite;
+  const vagas = plano ? Math.max(0, plano.limite - plano.pessoas - plano.convites_abertos) : null;
+  const semVaga = vagas === 0;
   const mudar = async (m: Membro, p: Papel) => {
-    try { await mudarPapel(fazendaId, m.usuario_id, p); carregar(); } catch (e) { aviso((e as Error).message, true); }
+    if (p === m.papel) return;
+    if (p === 'dono' && !window.confirm(`Dar a ${m.nome || 'esta pessoa'} o papel de DONO? Ela vai poder chamar e tirar pessoas da equipe, inclusive mudar o que cada um faz.`)) return;
+    try { await mudarPapel(fazendaId, m.usuario_id, p); carregar(); aviso(`Pronto: agora ${m.nome || 'ela'} é ${PAPEIS[p].nome.toLowerCase()}.`); } catch (e) { aviso((e as Error).message, true); }
   };
   const tirar = async (m: Membro) => {
     if (!window.confirm(`Tirar ${m.nome || 'esta pessoa'} da equipe? Ela deixa de ver e lançar os dados da fazenda.`)) return;
     try { await removerMembro(fazendaId, m.usuario_id); carregar(); } catch (e) { aviso((e as Error).message, true); }
   };
+  const msg = codigo ? mensagemConvite(papel, codigo, nomeFazenda) : '';
   return (
     <>
       <h2>Equipe</h2>
       {plano && (
         <p className="mudo" data-testid="planoEquipe">
           Plano {NOME_PLANO[plano.plano] ?? plano.plano}: {plano.pessoas} de {plano.limite} pessoas
-          {souDono && plano.convites_abertos > 0 ? ` (e ${plano.convites_abertos} convite(s) em aberto)` : ''}.
+          {souDono && plano.convites_abertos > 0 ? ` (e ${plano.convites_abertos} convite(s) esperando a pessoa entrar)` : ''}.
+          {souDono && vagas != null ? (vagas === 1 ? ' Sobra 1 vaga.' : vagas > 1 ? ` Sobram ${vagas} vagas.` : ' Não sobra vaga.') : ''}
           {plano.plano === 'pro' && plano.fotos_limite != null ? ` Leitura por foto: ${plano.fotos_usadas ?? 0} de ${plano.fotos_limite} neste mês.` : plano.plano === 'basico' ? ' A leitura por foto é do plano Pro.' : ''}
         </p>
       )}
       {plano?.eu_pausado && (
         <div className="alerta atencao"><span className="ic">⏸️</span><div><b>Seu acesso está pausado.</b> A equipe passou do limite do plano da fazenda. Peça ao dono para liberar uma vaga ou aumentar o plano. Os dados deste celular continuam aqui.</div></div>
       )}
-      {lista === null && !plano?.eu_pausado && <p className="mudo">A equipe aparece quando houver internet.</p>}
-      {lista?.map((m) => (
-        <div key={m.usuario_id} className="cartao">
-          <div className="linha-lote"><b>{m.nome || 'Sem nome'}{m.eu ? ' (você)' : ''}</b><span className="etiqueta">{PAPEIS[m.papel].nome}{m.bloqueado ? ' · pausado' : ''}</span></div>
-          {souDono && !m.eu && (
-            <div className="botoes" style={{ margin: '8px 0 0' }}>
-              <div style={{ flex: '1 1 180px' }}>
-                <Escolha aria-label={`Papel de ${m.nome}`} rotuloVoz="papel" valor={m.papel} aoMudar={(v) => mudar(m, v as Papel)}>
-                  {Object.entries(PAPEIS).map(([k, v]) => <option key={k} value={k}>{v.nome}</option>)}
-                </Escolha>
-              </div>
-              <button className="btn perigo pequeno" onClick={() => tirar(m)}>Tirar</button>
-            </div>
-          )}
+
+      {souDono && (
+        <div className="cartao" data-testid="liberarAcesso">
+          <h3>Liberar acesso para um funcionário</h3>
+          <p className="mudo" style={{ marginTop: 0 }}>São 3 passos. O funcionário usa o celular dele, com o e-mail dele, e só vê o que você liberar.</p>
+          <ol className="passos">
+            <li className={codigo ? 'feito' : ''}>
+              <b>O que ele vai poder fazer?</b>
+              <CampoEscolha rotulo="Papel do funcionário" nome="papelConvite" valor={papel} aoMudar={(v) => { setPapel(v as Papel); outro(); }}>
+                {(['vaqueiro', 'gerente', 'consultor'] as Papel[]).map((p) => <option key={p} value={p}>{PAPEIS[p].nome}</option>)}
+              </CampoEscolha>
+              <Permissoes papel={papel} />
+            </li>
+            <li className={codigo ? 'feito' : ''}>
+              <b>Gere o código de entrada</b>
+              {!codigo && semVaga ? (
+                <div className="alerta atencao" data-testid="semVaga"><span className="ic">👥</span><div><b>Sem vaga na equipe.</b> O plano {NOME_PLANO[plano!.plano]} permite {plano!.limite} pessoas, contando você e os convites esperando. Cancele um convite, tire alguém da lista abaixo ou aumente o plano (cada pessoa a mais custa {PRECO_PESSOA_EXTRA} por mês).</div></div>
+              ) : !codigo ? (
+                <button className="btn largo" onClick={convidar}>Gerar código para {PAPEIS[papel].nome.toLowerCase()}</button>
+              ) : (
+                <>
+                  <p className="codigo-convite" data-testid="codigoConvite">{codigo}</p>
+                  <p className="mudo" style={{ margin: 0 }}>Código de {PAPEIS[papel].nome.toLowerCase()}. Vale por 7 dias e para uma pessoa só.</p>
+                </>
+              )}
+            </li>
+            <li className={mandou ? 'feito' : codigo ? '' : 'espera'}>
+              <b>Mande o código para ele</b>
+              {codigo ? (
+                <>
+                  <a className="btn largo" target="_blank" rel="noopener noreferrer" href={linkWhatsApp(msg)} onClick={() => setMandou(true)}>Mandar no WhatsApp</a>
+                  <p className="mudo">A mensagem já vai com o passo a passo. Ele abre o BoiForte, entra com o e-mail dele, vai em <b>Mais › Nuvem e equipe</b> e digita o código. Quando ele entrar, o nome dele aparece em "Quem está na equipe" e o acesso já está liberado.</p>
+                  <button className="btn sec pequeno" onClick={outro}>Chamar outra pessoa</button>
+                </>
+              ) : <p className="mudo" style={{ margin: 0 }}>Depois de gerar o código, mande pelo WhatsApp ou leia para ele.</p>}
+            </li>
+          </ol>
         </div>
-      ))}
+      )}
+
       {souDono && pendentes.length > 0 && (
-        <div className="cartao">
-          <h3>Convites ainda não usados</h3>
+        <div className="cartao" data-testid="convitesPendentes">
+          <h3>Esperando entrar</h3>
+          <p className="mudo" style={{ marginTop: 0 }}>Códigos que você gerou e ninguém usou ainda. Cada um ocupa uma vaga até ser usado, cancelado ou vencer.</p>
           {pendentes.map((c) => (
             <div key={c.codigo} className="linha-lote" style={{ margin: '6px 0' }}>
-              <span><b style={{ letterSpacing: 2 }}>{c.codigo}</b><div className="mudo">{PAPEIS[c.papel].nome} · vale até {new Date(c.expira_em).toLocaleDateString('pt-BR')}</div></span>
-              <button className="btn perigo pequeno" onClick={() => cancelar(c)}>Cancelar</button>
+              <span><b style={{ letterSpacing: 2, whiteSpace: 'nowrap' }}>{c.codigo}</b><div className="mudo">{PAPEIS[c.papel].nome} · vale até {new Date(c.expira_em).toLocaleDateString('pt-BR')}</div></span>
+              <span className="botoes" style={{ margin: 0, flexWrap: 'nowrap' }}>
+                <a className="btn sec pequeno" target="_blank" rel="noopener noreferrer" href={linkWhatsApp(mensagemConvite(c.papel, c.codigo, nomeFazenda))}>Reenviar</a>
+                <button className="btn perigo pequeno" onClick={() => cancelar(c)}>Cancelar</button>
+              </span>
             </div>
           ))}
         </div>
       )}
-      {souDono && (
-        <div className="cartao">
-          <h3>Chamar alguém</h3>
-          <CampoEscolha rotulo="Papel" nome="papelConvite" valor={papel} aoMudar={(v) => { setPapel(v as Papel); setCodigo(null); }}>
-            {(['gerente', 'vaqueiro', 'consultor'] as Papel[]).map((p) => <option key={p} value={p}>{PAPEIS[p].nome}</option>)}
-          </CampoEscolha>
-          <p className="mudo">{PAPEIS[papel].texto}</p>
-          {!codigo && semVaga ? (
-            <p className="mudo" data-testid="semVaga">Sem vaga: o plano {NOME_PLANO[plano!.plano]} permite {plano!.limite} pessoas, contando os convites em aberto. Cancele um convite, tire alguém ou aumente o plano.</p>
-          ) : !codigo ? <button className="btn largo" onClick={convidar}>Gerar código de convite</button> : (
-            <>
-              <p style={{ fontSize: 30, letterSpacing: 4, textAlign: 'center', fontWeight: 700, margin: '8px 0' }} data-testid="codigoConvite">{codigo}</p>
-              <p className="mudo">Vale por 7 dias e para uma pessoa só. Ela instala o BoiForte, entra com o e-mail e digita o código em Mais › Nuvem e equipe.</p>
-              <a className="btn largo" target="_blank" rel="noopener noreferrer" href={linkWhatsApp(`Convite para a equipe da fazenda no BoiForte (${PAPEIS[papel].nome.toLowerCase()}). Código: ${codigo}\nAbra o app, vá em Mais > Nuvem e equipe e digite o código.`)}>Mandar no WhatsApp</a>
-            </>
+
+      <h3>Quem está na equipe</h3>
+      {lista === null && !plano?.eu_pausado && <p className="mudo">A equipe aparece quando houver internet.</p>}
+      {lista?.map((m) => (
+        <div key={m.usuario_id} className="cartao">
+          <div className="linha-lote"><b>{m.nome || 'Sem nome'}{m.eu ? ' (você)' : ''}</b><span className={`etiqueta${m.bloqueado ? ' atencao' : ''}`}>{PAPEIS[m.papel].nome}{m.bloqueado ? ' · pausado' : ''}</span></div>
+          <p className="mudo" style={{ margin: '4px 0 0' }}>{PAPEIS[m.papel].texto}</p>
+          {m.bloqueado && <p className="mudo" style={{ margin: '4px 0 0' }}>Pausado: a equipe passou do limite do plano. Tire alguém ou aumente o plano para liberar.</p>}
+          {souDono && !m.eu && (
+            <details style={{ marginTop: 8 }}>
+              <summary style={{ fontWeight: 700, cursor: 'pointer', minHeight: 32 }}>Mudar o que pode fazer ou tirar da equipe</summary>
+              <CampoEscolha rotulo={`Papel de ${m.nome || 'sem nome'}`} nome={`papel-${m.usuario_id}`} valor={m.papel} aoMudar={(v) => mudar(m, v as Papel)}>
+                {(['vaqueiro', 'gerente', 'consultor', 'dono'] as Papel[]).map((k) => <option key={k} value={k}>{PAPEIS[k].nome}</option>)}
+              </CampoEscolha>
+              <Permissoes papel={m.papel} />
+              <button className="btn perigo pequeno" onClick={() => tirar(m)}>Tirar da equipe</button>
+            </details>
           )}
         </div>
+      ))}
+      {souDono && lista && lista.length > 0 && (
+        <p className="mudo">Para guardar o salário e o telefone de quem trabalha na fazenda, use <Link to="/funcionarios">Mais › Funcionários</Link>.</p>
       )}
     </>
   );

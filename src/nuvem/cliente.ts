@@ -88,6 +88,8 @@ export async function sair() { await (await sb()).auth.signOut({ scope: 'local' 
 export interface MinhaFazenda { fazenda_id: string; nome: string; papel: Papel; bloqueado?: boolean }
 export interface Membro { usuario_id: string; nome: string; papel: Papel; entrou_em: string; eu: boolean; bloqueado?: boolean }
 export interface PlanoFazenda { plano: 'basico' | 'pro'; usuarios_extras: number; limite: number; pessoas: number; convites_abertos: number; eu_pausado: boolean; fotos_usadas?: number; fotos_limite?: number }
+/** Preço de cada pessoa a mais na equipe, além das que o plano já inclui. */
+export const PRECO_PESSOA_EXTRA = 'R$ 14,90';
 export const NOME_PLANO: Record<string, string> = { basico: 'Básico', pro: 'Pro' };
 
 export const minhasFazendas = () => rpc<MinhaFazenda[]>('minhas_fazendas', {});
