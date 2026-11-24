@@ -75,19 +75,85 @@ export function lerNumeroFalado(texto: string): number | null {
   return meio ? n + 0.5 : n;
 }
 
+// ---------- Peso falado em arroba ----------
+
+/** Arroba de peso vivo: 15 kg de animal vivo ("bezerro de 12 arrobas" = 180 kg). A arroba de carcaça, usada no preço, é outra conta (ver rendimento). */
+export const KG_POR_ARROBA_VIVA = 15;
+
+export type PesoFalado =
+  | { kg: number; arrobas?: number }
+  /** Falou em arroba, mas não deu para entender o número. */
+  | { erro: 'arroba' };
+
+const TEM_ARROBA = /\barrobas?\b/;
+
+/**
+ * Lê um peso falado. Em kg ("trezentos e vinte", "320 quilos") ou em arroba de peso vivo
+ * ("15 arrobas", "quinze arrobas e meia", "18 @ e 10 quilos", "doze arrobas de peso vivo").
+ * Arroba vira kg com 15 kg por arroba.
+ */
+export function lerPesoFalado(texto: string): PesoFalado | null {
+  if (!texto) return null;
+  const s = semAcento(texto).replace(/@/g, ' arroba ').replace(/\s+/g, ' ').trim();
+  if (!TEM_ARROBA.test(s)) {
+    const n = lerNumeroFalado(texto);
+    return n == null ? null : { kg: n };
+  }
+  const limpo = s.replace(/\b(de )?peso vivo\b/g, ' ').replace(/\bvivas?\b/g, ' ').replace(/\s+/g, ' ').trim();
+  const m = limpo.match(/^(.*?)\s*\barrobas?\b\s*(.*)$/);
+  if (!m) return { erro: 'arroba' };
+  let arrobas = lerNumeroFalado(m[1].trim());
+  if (arrobas == null || arrobas <= 0) return { erro: 'arroba' };
+  let resto = m[2].replace(/^e\s+/, '').trim();
+  let kgExtra = 0;
+  if (/^(meia|meio)$/.test(resto)) { arrobas += 0.5; resto = ''; }
+  if (resto) {
+    const k = lerNumeroFalado(resto);
+    if (k == null || TEM_ARROBA.test(resto)) return { erro: 'arroba' };
+    kgExtra = k;
+  }
+  const kg = Math.round((arrobas * KG_POR_ARROBA_VIVA + kgExtra) * 100) / 100;
+  return { kg, arrobas };
+}
+
+/** Das alternativas do reconhecimento ("a|b|c"), pega o primeiro peso entendido; se só achou arroba sem número, devolve o erro. */
+export function melhorPeso(alternativas: string): PesoFalado | null {
+  let erro: PesoFalado | null = null;
+  for (const t of alternativas.split('|')) {
+    const r = lerPesoFalado(t);
+    if (r && 'kg' in r) return r;
+    if (r) erro = r;
+  }
+  return erro;
+}
+
+/** Frase curta para mostrar a conversão: "15 @ de peso vivo = 225 kg". */
+export function explicarArroba(arrobas: number, kg: number): string {
+  const f = (n: number) => String(Math.round(n * 100) / 100).replace('.', ',');
+  return `${f(arrobas)} @ de peso vivo × ${KG_POR_ARROBA_VIVA} kg = ${f(kg)} kg`;
+}
+
+export const AVISO_PESO_EM_KG = 'Este peso é em kg, não em arroba. Fale em quilos, por exemplo: "trezentos e vinte".';
+
 export interface PesagemFalada {
   brinco: string;
   peso: number;
+  /** Quando foi falado em arroba de peso vivo (o peso já vem convertido em kg). */
+  arrobas?: number;
 }
 
-/** Lê "brinco 12 peso 320" ou "animal 45, 318 quilos" ou "12 320". */
-export function lerPesagemFalada(texto: string): PesagemFalada | null {
-  const s = semAcento(texto).replace(/[^a-z0-9,. ]/g, ' ').replace(/\s+/g, ' ').trim();
+/** Resultado de lerPesagemFalada quando falou arroba e não deu para converter. */
+export const PESAGEM_ARROBA_SEM_NUMERO = 'arroba' as const;
+
+/** Lê "brinco 12 peso 320" ou "animal 45, 318 quilos" ou "12 320" ou "brinco 12 peso 18 arrobas". */
+export function lerPesagemFalada(texto: string): PesagemFalada | typeof PESAGEM_ARROBA_SEM_NUMERO | null {
+  const s = semAcento(texto).replace(/@/g, ' arroba ').replace(/[^a-z0-9,. ]/g, ' ').replace(/\s+/g, ' ').trim();
   let m = s.match(/(?:brinco|animal|numero|boi|vaca|novilha|bezerro|garrote)\s+(\S+(?:\s+\S+)*?)\s+(?:peso|pesando|pesou|com)\s+(.+)$/);
   if (m) {
     const brinco = lerNumeroFalado(m[1]);
-    const peso = lerNumeroFalado(m[2]);
-    if (peso != null && peso > 0) return { brinco: brinco != null ? String(brinco) : m[1].toUpperCase(), peso };
+    const p = lerPesoFalado(m[2]);
+    if (p && 'erro' in p) return PESAGEM_ARROBA_SEM_NUMERO;
+    if (p && p.kg > 0) return { brinco: brinco != null ? String(brinco) : m[1].toUpperCase(), peso: p.kg, ...(p.arrobas != null ? { arrobas: p.arrobas } : {}) };
   }
   m = s.match(/^(?:brinco|animal|numero)?\s*(\d+)\s+(\d+(?:[.,]\d+)?)(?:\s*(?:quilos|kg|kilos))?$/);
   if (m) return { brinco: m[1], peso: Number(m[2].replace(',', '.')) };
