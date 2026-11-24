@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { anel, lerResposta, pedidoEstatistica, pixelsDoPoligono } from '../../supabase/functions/_shared/ndvi';
+import { anel, lerResposta, pedidoEstatistica, pedidoImagem, pixelsDoPoligono } from '../../supabase/functions/_shared/ndvi';
 
 describe('NDVI (função do satélite)', () => {
   const c = [{ lat: -20.1, lon: -54.1 }, { lat: -20.1, lon: -54.11 }, { lat: -20.11, lon: -54.11 }];
@@ -33,5 +33,16 @@ describe('NDVI (função do satélite)', () => {
     expect(lerResposta(resp(200, 100), 100)[0].nuvemPct).toBe(0);
     // 30 pixels do piquete com nuvem
     expect(lerResposta(resp(200, 130), 100)[0].nuvemPct).toBe(30);
+  });
+  it('pedido da foto: contorno da nuvem, 5 dias a partir da leitura, proporção do piquete', () => {
+    const c = [{ lat: -20, lon: -50 }, { lat: -20, lon: -49.998 }, { lat: -19.999, lon: -49.998 }, { lat: -19.999, lon: -50 }];
+    const p = pedidoImagem(c, '2026-11-14', 'verde')!;
+    expect(p.input.data[0].dataFilter.timeRange).toEqual({ from: '2026-11-14T00:00:00Z', to: '2026-11-19T23:59:59Z' });
+    expect(p.output.width).toBe(400);
+    expect(p.output.height).toBeGreaterThan(150);
+    expect(p.output.height).toBeLessThan(260);
+    expect(p.evalscript).toMatch(/colorBlend/);
+    expect(pedidoImagem(c, 'ontem', 'cor')).toBeNull();
+    expect(pedidoImagem([c[0]], '2026-11-14', 'cor')).toBeNull();
   });
 });
