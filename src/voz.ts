@@ -77,8 +77,8 @@ export function lerNumeroFalado(texto: string): number | null {
 
 // ---------- Peso falado em arroba ----------
 
-/** Arroba de peso vivo: 15 kg de animal vivo ("bezerro de 12 arrobas" = 180 kg). A arroba de carcaça, usada no preço, é outra conta (ver rendimento). */
-export const KG_POR_ARROBA_VIVA = 15;
+/** Arroba de peso vivo: 30 kg de animal vivo (convenção pedida pelo Luiz: "boi de 18 arrobas" = 540 kg). A arroba de carcaça (15 kg), usada no preço, é outra conta (ver rendimento). */
+export const KG_POR_ARROBA_VIVA = 30;
 
 export type PesoFalado =
   | { kg: number; arrobas?: number }
@@ -90,7 +90,7 @@ const TEM_ARROBA = /\barrobas?\b/;
 /**
  * Lê um peso falado. Em kg ("trezentos e vinte", "320 quilos") ou em arroba de peso vivo
  * ("15 arrobas", "quinze arrobas e meia", "18 @ e 10 quilos", "doze arrobas de peso vivo").
- * Arroba vira kg com 15 kg por arroba.
+ * Arroba vira kg com 30 kg por arroba de peso vivo.
  */
 export function lerPesoFalado(texto: string): PesoFalado | null {
   if (!texto) return null;
@@ -127,7 +127,7 @@ export function melhorPeso(alternativas: string): PesoFalado | null {
   return erro;
 }
 
-/** Frase curta para mostrar a conversão: "15 @ de peso vivo = 225 kg". */
+/** Frase curta para mostrar a conversão: "15 @ de peso vivo × 30 kg = 450 kg". */
 export function explicarArroba(arrobas: number, kg: number): string {
   const f = (n: number) => String(Math.round(n * 100) / 100).replace('.', ',');
   return `${f(arrobas)} @ de peso vivo × ${KG_POR_ARROBA_VIVA} kg = ${f(kg)} kg`;

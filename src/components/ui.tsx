@@ -97,7 +97,7 @@ export function mostrarDicaMicDeNovo() { gravarUsosMic(0); }
 
 const EXEMPLOS: Record<TipoVoz, ReactNode> = {
   numero: <>Fale o número: <b>“trezentos e vinte”</b>. Com vírgula: <b>“trezentos e vinte vírgula cinco”</b> ou <b>“trezentos e vinte e meio”</b>.</>,
-  peso: <>Fale o peso em quilos: <b>“trezentos e vinte”</b>. Se falar em arroba (<b>“quinze arrobas”</b>), o app converte para kg: 15 kg por arroba de peso vivo.</>,
+  peso: <>Fale o peso em quilos: <b>“trezentos e vinte”</b>. Se falar em arroba (<b>“quinze arrobas”</b>), o app converte para kg: 30 kg por arroba de peso vivo.</>,
   texto: <>Fale normalmente, como numa conversa: <b>“Retiro de cima”</b>. O que você falar vira texto no campo.</>,
   data: <>Fale <b>“hoje”</b>, <b>“ontem”</b> ou a data: <b>“15 de março”</b>.</>,
   escolha: <>Fale o nome da opção que você quer na lista. Ex.: <b>“milho”</b>.</>,
@@ -206,7 +206,7 @@ type PropsEntrada = Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onCha
   rotuloVoz?: string;
   unidade?: string;
   multilinha?: boolean;
-  /** Peso de animal vivo em kg: se falar em arroba ("15 arrobas"), converte (15 kg por arroba). */
+  /** Peso de animal vivo em kg: se falar em arroba ("15 arrobas"), converte (30 kg por arroba de peso vivo). */
   pesoVivo?: boolean;
 };
 
@@ -216,7 +216,7 @@ export function Entrada({ valor, aoMudar, voz = 'texto', rotuloVoz, unidade, mul
   const numero = voz === 'numero';
   const ouviu = (t: string) => {
     if (numero && (pesoVivo || unidade === 'kg')) {
-      // Campo em kg: "15 arrobas" vira 225 kg no peso do animal; em outro campo de kg (ração), avisa que é em kg.
+      // Campo em kg: "15 arrobas" vira 450 kg no peso do animal; em outro campo de kg (ração), avisa que é em kg.
       const p = melhorPeso(t);
       if (p && 'kg' in p && (p.arrobas == null || pesoVivo)) {
         aoMudar(String(p.kg).replace('.', ','));
@@ -259,7 +259,7 @@ export function CampoNumero({ rotulo, valor, aoMudar, unidade, dica, nome, rotul
 }) {
   const id = useId();
   const n = num(valor);
-  // Por cabeça, menos de 40 kg quase sempre é arroba digitada (18 @ = 270 kg).
+  // Por cabeça, menos de 40 kg quase sempre é arroba digitada (18 @ = 540 kg).
   const pareceArroba = pesoVivo === true && n != null && n > 0 && n < LIMITE_PARECE_ARROBA;
   return (
     <div className="campo">
