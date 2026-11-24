@@ -1,19 +1,28 @@
 import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { concluirEventoSanitario, db, excluirEventoSanitario, garantirLembretesPadrao, salvarEventoSanitario, type Lote } from '../db';
-import { emCarencia, pendenciasSanidade, proximaData, TIPOS_SANIDADE, type TipoSanidade } from '../sanidade';
+import { emCarencia, eventosSanidadeAtivos, pendenciasSanidade, proximaData, TIPOS_SANIDADE, type TipoSanidade } from '../sanidade';
 import { fmtData, hojeISO } from '../calc';
 import { CampoData, CampoEscolha, CampoNumero, CampoTexto, num, Opcoes, Topo, useAviso } from '../components/ui';
 import { rs } from './Nutricao';
 
 /** Aba "Saúde" dentro do lote. */
 export function LoteSanidade({ lote }: { lote: Lote }) {
-  const eventos = useLiveQuery(() => db.sanidade.where('loteId').equals(lote.id!).toArray(), [lote.id]);
+  return <SanidadeDe alvo={{ loteId: lote.id! }} qtd={lote.qtdCabecas} />;
+}
+
+/** Onde a aplicação foi feita: um lote (Recria/Engorda), um grupo de manejo ou um animal da Cria. */
+export type AlvoSanidade = { loteId: number } | { grupoId: number } | { animalId: number };
+
+/** Aplicações e agendamentos de um lote, grupo de manejo ou animal. */
+export function SanidadeDe({ alvo, qtd }: { alvo: AlvoSanidade; qtd: number }) {
+  const [campo, valor] = Object.entries(alvo)[0] as ['loteId' | 'grupoId' | 'animalId', number];
+  const eventos = useLiveQuery(() => db.sanidade.filter((e) => e[campo] === valor).toArray(), [campo, valor]);
   const [novo, setNovo] = useState(false);
   const aviso = useAviso();
   if (!eventos) return null;
   const hoje = hojeISO();
-  const car = emCarencia(eventos, lote.id!, hoje);
+  const car = emCarencia(eventos.map((e) => ({ ...e, loteId: -1 })), -1, hoje);
   const agendados = eventos.filter((e) => !e.feito).sort((a, b) => a.data.localeCompare(b.data));
   const feitos = eventos.filter((e) => e.feito).sort((a, b) => b.data.localeCompare(a.data));
   return (
@@ -21,7 +30,7 @@ export function LoteSanidade({ lote }: { lote: Lote }) {
       {car ? (
         <div className="alerta ruim"><span className="ic">⛔</span><div><b>Em carência até {fmtData(car.data)}</b>Por causa de {car.produto}. Não mande para o abate antes dessa data.</div></div>
       ) : <div className="alerta bom"><span className="ic">✅</span><div><b>Sem carência</b>Nenhum produto aplicado impede o abate hoje.</div></div>}
-      {novo ? <FormEvento loteId={lote.id!} qtd={lote.qtdCabecas} aoTerminar={() => setNovo(false)} /> : <button className="btn largo" style={{ marginBottom: 14 }} onClick={() => setNovo(true)}>+ Aplicação ou agendamento</button>}
+      {novo ? <FormEvento alvo={alvo} qtd={qtd} aoTerminar={() => setNovo(false)} /> : <button className="btn largo" style={{ marginBottom: 14 }} onClick={() => setNovo(true)}>+ Aplicação ou agendamento</button>}
       {agendados.length > 0 && <h2>Agendado</h2>}
       {agendados.map((e) => (
         <div key={e.id} className="cartao">
@@ -56,7 +65,7 @@ export function LoteSanidade({ lote }: { lote: Lote }) {
   );
 }
 
-function FormEvento({ loteId, qtd, aoTerminar }: { loteId: number; qtd: number; aoTerminar: () => void }) {
+function FormEvento({ alvo, qtd, aoTerminar }: { alvo: AlvoSanidade; qtd: number; aoTerminar: () => void }) {
   const aviso = useAviso();
   const [feito, setFeito] = useState<'feito' | 'agendar'>('feito');
   const [tipo, setTipo] = useState<TipoSanidade>('vacina');
@@ -70,11 +79,11 @@ function FormEvento({ loteId, qtd, aoTerminar }: { loteId: number; qtd: number; 
     if (!produto.trim()) return aviso('Informe o produto.', true);
     try {
       await salvarEventoSanitario({
-        loteId, data, feito: feito === 'feito', tipo, produto: produto.trim(), dose: dose.trim() || undefined, qtdAnimais: qtd,
+        ...alvo, data, feito: feito === 'feito', tipo, produto: produto.trim(), dose: dose.trim() || undefined, qtdAnimais: qtd,
         custo: num(custo) ?? undefined, carenciaDias: num(carencia) != null ? Math.round(num(carencia)!) : undefined, repetirDias: num(repetir) ? Math.round(num(repetir)!) : undefined,
       });
       if (feito === 'feito' && num(repetir)) {
-        await salvarEventoSanitario({ loteId, data: new Date(new Date(data + 'T12:00:00Z').getTime() + Math.round(num(repetir)!) * 86400000).toISOString().slice(0, 10), feito: false, tipo, produto: produto.trim(), dose: dose.trim() || undefined, qtdAnimais: qtd, custo: num(custo) ?? undefined, carenciaDias: num(carencia) != null ? Math.round(num(carencia)!) : undefined, repetirDias: Math.round(num(repetir)!) });
+        await salvarEventoSanitario({ ...alvo, data: new Date(new Date(data + 'T12:00:00Z').getTime() + Math.round(num(repetir)!) * 86400000).toISOString().slice(0, 10), feito: false, tipo, produto: produto.trim(), dose: dose.trim() || undefined, qtdAnimais: qtd, custo: num(custo) ?? undefined, carenciaDias: num(carencia) != null ? Math.round(num(carencia)!) : undefined, repetirDias: Math.round(num(repetir)!) });
       }
       aviso(feito === 'feito' ? 'Aplicação registrada.' : 'Agendado.');
       aoTerminar();
@@ -101,16 +110,14 @@ function FormEvento({ loteId, qtd, aoTerminar }: { loteId: number; qtd: number; 
 /** Tela geral de sanidade: agenda de todos os lotes e lembretes do calendário. */
 export function Sanidade() {
   useEffect(() => { garantirLembretesPadrao().catch(() => {}); }, []);
-  const dados = useLiveQuery(async () => ({ eventos: await db.sanidade.toArray(), lotes: await db.lotes.toArray(), lembretes: await db.lembretes.toArray() }));
+  const dados = useLiveQuery(async () => ({ eventos: await db.sanidade.toArray(), lotes: await db.lotes.toArray(), lembretes: await db.lembretes.toArray(), grupos: await db.grupos.toArray(), animais: await db.animais.filter((a) => a.grupoId != null).toArray() }));
   const aviso = useAviso();
   const [titulo, setTitulo] = useState('');
   const [mes, setMes] = useState('5');
   const [dia, setDia] = useState('31');
   if (!dados) return <Topo titulo="Sanidade" voltar />;
   const hoje = hojeISO();
-  const nomes = new Map(dados.lotes.map((l) => [l.id!, l.nome]));
-  const ativos = new Set(dados.lotes.filter((l) => !l.encerrado).map((l) => l.id!));
-  const pend = pendenciasSanidade(dados.eventos.filter((e) => ativos.has(e.loteId)).map((e) => ({ ...e, nomeLote: nomes.get(e.loteId) })), [], hoje, 30);
+  const pend = pendenciasSanidade(eventosSanidadeAtivos(dados.eventos, dados.lotes, dados.grupos, dados.animais), [], hoje, 30);
   const carencias = dados.lotes.filter((l) => !l.encerrado).map((l) => ({ l, c: emCarencia(dados.eventos, l.id!, hoje) })).filter((x) => x.c);
   const addLembrete = async () => {
     if (!titulo.trim()) return aviso('Escreva o lembrete.', true);

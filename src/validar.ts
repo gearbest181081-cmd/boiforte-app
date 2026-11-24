@@ -31,6 +31,8 @@ const CRIADO = NUM(0, 4102444800000, false, true);
 export const FASES_V = ['cria', 'recria', 'rip', 'engorda_pasto', 'tip', 'confinamento'] as const;
 export const CATEGORIAS_ANOTACAO_V = ['cerca', 'agua', 'cocho', 'pasto', 'animal', 'estrutura', 'outro'] as const;
 export const MAX_FOTOS_ANOTACAO = 4;
+export const CATEGORIAS_CRIA_V = ['matriz', 'novilha', 'touro', 'bezerro'] as const;
+export const TIPOS_GRUPO_V = ['matrizes', 'paridas', 'novilhas', 'touros', 'bezerros', 'misto'] as const;
 export const TIPOS_FORMULA_V = ['sal_mineral', 'proteinado', 'proteico_energetico', 'rip', 'tip', 'creep', 'confinamento', 'outro'] as const;
 
 const ESQUEMAS_BASE: Record<string, Record<string, Regra>> = {
@@ -45,7 +47,14 @@ const ESQUEMAS_BASE: Record<string, Record<string, Regra>> = {
     fases: { t: 'lista', max: 30, item: { data: DATA(), de: ENUM(FASES_V), para: ENUM(FASES_V), pesoMedio: NUM(1, 2000), dieta: TXT(80) } },
     criadoEm: CRIADO,
   },
-  animais: { id: ID(false), loteId: ID(), brinco: TXT(30, true), sexo: ENUM(['macho', 'femea', 'misto'], false), raca: TXT(40), ativo: BOOL, criadoEm: CRIADO },
+  // Animal da Recria/Engorda (loteId) ou da Cria (grupoId). Na desmama o mesmo registro passa do grupo para o lote.
+  animais: {
+    id: ID(false), loteId: ID(false), brinco: TXT(30, true), sexo: ENUM(['macho', 'femea', 'misto'], false), raca: TXT(40), ativo: BOOL, criadoEm: CRIADO,
+    grupoId: ID(false), categoria: ENUM(CATEGORIAS_CRIA_V, false), chip: TXT(30), sisbov: TXT(15), nome: TXT(40),
+    nascimento: DATA(false), maeId: ID(false), paiId: ID(false), paiTexto: TXT(60), foto: TXT(36), pesoNascer: NUM(5, 80),
+    creep: BOOL, formulaCreepId: ID(false), entrada: DATA(false), permanenciaMeses: NUM(1, 240, false, true), qtd: NUM(1, 10_000, false, true),
+    saida: DATA(false), motivoSaida: ENUM(['venda', 'descarte', 'morte', 'desmama', 'outro'], false), descarte: BOOL, motivoDescarte: TXT(120), obs: TXT(300),
+  },
   pesagens: {
     id: ID(false), loteId: ID(), data: DATA(), tipo: ENUM(['media', 'individual']), pesoMedio: NUM(1, 2000, true), qtdPesada: NUM(0, 1_000_000, true, true),
     pesos: { t: 'lista', max: 100_000, item: { animalId: ID(), peso: NUM(1, 2000, true) } }, obs: TXT(300), criadoEm: CRIADO,
@@ -79,7 +88,7 @@ const ESQUEMAS_BASE: Record<string, Record<string, Regra>> = {
   lancamentos: {
     id: ID(false), data: DATA(), tipo: ENUM(['despesa', 'receita']),
     categoria: ENUM(['compra_animais', 'pasto', 'sanidade', 'mao_obra', 'frete', 'impostos', 'manutencao', 'combustivel', 'outros', 'venda_animais', 'outras_receitas']),
-    descricao: TXT(120), valor: NUM(0, 1_000_000_000, true), loteId: ID(false), origem: ENUM(['manual', 'compra_lote', 'sanidade'], false), refId: ID(false), criadoEm: CRIADO,
+    descricao: TXT(120), valor: NUM(0, 1_000_000_000, true), loteId: ID(false), grupoId: ID(false), origem: ENUM(['manual', 'compra_lote', 'sanidade'], false), refId: ID(false), criadoEm: CRIADO,
     // dados da compra do lote, para o servidor refazer a conta
     compraQtd: NUM(0, 1_000_000, false, true), compraPreco: NUM(0, 10_000_000), compraComissao: NUM(0, 1), compraFrete: NUM(0, 100_000_000), compraNf: NUM(0, 100_000_000),
   },
@@ -90,7 +99,7 @@ const ESQUEMAS_BASE: Record<string, Record<string, Regra>> = {
     valorBruto: NUM(0, 1_000_000_000, true), valorLiquido: NUM(-100_000_000, 1_000_000_000, true), comprador: TXT(80), obs: TXT(300), criadoEm: CRIADO,
   },
   sanidade: {
-    id: ID(false), loteId: ID(), data: DATA(), feito: BOOL, tipo: ENUM(['vacina', 'vermifugo', 'carrapaticida', 'antibiotico', 'vitamina', 'exame', 'outro']),
+    id: ID(false), loteId: ID(false), grupoId: ID(false), animalId: ID(false), data: DATA(), feito: BOOL, tipo: ENUM(['vacina', 'vermifugo', 'carrapaticida', 'antibiotico', 'vitamina', 'exame', 'outro']),
     produto: TXT(80, true), dose: TXT(40), qtdAnimais: NUM(0, 1_000_000, false, true), custo: NUM(0, 100_000_000), carenciaDias: NUM(0, 730, false, true),
     repetirDias: NUM(0, 730, false, true), obs: TXT(300), criadoEm: CRIADO,
   },
@@ -108,6 +117,23 @@ const ESQUEMAS_BASE: Record<string, Record<string, Regra>> = {
     urgente: BOOL, feita: BOOL, data: DATA(), feitaEm: DATA(false),
     fotos: { t: 'lista', max: MAX_FOTOS_ANOTACAO, item: { foto: TXT(36, true) } },
     autor: TXT(80), autorId: TXT(36), feitaPor: TXT(80), criadoEm: CRIADO,
+  },
+  // ----- Cria -----
+  grupos: {
+    id: ID(false), propriedadeId: ID(), nome: TXT(80, true), tipo: ENUM(TIPOS_GRUPO_V), piqueteId: ID(false), encerrado: BOOL, obs: TXT(300), criadoEm: CRIADO,
+  },
+  estacoes: { id: ID(false), nome: TXT(60, true), inicio: DATA(), fim: DATA(), metodo: ENUM(['monta', 'ia', 'iatf', 'ia_repasse']), obs: TXT(300), criadoEm: CRIADO },
+  reproducao: {
+    id: ID(false), matrizId: ID(), data: DATA(), tipo: ENUM(['monta', 'ia', 'diagnostico', 'parto', 'aborto']),
+    touroId: ID(false), semen: TXT(60), estacaoId: ID(false), resultado: ENUM(['prenhe', 'vazia'], false), diasGestacao: NUM(0, 300, false, true),
+    bezerroId: ID(false), partoTipo: ENUM(['normal', 'assistido', 'natimorto'], false), obs: TXT(300), criadoEm: CRIADO,
+  },
+  pesosCria: { id: ID(false), animalId: ID(), data: DATA(), peso: NUM(5, 2000, true), obs: TXT(120), criadoEm: CRIADO },
+  desmamas: {
+    id: ID(false), data: DATA(), ano: NUM(1990, 2100, true, true), versao: NUM(1, 1000, true, true), grupoId: ID(false), loteId: ID(false), loteFemeasId: ID(false),
+    fase: ENUM(['recria', 'rip']),
+    itens: { t: 'lista', max: 5000, item: { animalId: ID(), peso: NUM(20, 600, true), sexo: ENUM(['macho', 'femea']), idadeDias: NUM(0, 730, true, true), destino: ENUM(['lote', 'reposicao']), grupoId: ID(false) } },
+    cabecas: NUM(1, 5000, true, true), kgTotal: NUM(1, 3_000_000, true), pesoMedio: NUM(20, 600, true), p205Medio: NUM(20, 600), obs: TXT(300), criadoEm: CRIADO,
   },
 };
 
@@ -184,6 +210,7 @@ export const ROTULOS: Record<string, string> = {
   propriedades: 'Fazenda', modulos: 'Módulo', piquetes: 'Piquete', lotes: 'Lote', animais: 'Animal', pesagens: 'Pesagem',
   ingredientes: 'Ingrediente', formulas: 'Fórmula', movimentos: 'Estoque', batidas: 'Batida', fornecimentos: 'Fornecimento', config: 'Configuração',
   lancamentos: 'Lançamento', custosFixos: 'Custo fixo', vendas: 'Venda', sanidade: 'Sanidade', lembretes: 'Lembrete', funcionarios: 'Funcionário', anotacoes: 'Anotação',
+  grupos: 'Grupo de manejo', estacoes: 'Estação de monta', reproducao: 'Reprodução', pesosCria: 'Pesagem da cria', desmamas: 'Desmama',
 };
 
 /** Valida e devolve uma cópia limpa do registro (sem campos desconhecidos). */

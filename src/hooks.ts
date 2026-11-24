@@ -120,12 +120,14 @@ export function useEstoque(hoje = hojeISO()): ItemEstoque[] | undefined {
 import { dreLote, folhaComoFixos, ratear, variacao, type DreLote } from './financeiro';
 import { emCarencia, pendenciasSanidade, liberacaoAbate } from './sanidade';
 import { lerConfigFin, lerConfig as lerConfigMercado } from './db';
-import type { Lancamento, CustoFixo, Venda, EventoSanitario, Lembrete, Animal, Funcionario } from './db';
+import type { Lancamento, CustoFixo, Venda, EventoSanitario, Lembrete, Animal, Funcionario, Grupo } from './db';
+import { eventosSanidadeAtivos } from './sanidade';
+import { ativoCria, cabecas } from './cria';
 
 export interface Tudo {
   lotes: Lote[]; pesagens: Pesagem[]; formulas: Formula[]; ingredientes: Ingrediente[]; fornecimentos: Fornecimento[];
   lancamentos: Lancamento[]; custosFixos: CustoFixo[]; vendas: Venda[]; sanidade: EventoSanitario[]; lembretes: Lembrete[];
-  movimentos: { data: string; valor?: number; tipo: string; origem: string }[]; animais: Animal[]; funcionarios: Funcionario[];
+  movimentos: { data: string; valor?: number; tipo: string; origem: string }[]; animais: Animal[]; funcionarios: Funcionario[]; grupos: Grupo[];
   precoArroba: number; rendimento: number; oportunidadeMes: number; comissaoVenda: number;
 }
 
@@ -135,7 +137,8 @@ export async function carregarTudo(): Promise<Tudo> {
     db.lancamentos.toArray(), db.custosFixos.toArray(), db.vendas.toArray(), db.sanidade.toArray(), db.lembretes.toArray(), db.movimentos.toArray(), db.animais.toArray(),
     db.funcionarios.toArray(), lerConfigMercado(), lerConfigFin(),
   ]);
-  return { lotes, pesagens, formulas, ingredientes, fornecimentos, lancamentos, custosFixos, vendas, sanidade, lembretes, movimentos, animais, funcionarios, ...m, ...f };
+  const grupos = await db.grupos.toArray();
+  return { lotes, pesagens, formulas, ingredientes, fornecimentos, lancamentos, custosFixos, vendas, sanidade, lembretes, movimentos, animais, funcionarios, grupos, ...m, ...f };
 }
 
 export function useTudo(): Tudo | undefined {
@@ -147,8 +150,12 @@ export interface AnaliseLote { info: LoteInfo; dre: DreLote; liberacao: { data: 
 /** DRE de todos os lotes até uma data (rateio dos indiretos incluído). */
 export function analisarLotes(t: Tudo, ate = hojeISO()): AnaliseLote[] {
   const loteFin = t.lotes.map((l) => ({ id: l.id!, nome: l.nome, dataEntrada: l.dataEntrada, qtdCabecas: l.qtdCabecas, encerrado: l.encerrado, dataSaida: l.dataSaida }));
-  const rateio = ratear(loteFin, t.vendas, t.lancamentos, t.custosFixos, ate);
-  const rateioFolha = ratear(loteFin, t.vendas, [], folhaComoFixos(t.funcionarios), ate);
+  // O rebanho da Cria entra no rateio como se fosse um lote a mais: assim os custos gerais e a folha
+  // se dividem entre a Cria e os lotes pelas cabeças, sem a Cria ficar de graça.
+  const cria = loteCria(t);
+  const todos = cria ? [...loteFin, cria] : loteFin;
+  const rateio = ratear(todos, t.vendas, t.lancamentos, t.custosFixos, ate);
+  const rateioFolha = ratear(todos, t.vendas, [], folhaComoFixos(t.funcionarios), ate);
   return t.lotes.map((l, i) => {
     const pes = t.pesagens.filter((p) => p.loteId === l.id);
     const dre = dreLote({
@@ -158,6 +165,37 @@ export function analisarLotes(t: Tudo, ate = hojeISO()): AnaliseLote[] {
     });
     return { info: montarInfo(l, pes, ate), dre, liberacao: liberacaoAbate(t.sanidade, l.id!) };
   });
+}
+
+/** Id do "lote" que representa o rebanho da Cria no rateio. */
+export const ID_RATEIO_CRIA = -1;
+
+/** O rebanho da Cria como um lote para o rateio: cabeças ativas hoje, desde o primeiro animal lançado. */
+export function loteCria(t: Pick<Tudo, 'animais'>) {
+  const cria = t.animais.filter(ativoCria);
+  if (!cria.length) return null;
+  const inicio = cria.map((a) => a.entrada ?? a.nascimento ?? new Date(a.criadoEm).toISOString().slice(0, 10)).sort()[0];
+  return { id: ID_RATEIO_CRIA, nome: 'Cria', dataEntrada: inicio, qtdCabecas: cria.reduce((s, a) => s + cabecas(a), 0) };
+}
+
+/**
+ * Custo da Cria num período: despesas lançadas nos grupos de manejo (inclui vacinas) + a parte da Cria
+ * nos custos gerais, custos fixos e folha (rateio por cabeça-dia junto com os lotes).
+ */
+export function custoCriaPeriodo(t: Tudo, de: string, ate: string): { diretos: number; rateio: number; folha: number; total: number } {
+  const diretos = t.lancamentos.filter((l) => l.tipo === 'despesa' && l.grupoId && l.data >= de && l.data <= ate).reduce((s, l) => s + l.valor, 0);
+  const cria = loteCria(t);
+  let rateio = 0, folha = 0;
+  if (cria) {
+    const loteFin = t.lotes.map((l) => ({ id: l.id!, nome: l.nome, dataEntrada: l.dataEntrada, qtdCabecas: l.qtdCabecas, encerrado: l.encerrado, dataSaida: l.dataSaida }));
+    const todos = [...loteFin, cria];
+    const antes = somaDiasLocal(de, -1);
+    const r = (lanc: typeof t.lancamentos, fixos: Parameters<typeof ratear>[3], d: string) => ratear(todos, t.vendas, lanc, fixos, d).get(ID_RATEIO_CRIA) ?? 0;
+    rateio = r(t.lancamentos, t.custosFixos, ate) - r(t.lancamentos, t.custosFixos, antes);
+    const fol = folhaComoFixos(t.funcionarios);
+    folha = r([], fol, ate) - r([], fol, antes);
+  }
+  return { diretos, rateio, folha, total: diretos + rateio + folha };
 }
 
 /** Alertas que cruzam financeiro, sanidade e desempenho. */
@@ -185,8 +223,7 @@ export function alertasInteligentes(t: Tudo, hoje = hojeISO()): Alerta[] {
       else if (diasEntre(hoje, car.data) <= 30 || (a.info.projecao && diasEntre(hoje, a.info.projecao.dataPrevista) <= 45)) out.push({ nivel: 'atencao', titulo: `${l.nome} em carência até ${car.data.split('-').reverse().join('/')}`, texto: `Por causa de ${car.produto}. Só libere para abate depois dessa data.` });
     }
   }
-  const nomes = new Map(t.lotes.map((l) => [l.id!, l.nome]));
-  for (const p of pendenciasSanidade(t.sanidade.filter((e) => !t.lotes.find((l) => l.id === e.loteId)?.encerrado).map((e) => ({ ...e, nomeLote: nomes.get(e.loteId) })), t.lembretes, hoje)) {
+  for (const p of pendenciasSanidade(eventosSanidadeAtivos(t.sanidade, t.lotes, t.grupos, t.animais), t.lembretes, hoje)) {
     out.push({ nivel: p.nivel, titulo: p.titulo, texto: p.texto });
   }
   return out;
