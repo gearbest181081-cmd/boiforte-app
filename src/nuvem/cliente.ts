@@ -1,4 +1,4 @@
-// Ligação com o Supabase (login, equipe, sincronização, cotações e leitura por foto).
+// Ligação com o Supabase (login, equipe, sincronização e leitura por foto).
 // O endereço e a chave pública vêm do build (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY). A chave pública
 // pode estar no app: ela só deixa chegar até as regras do servidor, que conferem tudo (ver SEGURANCA.md).
 // A biblioteca só é carregada quando a nuvem é usada, para o app continuar leve e abrir sem internet.
@@ -191,15 +191,7 @@ export const transporteNuvem: Transporte = {
   baixar: (f: string, desde: number, limite: number) => rpc<LinhaRemota[]>('baixar_alteracoes', { f, desde, limite }),
 };
 
-// ---------- cotações e foto ----------
-
-export interface Cotacao { produto: string; praca: string; data: string; valor: number; unidade: string; fonte: string }
-
-export async function ultimasCotacoes(): Promise<Cotacao[]> {
-  const { data, error } = await (await sb()).from('cotacoes').select('produto, praca, data, valor, unidade, fonte').order('data', { ascending: false }).limit(200);
-  if (error) throw erro(error);
-  return (data ?? []).map((c) => ({ ...c, valor: Number(c.valor) })) as Cotacao[];
-}
+// ---------- foto ----------
 
 /** Manda a foto para o servidor ler (rótulo do núcleo ou visor da balança). */
 export async function lerFoto<T>(fazenda: string, tipo: 'rotulo' | 'balanca' | 'balanca_lote', imagemBase64: string, mime: string): Promise<T> {

@@ -43,7 +43,6 @@ Aplicativo de gestão de **cria, recria e engorda** (a pasto, TIP e confinamento
 - **Funcionários**: nome, função e salário (com 13º, férias e encargos). A folha entra sozinha no custo da fazenda e no custo da @ produzida, rateada entre os lotes pelas cabeças. O dono chama o funcionário para o app pela própria ficha dele. O vaqueiro não vê salários.
 - **Cálculos de dinheiro refeitos no servidor**: se um celular mandar valor errado, volta corrigido.
 - **Leitura por foto**: rótulo do núcleo/suplemento (preenche MS, PB, NDT, Ca, P e ureia) e visor da balança.
-- **Cotações** do boi gordo, bezerro, milho e soja (Cepea), atualizadas todo dia, com botão para usar como preço da @.
 - **Balança Bluetooth** (experimental): o peso parado entra sozinho na próxima linha da pesagem.
 - **Android**: arquivos e guia para publicar na Play Store em [android/LEIAME.md](android/LEIAME.md).
 
@@ -74,7 +73,7 @@ A cada envio para `main`, o GitHub Actions roda os testes e publica o app no Git
 - `src/db.ts`: banco local (Dexie/IndexedDB), regras de estoque/trato e cópia de segurança.
 - `src/nuvem/`: sincronização, login e equipe (`sinc.ts`, `cliente.ts`) e os testes do servidor.
 - `src/balanca.ts`: balança Bluetooth.
-- `supabase/`: banco (migrações com todas as regras) e funções do servidor (foto e cotações).
+- `supabase/`: banco (migrações com todas as regras) e funções do servidor (leitura por foto).
 - `src/pages/`: telas.
 
 ### Regras para telas novas

@@ -18,7 +18,6 @@ import { Sanidade } from './pages/Sanidade';
 import { Simular } from './pages/Simular';
 import { Relatorios } from './pages/Relatorios';
 import { RelatorioPesagem } from './pages/RelatorioPesagem';
-import { Cotacoes } from './pages/Cotacoes';
 import { Nuvem } from './pages/Nuvem';
 import { FuncionarioForm, Funcionarios } from './pages/Funcionarios';
 import { AnotacaoDetalhe, AnotacaoForm, Anotacoes } from './pages/Anotacoes';
@@ -58,7 +57,6 @@ export function App() {
               <Route path="/nuvem" element={<Nuvem />} />
               <Route path="/funcionarios" element={<Funcionarios />} />
               <Route path="/funcionarios/:id" element={<FuncionarioForm />} />
-              <Route path="/cotacoes" element={<Cotacoes />} />
               <Route path="/anotacoes" element={<Anotacoes />} />
               <Route path="/anotacoes/nova" element={<AnotacaoForm />} />
               <Route path="/anotacoes/:id" element={<AnotacaoDetalhe />} />

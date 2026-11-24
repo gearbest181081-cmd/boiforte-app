@@ -46,5 +46,3 @@ content_path = "./supabase/templates/nova-senha.html"
 [functions.ler-foto]
 verify_jwt = true
 
-[functions.atualizar-cotacoes]
-verify_jwt = false

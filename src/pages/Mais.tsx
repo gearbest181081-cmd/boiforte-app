@@ -92,7 +92,6 @@ export function Mais() {
           <Link to="/sanidade" className="btn sec">Sanidade</Link>
           {veDinheiro && <Link to="/relatorios" className="btn sec">Relatórios</Link>}
           {veDinheiro && <Link to="/simular" className="btn sec">Simulação</Link>}
-          <Link to="/cotacoes" className="btn sec">Cotações</Link>
           <Link to="/lotes" className="btn sec">Lotes</Link>
         </div>
         <Mercado />
@@ -140,7 +139,7 @@ export function Mais() {
 
         <div className="cartao">
           <h3>Sobre</h3>
-          <p className="mudo">BoiForte versão 0.4. Rebanho e pesagens, nutrição e estoque, financeiro, sanidade, relatórios, simulações, nuvem com equipe, cotações, leitura por foto e balança Bluetooth.</p>
+          <p className="mudo">BoiForte versão 0.4. Rebanho e pesagens, nutrição e estoque, financeiro, sanidade, relatórios, simulações, nuvem com equipe, leitura por foto e balança Bluetooth.</p>
           <button className="btn perigo pequeno" onClick={apagarTudo}>Apagar todos os dados</button>
         </div>
       </main>
@@ -167,7 +166,7 @@ function Mercado() {
   return (
     <div className="cartao">
       <h3>Mercado</h3>
-      <p className="mudo">Usados no custo da @ produzida. Veja a cotação do dia em <Link to="/cotacoes">Cotações</Link>.</p>
+      <p className="mudo">Usados no custo da @ produzida. Atualize com o preço da sua região.</p>
       <div className="grade">
         <CampoNumero rotulo="Preço da @" valor={vA} aoMudar={setArroba} unidade="R$" nome="precoArroba" />
         <CampoNumero rotulo="Rendimento de carcaça" valor={vR} aoMudar={setRend} unidade="%" nome="rendimento" />
