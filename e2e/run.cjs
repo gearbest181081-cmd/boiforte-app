@@ -46,15 +46,42 @@ function confere(cond, msg) {
   try {
     console.log('0. Tela de entrada');
     await page.goto(URL);
-    const nuvemNoBuild = await page.getByRole('button', { name: 'Mandar e-mail de entrada' }).waitFor({ timeout: 4000 }).then(() => true, () => false);
+    const nuvemNoBuild = await page.getByTestId('entrarSenha').waitFor({ timeout: 4000 }).then(() => true, () => false);
     if (nuvemNoBuild) {
       confere(!(await page.locator('nav.baixo').count()), 'sem entrar, o app não mostra o menu nem os dados');
-      await page.locator('input[name=email]').fill('produtor@exemplo.com');
-      await page.getByRole('button', { name: 'Mandar e-mail de entrada' }).click();
-      await page.getByText('Sem internet agora').waitFor();
-      confere(true, 'sem sinal, a entrada avisa em português simples');
       await foto('00-entrada');
+      await page.locator('input[name=email]').fill('produtor@exemplo.com');
+      await page.locator('input[name=senha]').fill('boi2026forte');
+      confere(await page.locator('input[name=senha]').getAttribute('type') === 'password', 'a senha aparece escondida');
+      await page.getByRole('button', { name: 'Mostrar a senha' }).click();
+      confere(await page.locator('input[name=senha]').getAttribute('type') === 'text', 'botão Ver mostra a senha');
+      await page.getByRole('button', { name: 'Entrar', exact: true }).click();
+      await page.getByText('Sem internet agora').first().waitFor();
+      confere(true, 'sem sinal, a entrada avisa em português simples');
+      await page.getByRole('button', { name: 'Primeiro acesso? Criar minha senha' }).click();
+      await page.getByTestId('primeiroAcesso').waitFor();
+      confere((await page.locator('input[name=email]').inputValue()) === 'produtor@exemplo.com', 'primeiro acesso já traz o e-mail digitado');
+      await foto('00b-primeiro-acesso');
+      await page.getByRole('button', { name: 'Mandar link de confirmação' }).click();
+      await page.getByText('Sem internet agora').first().waitFor();
+      await page.getByRole('button', { name: 'Já tenho senha: entrar' }).click();
+      await page.getByRole('button', { name: 'Esqueci minha senha' }).click();
+      await page.getByRole('button', { name: 'Mandar link para nova senha' }).waitFor();
+      confere(true, 'tela de esqueci a senha manda link');
+      // Entrou pelo link do e-mail: o app pede para cadastrar a senha antes de abrir.
       await entrarComo('11111111-1111-4111-8111-111111111111', 'produtor@exemplo.com');
+      await page.evaluate(() => localStorage.setItem('boiforte-cadastrar-senha', '1'));
+      await page.reload();
+      await page.getByTestId('criarSenha').waitFor();
+      confere(!(await page.locator('nav.baixo').count()), 'depois do link, pede a senha antes de abrir o app');
+      await page.locator('input[name=nova-senha]').fill('abc');
+      await page.getByText('pelo menos 8').waitFor();
+      await page.locator('input[name=nova-senha]').fill('boi2026forte');
+      await page.locator('input[name=repetir-senha]').fill('boi2026fort');
+      await page.getByText('As duas senhas não estão iguais.').waitFor();
+      confere(true, 'cadastro de senha explica senha curta e senhas diferentes');
+      await foto('00c-criar-senha');
+      await page.evaluate(() => localStorage.removeItem('boiforte-cadastrar-senha'));
       await page.reload();
     } else console.log('  (build sem nuvem: o app abre direto)');
 
@@ -539,7 +566,7 @@ function confere(cond, msg) {
       confere(true, 'perfil no canto de cima mostra a conta');
       await foto('20-perfil');
       await page.getByRole('button', { name: 'Sair da conta' }).click();
-      await page.getByRole('button', { name: 'Mandar e-mail de entrada' }).waitFor();
+      await page.getByTestId('entrarSenha').waitFor();
       confere(true, 'depois de sair, volta para a tela de entrada');
       await page.context().setOffline(true);
       await entrarComo('11111111-1111-4111-8111-111111111111', 'produtor@exemplo.com');
@@ -553,7 +580,7 @@ function confere(cond, msg) {
       confere(!(await page.getByText('Fêmea — 4º lote').count()), 'outra conta no mesmo celular não vê os dados de quem usava antes');
       await foto('21-outra-conta');
       await page.getByRole('button', { name: /Voltar e entrar com/ }).click();
-      await page.getByRole('button', { name: 'Mandar e-mail de entrada' }).waitFor();
+      await page.getByTestId('entrarSenha').waitFor();
       confere(true, 'pode voltar sem apagar nada');
     }
 

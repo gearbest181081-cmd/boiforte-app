@@ -60,17 +60,34 @@ no Pro, aumente esse número numa migração nova.
 Se o plano diminuir, quem passar do limite fica pausado (ninguém é apagado) até o dono tirar alguém
 ou o plano aumentar.
 
-## 3. Login por código no e-mail
+## 3. Entrada com e-mail e senha
 
-Em *Authentication*:
-- *Providers › Email*: ligado, **"Confirm email" LIGADO**, OTP com 6 dígitos e validade de 600 s.
-  Não desligue o "Confirm email": sem ele, qualquer pessoa cria pela API uma conta com senha usando o e-mail de outra
-  e entra na conta dela depois. O login por código continua funcionando, porque o código já confirma o e-mail.
-  (O banco também bloqueia contas com senha, mas isso é a segunda tranca.)
-- *Email Templates › Magic Link*: cole o conteúdo de `supabase/templates/codigo.html`
-  (o importante é ter `{{ .Token }}`, que é o código de 6 números).
-- *URL Configuration › Site URL*: o endereço do app (ex.: `https://SEU-USUARIO.github.io/boiforte-app/`).
-- Para muitos usuários, configure um SMTP próprio em *Project Settings › Auth › SMTP* (o envio grátis do Supabase é limitado a poucos e-mails por hora).
+Como funciona no app: no **primeiro acesso** a pessoa digita o e-mail, recebe um link de confirmação, toca nele
+e cadastra a senha. Nas próximas vezes entra com **e-mail e senha**. Se esquecer, toca em "Esqueci minha senha",
+recebe outro link e cadastra uma senha nova. Quem já usava o app pelo link do e-mail cria a senha na próxima vez que abrir com internet.
+
+Rode a migração `20261124120000_login_senha.sql` no *SQL Editor* (depois das anteriores). Ela libera contas com senha
+**só depois que o e-mail é confirmado**, apaga a senha que alguém tenha posto antes da confirmação (assim ninguém
+"reserva" a conta de outro com uma senha) e cria a função `tenho_senha`. Ela também apaga senhas antigas (até hoje o
+app nunca cadastrou senha, então nada de bom se perde).
+
+No painel do Supabase, em *Authentication*:
+- *Sign In / Providers › Email*: ligado, **"Confirm email" LIGADO**, "Secure email change" ligado,
+  validade do link/código (*Email OTP Expiration*) 3600 s, 6 dígitos.
+  Não desligue o "Confirm email": sem ele, qualquer pessoa cria pela API uma conta com senha usando o e-mail de outra.
+- *Sign In / Providers › Email › Password*: **mínimo 8** caracteres e exigência **"Letters and digits"** (letras e números).
+  Se o plano do Supabase tiver, ligue também *"Prevent use of leaked passwords"*.
+- *Rate Limits*: deixe os limites de login (sign-ins/sign-ups e verificações) em 30 a cada 5 minutos por IP.
+  Isso trava quem tenta adivinhar senhas.
+- *Emails › Templates* (só dá para editar com SMTP próprio, ver abaixo):
+  - *Confirm signup* e *Magic Link*: assunto "Confirme seu e-mail no BoiForte", corpo de `supabase/templates/confirmar.html`.
+  - *Reset Password*: assunto "Criar senha nova no BoiForte", corpo de `supabase/templates/nova-senha.html`.
+  Sem SMTP próprio, os e-mails chegam com o texto padrão do Supabase (em inglês), mas o link funciona igual.
+- *URL Configuration*: *Site URL* = endereço do app (ex.: `https://SEU-USUARIO.github.io/boiforte-app/`) e em
+  *Redirect URLs* o mesmo endereço com `**` no fim.
+- **SMTP próprio** (*Project Settings › Auth › SMTP*, ex.: Resend com o domínio do BoiForte): sem ele o Supabase só
+  manda e-mail para quem é da equipe da conta do Supabase e poucos por hora. Para clientes e funcionários receberem o
+  link de primeiro acesso, o SMTP próprio é obrigatório.
 
 ## 4. Funções do servidor (foto e cotações)
 

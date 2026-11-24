@@ -298,17 +298,41 @@ describe('servidor: correções da auditoria', () => {
     await s.rpc(vaq, 'aceitar_convite', { p_codigo: c, meu_nome: 'Vaq' });
   }, 30000);
 
-  it('A1: conta criada com senha (fora do app) fica bloqueada', async () => {
+  it('A1: conta com e-mail ainda não confirmado fica bloqueada', async () => {
     const intruso = await s.novoUsuario('vitima@x');
-    await s.pg.query(`update auth.users set encrypted_password = '$2a$10$abc' where id = $1`, [intruso]);
-    await expect(s.rpc(intruso, 'criar_fazenda', { p_nome: 'X' })).rejects.toThrow('criada fora do app');
+    await s.pg.query(`update auth.users set email_confirmed_at = null, encrypted_password = '$2a$10$abc' where id = $1`, [intruso]);
+    await expect(s.rpc(intruso, 'criar_fazenda', { p_nome: 'X' })).rejects.toThrow('Confirme seu e-mail');
     expect(await s.rpc<unknown[]>(intruso, 'minhas_fazendas', {})).toHaveLength(0);
+    expect(await s.rpc<boolean>(intruso, 'tenho_senha', {})).toBe(false);
     // mesmo se já estivesse numa equipe, o papel some
     await s.pg.query(`insert into public.membros (fazenda_id, usuario_id, papel) values ($1, $2, 'gerente')`, [f, intruso]);
     await expect(s.rpc(intruso, 'baixar_alteracoes', { f, desde: 0 })).rejects.toThrow();
     const fz = await s.como(intruso, () => s.pg.query('select id from public.fazendas'));
     expect(fz.rows).toHaveLength(0);
     await s.pg.query(`delete from public.membros where usuario_id = $1`, [intruso]);
+  });
+
+  it('A1: senha posta antes de confirmar o e-mail é apagada quando o dono do e-mail confirma', async () => {
+    const id = await s.novoUsuario('dono-do-email@x');
+    // alguém cria a conta com senha usando o e-mail de outra pessoa (fica sem confirmar)
+    await s.pg.query(`update auth.users set email_confirmed_at = null, encrypted_password = '$2a$10$senha-do-intruso' where id = $1`, [id]);
+    // o dono do e-mail abre o link: o e-mail é confirmado e a senha do intruso some
+    await s.pg.query(`update auth.users set email_confirmed_at = now() where id = $1`, [id]);
+    const r = await s.pg.query<{ p: string }>(`select encrypted_password as p from auth.users where id = $1`, [id]);
+    expect(r.rows[0].p).toBe('');
+    expect(await s.rpc<boolean>(id, 'tenho_senha', {})).toBe(false);
+    // depois de confirmado, a senha que ele cadastra vale e ele usa o app normalmente
+    await s.pg.query(`update auth.users set encrypted_password = '$2a$10$senha-do-dono' where id = $1`, [id]);
+    expect(await s.rpc<boolean>(id, 'tenho_senha', {})).toBe(true);
+    const nova = await s.rpc<string>(id, 'criar_fazenda', { p_nome: 'Fazenda do dono', meu_nome: 'Dono' });
+    expect(nova).toBeTruthy();
+    // trocar a senha depois (esqueci a senha) também vale
+    await s.pg.query(`update auth.users set encrypted_password = '$2a$10$outra' where id = $1`, [id]);
+    expect((await s.pg.query<{ p: string }>(`select encrypted_password as p from auth.users where id = $1`, [id])).rows[0].p).toBe('$2a$10$outra');
+  });
+
+  it('tenho_senha só responde sobre a própria conta e não abre para quem não entrou', async () => {
+    await expect(s.rpc(null, 'tenho_senha', {})).rejects.toThrow();
   });
 
   it('A3: o vaqueiro baixa tudo do trato, mas sem preço nem custo', async () => {

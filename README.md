@@ -38,7 +38,7 @@ Aplicativo de gestão de **cria, recria e engorda** (a pasto, TIP e confinamento
 
 ## Etapa 4
 
-- **Nuvem e equipe**: entrar com código no e-mail, criar a fazenda na nuvem ou entrar por convite. O celular continua funcionando sem sinal e sincroniza sozinho quando pega internet.
+- **Nuvem e equipe**: entrar com e-mail e senha (primeiro acesso por link de confirmação no e-mail), criar a fazenda na nuvem ou entrar por convite. O celular continua funcionando sem sinal e sincroniza sozinho quando pega internet.
 - **Papéis**: dono, gerente, vaqueiro (pesa, trata e vacina, sem ver dinheiro) e consultor (só olha). Tudo conferido no servidor.
 - **Funcionários**: nome, função e salário (com 13º, férias e encargos). A folha entra sozinha no custo da fazenda e no custo da @ produzida, rateada entre os lotes pelas cabeças. O dono chama o funcionário para o app pela própria ficha dele. O vaqueiro não vê salários.
 - **Cálculos de dinheiro refeitos no servidor**: se um celular mandar valor errado, volta corrigido.
@@ -81,7 +81,7 @@ A cada envio para `main`, o GitHub Actions roda os testes e publica o app no Git
 
 - **Todo campo de escrever tem microfone.** Use os componentes de `src/components/ui.tsx` em vez de `<input>`, `<select>` ou `<textarea>` soltos:
   `CampoTexto` (texto; `multilinha` para observações; `formato="email" | "codigo" | "digitos"`), `CampoNumero`, `CampoData`, `CampoEscolha`
-  e, quando não houver rótulo visível, `Entrada`, `EntradaData` e `Escolha`. Só caixa de marcar e arquivo ficam sem microfone.
+  e, quando não houver rótulo visível, `Entrada`, `EntradaData` e `Escolha`. Só caixa de marcar, arquivo e senha (`CampoSenha`: falar a senha em voz alta deixa os outros ouvirem) ficam sem microfone.
   Nas 3 primeiras vezes que a pessoa toca num microfone, aparece a explicação de como falar.
 - **Toda tela tem Voltar.** O `Topo` já mostra o botão "Voltar" (só o Início fica sem). Se a tela abrir um formulário dentro dela, ponha também um botão "Cancelar".
 - O teste de ponta a ponta (passo 20) confere as duas regras em todas as telas da lista `telas`: acrescente lá as telas novas.

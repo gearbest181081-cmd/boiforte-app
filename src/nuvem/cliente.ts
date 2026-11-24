@@ -26,9 +26,12 @@ export function sb(): Promise<SupabaseClient> {
 function erro(e: { message?: string } | null | undefined): Error {
   const m = e?.message ?? '';
   if (/Failed to fetch|NetworkError|network/i.test(m)) return new Error('Sem internet agora. Tente quando pegar sinal.');
+  if (/Invalid login credentials/i.test(m)) return new Error('E-mail ou senha errados. Confira e tente de novo. Se ainda não criou sua senha, toque em "Primeiro acesso".');
+  if (/Email not confirmed/i.test(m)) return new Error('Seu e-mail ainda não foi confirmado. Toque em "Primeiro acesso" para receber o link.');
+  if (/weak|Password should|password.*(characters|contain)/i.test(m)) return new Error(`Senha fraca: use pelo menos ${SENHA_MINIMA} letras e números misturados.`);
+  if (/Token has expired or is invalid|otp/i.test(m)) return new Error('Código ou link errado ou vencido. Peça outro.');
   if (/JWT|token|session/i.test(m)) return new Error('Sua entrada venceu. Entre de novo.');
   if (/rate limit|Too many|security purposes/i.test(m)) return new Error('Muitas tentativas. Espere um minuto e tente de novo.');
-  if (/Token has expired or is invalid|otp/i.test(m)) return new Error('Código errado ou vencido. Peça outro.');
   return new Error(m || 'Não deu certo. Tente de novo.');
 }
 
@@ -38,23 +41,78 @@ async function rpc<T>(nome: string, args: Record<string, unknown>): Promise<T> {
   return data as T;
 }
 
-// ---------- login por código no e-mail ----------
+// ---------- entrada com e-mail e senha ----------
+// Primeiro acesso: link no e-mail -> a pessoa entra por ele -> cadastra a senha.
+// Depois: e-mail e senha. Esqueceu: outro link -> senha nova.
+// Quem decide se a senha é forte e limita as tentativas é o servidor (painel do Supabase, ver CONFIGURAR.md);
+// a conferência daqui só evita mandar uma senha que ele vai recusar.
 
 const RE_EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
+export const SENHA_MINIMA = 8;
+const CHAVE_ULTIMO_EMAIL = 'boiforte-ultimo-email';
 
-export async function pedirCodigo(email: string) {
+function emailLimpo(email: string) {
   const e = email.trim().toLowerCase();
   if (!RE_EMAIL.test(e)) throw new Error('Confira o e-mail.');
-  const { error } = await (await sb()).auth.signInWithOtp({ email: e, options: { shouldCreateUser: true, emailRedirectTo: location.origin + location.pathname } });
+  return e;
+}
+const enderecoDoApp = () => location.origin + location.pathname;
+
+/** O que falta na senha, em português simples (ou null se está boa). */
+export function problemaNaSenha(senha: string): string | null {
+  if (senha.length < SENHA_MINIMA) return `A senha precisa de pelo menos ${SENHA_MINIMA} letras ou números.`;
+  if (senha.length > 72) return 'Senha comprida demais (até 72).';
+  if (!/[A-Za-zÀ-ÿ]/.test(senha) || !/\d/.test(senha)) return 'Misture letras e números (exemplo: boi2026forte).';
+  return null;
+}
+
+export function ultimoEmail(): string {
+  try { return localStorage.getItem(CHAVE_ULTIMO_EMAIL) ?? ''; } catch { return ''; }
+}
+function lembrarEmail(e: string) { try { localStorage.setItem(CHAVE_ULTIMO_EMAIL, e); } catch { /* sem armazenamento */ } }
+
+export async function entrarComSenha(email: string, senha: string) {
+  const e = emailLimpo(email);
+  if (!senha) throw new Error('Digite sua senha.');
+  const { error } = await (await sb()).auth.signInWithPassword({ email: e, password: senha });
+  if (error) throw erro(error);
+  lembrarEmail(e);
+}
+
+/** Primeiro acesso: manda o link de confirmação (cria a conta se ainda não existe). */
+export async function mandarLinkPrimeiroAcesso(email: string) {
+  const e = emailLimpo(email);
+  const { error } = await (await sb()).auth.signInWithOtp({ email: e, options: { shouldCreateUser: true, emailRedirectTo: enderecoDoApp() } });
+  if (error) throw erro(error);
+  lembrarEmail(e);
+}
+
+/** Esqueci a senha: manda o link para cadastrar outra. Não diz se o e-mail tem conta (para ninguém descobrir quem usa o app). */
+export async function mandarLinkNovaSenha(email: string) {
+  const e = emailLimpo(email);
+  const { error } = await (await sb()).auth.resetPasswordForEmail(e, { redirectTo: enderecoDoApp() });
+  if (error) throw erro(error);
+  lembrarEmail(e);
+}
+
+/** Quando o e-mail traz um código de 6 números (aberto em outro aparelho, por exemplo). */
+export async function confirmarCodigo(email: string, codigo: string, tipo: 'email' | 'recovery' = 'email') {
+  const token = codigo.replace(/\D/g, '');
+  if (token.length < 6) throw new Error('O código tem 6 números.');
+  const { error } = await (await sb()).auth.verifyOtp({ email: emailLimpo(email), token, type: tipo });
   if (error) throw erro(error);
 }
 
-export async function confirmarCodigo(email: string, codigo: string) {
-  const token = codigo.replace(/\D/g, '');
-  if (token.length < 6) throw new Error('O código tem 6 números.');
-  const { error } = await (await sb()).auth.verifyOtp({ email: email.trim().toLowerCase(), token, type: 'email' });
-  if (error) throw erro(error);
+/** Cadastra (ou troca) a senha de quem entrou pelo link do e-mail. */
+export async function definirSenha(senha: string) {
+  const p = problemaNaSenha(senha);
+  if (p) throw new Error(p);
+  const { error } = await (await sb()).auth.updateUser({ password: senha });
+  if (error && !/same_password|different from the old/i.test(`${(error as { code?: string }).code} ${error.message}`)) throw erro(error);
 }
+
+/** A conta já tem senha? (pergunta ao servidor; só sobre a própria conta) */
+export const tenhoSenha = () => rpc<boolean>('tenho_senha', {});
 
 export async function usuarioAtual(): Promise<{ id: string; email: string } | null> {
   if (!nuvemConfigurada()) return null;
