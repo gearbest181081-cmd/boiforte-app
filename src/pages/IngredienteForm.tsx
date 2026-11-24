@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { db, excluirIngrediente } from '../db';
-import { CampoEscolha, CampoNumero, CampoTexto, num, Topo, useAviso } from '../components/ui';
+import { AvisoNutricao, CampoEscolha, CampoNumero, CampoTexto, num, Topo, useAviso } from '../components/ui';
 import { BotaoFoto } from '../components/Foto';
 import { useVeDinheiro } from '../nuvem/useNuvem';
 import { TIPOS, valorExtra, type CategoriaIngrediente, type TipoFormula } from '../nutricao';
@@ -105,6 +105,7 @@ export function IngredienteForm() {
     <>
       <Topo titulo={editando ? 'Ingrediente' : 'Novo ingrediente'} voltar />
       <main>
+        <AvisoNutricao />
         <BotaoFoto<LeituraRotulo> tipo="rotulo" rotulo="📷 Tirar foto da tabela nutricional" sempre aoLer={leu} aoErro={(m) => aviso(m, true)} />
         <p className="mudo" style={{ fontSize: 14, marginTop: 6 }}>Serve para núcleo e para produto pronto (sal mineral, sal adensado, proteinado, proteico energético, ração).</p>
         {lida && <div className="alerta atencao" data-testid="lidoFoto"><span className="ic">📷</span><div><b>{lida}</b>Confira cada número com o rótulo antes de salvar.</div></div>}

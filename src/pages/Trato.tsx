@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { desfazerFornecimento, registrarFornecimento } from '../db';
 import { useEscala, type LinhaEscala } from '../hooks';
 import { fmtData, fmtNum, hojeISO, somaDias } from '../calc';
-import { CampoNumero, EntradaData, num, Topo, useAviso } from '../components/ui';
+import { AvisoNutricao, CampoNumero, EntradaData, num, Topo, useAviso } from '../components/ui';
 import { rs } from './Nutricao';
 import { useVeDinheiro } from '../nuvem/useNuvem';
 
@@ -22,6 +22,7 @@ export function Trato() {
     <>
       <Topo titulo="Trato do dia" />
       <main>
+        <AvisoNutricao />
         <div style={{ display: 'grid', gridTemplateColumns: '48px 1fr 48px', gap: 8, marginBottom: 14 }}>
           <button className="btn sec pequeno" aria-label="Dia anterior" onClick={() => setData((d) => somaDias(d, -1))}>‹</button>
           <EntradaData valor={data} aoMudar={(v) => v && setData(v)} aria-label="Data do trato" rotuloVoz="data do trato" />
