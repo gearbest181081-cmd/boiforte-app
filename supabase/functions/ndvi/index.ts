@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
   // no agendado, pula quem já tem leitura dos últimos 5 dias (o satélite passa a cada ~5 dias)
   const fila = (piquetes as { fazenda_id: string; gid: string; contorno: unknown; ultima: string | null }[])
     .filter((p) => fazenda || !p.ultima || p.ultima < somaDias(hoje, -5));
-  if (!fila.length) return resposta({ piquetes: 0, leituras: 0 }, 200, origem);
+  if (!fila.length) return resposta({ piquetes: 0, leituras: 0, falhas: 0 }, 200, origem);
 
   let token: string;
   try { token = await tokenCdse(); } catch (e) {
@@ -77,26 +77,33 @@ Deno.serve(async (req) => {
   }
 
   let leituras = 0, feitos = 0, falhas = 0;
+  let motivo: string | undefined; // primeiro erro, para a tela e para os Logs
   const inicio = Date.now();
   for (const p of fila) {
     if (Date.now() - inicio > 120_000) break; // a função tem tempo limitado; o resto vai na próxima rodada
     const pedido = pedidoEstatistica(p.contorno, p.ultima, hoje);
-    if (!pedido) continue;
+    if (!pedido) { falhas++; motivo ??= 'contorno inválido'; console.warn('ndvi', p.gid, 'contorno inválido'); continue; }
     try {
       const r = await fetch(CDSE_ESTATISTICA, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(pedido) });
-      if (r.status === 429) { console.warn('ndvi: cota do Copernicus atingida'); break; }
-      if (!r.ok) { falhas++; console.warn('ndvi', p.gid, r.status); continue; }
+      if (r.status === 429) { console.warn('ndvi: cota do Copernicus atingida'); motivo ??= 'cota do Copernicus atingida'; break; }
+      if (!r.ok) {
+        const txt = (await r.text().catch(() => '')).slice(0, 400);
+        falhas++; motivo ??= `Copernicus ${r.status}`;
+        console.warn('ndvi', p.gid, r.status, txt);
+        continue;
+      }
       const linhas = lerResposta(await r.json());
       if (linhas.length) {
         const { data: n, error: eg } = await servico.rpc('gravar_ndvi', { p_fazenda: p.fazenda_id, p_piquete: p.gid, p_linhas: linhas });
-        if (eg) { falhas++; continue; }
+        if (eg) { falhas++; motivo ??= 'gravar'; console.warn('ndvi gravar', p.gid, eg.message); continue; }
         leituras += Number(n) || 0;
       }
       feitos++;
     } catch (e) {
-      falhas++;
+      falhas++; motivo ??= 'rede';
       console.warn('ndvi', p.gid, (e as Error).message);
     }
   }
-  return resposta({ piquetes: feitos, leituras, falhas }, 200, origem);
+  console.log('ndvi', JSON.stringify({ fazenda, fila: fila.length, feitos, leituras, falhas, motivo }));
+  return resposta({ piquetes: feitos, leituras, falhas, motivo }, 200, origem);
 });

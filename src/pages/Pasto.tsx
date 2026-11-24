@@ -13,7 +13,7 @@ import { aceitarPonto, areaHa, lerContorno, limparContorno, type Ponto } from '.
 import { CampoData, CampoEscolha, CampoNumero, CampoTexto, Indicador, num, Topo, useAviso, useOnline } from '../components/ui';
 import { CapturaMidias, VerMidias } from '../components/Midias';
 import { atualizarNdvi, nuvemConfigurada } from '../nuvem/cliente';
-import { useEstadoNuvem, usePapel } from '../nuvem/useNuvem';
+import { sincronizarAgora, useEstadoNuvem, usePapel } from '../nuvem/useNuvem';
 
 const SITUACAO: Record<EstadoPiquete['situacao'], { nome: string; classe: string }> = {
   ocupado: { nome: 'Com gado', classe: 'atencao' },
@@ -37,6 +37,15 @@ function Avisos({ lista }: { lista: { nivel: string; titulo: string; texto: stri
   );
 }
 
+/** O que dizer depois de consultar o satélite. */
+export function mensagemSatelite(r: { piquetes: number; leituras: number; falhas?: number; motivo?: string }): string {
+  const s = (n: number) => (n === 1 ? '' : 's');
+  if (!r.piquetes && r.falhas) return `O satélite não respondeu para ${r.falhas} piquete${s(r.falhas)}${r.motivo ? ` (${r.motivo})` : ''}. Tente de novo mais tarde.`;
+  if (!r.piquetes) return 'Nenhum piquete com contorno na nuvem ainda. Espere o celular sincronizar e tente de novo.';
+  if (!r.leituras) return `Satélite consultado (${r.piquetes} piquete${s(r.piquetes)}), mas não há imagem nova sem nuvem. O satélite passa a cada ~5 dias.`;
+  return `Satélite consultado: ${r.leituras} leitura${s(r.leituras)} nova${s(r.leituras)}. Abra o piquete para ver o gráfico do NDVI.`;
+}
+
 // ---------------------------------------------------------------- lista do pasto
 
 export function Pasto() {
@@ -54,7 +63,8 @@ export function Pasto() {
     setBuscando(true);
     try {
       const r = await atualizarNdvi(est.fazenda.id);
-      aviso(r.piquetes ? `Satélite consultado: ${r.piquetes} piquetes, ${r.leituras} leituras novas. Elas chegam na próxima sincronização.` : 'Nenhum piquete com contorno para o satélite.');
+      aviso(mensagemSatelite(r), !r.piquetes && !!r.falhas);
+      if (r.leituras) sincronizarAgora().catch(() => {});
     } catch (e) { aviso((e as Error).message, true); } finally { setBuscando(false); }
   };
 

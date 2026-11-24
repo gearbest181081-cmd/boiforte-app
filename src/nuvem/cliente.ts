@@ -206,13 +206,13 @@ export async function lerFoto<T>(fazenda: string, tipo: 'rotulo' | 'balanca' | '
 // ---------- NDVI do satélite ----------
 
 /** Pede para buscar agora o NDVI dos piquetes da fazenda (dono/gerente; o servidor limita a 2 por hora). */
-export async function atualizarNdvi(fazenda: string): Promise<{ piquetes: number; leituras: number }> {
+export async function atualizarNdvi(fazenda: string): Promise<{ piquetes: number; leituras: number; falhas?: number; motivo?: string }> {
   const { data, error } = await (await sb()).functions.invoke('ndvi', { body: { fazenda } });
   if (error) {
     const corpo = await (error as { context?: Response }).context?.json?.().catch(() => null);
     throw new Error(corpo?.erro ?? 'Não deu para falar com o satélite agora. Tente mais tarde.');
   }
-  return data as { piquetes: number; leituras: number };
+  return data as { piquetes: number; leituras: number; falhas?: number; motivo?: string };
 }
 
 // ---------- fotos das anotações (Storage) ----------
