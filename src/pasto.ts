@@ -60,7 +60,7 @@ export function alvosPiquete(p: Pick<Piquete, 'capim' | 'alturaEntrada' | 'altur
 // ---------------------------------------------------------------- lotação e pressão de pastejo
 
 /** Quem está no pasto (lote ou grupo de manejo), do jeito mais simples possível. */
-export interface Ocupante { piqueteId: number | null | undefined; cabecas: number; pesoMedio: number | null | undefined }
+export interface Ocupante { piqueteId: number | null | undefined; cabecas: number; pesoMedio: number | null | undefined; tipo?: TipoOcupante; id?: number; nome?: string }
 
 export function uaDe(o: Ocupante): number {
   return o.cabecas > 0 && o.pesoMedio ? ua(o.pesoMedio, o.cabecas) : 0;
@@ -150,6 +150,8 @@ export interface EstadoPiquete {
   ultima?: Ocupacao; // última que saiu
   diasOcupado?: number;
   diasDescanso?: number;
+  ocupante?: Ocupante; // quem está lá agora (lote ou grupo)
+  uaHa?: number | null; // lotação do piquete agora
   alertas: Alerta[];
 }
 
@@ -307,7 +309,7 @@ function conferirMidias(m: MidiaNova[] | undefined) {
 async function guardarMidias(m: MidiaNova[] | undefined, em: number): Promise<Midia[] | undefined> {
   if (!m?.length) return undefined;
   for (const x of m) await db.fotosAnotacao.put({ id: x.id, dados: x.dados, estado: 'enviar', em, ...(x.ext !== 'jpg' ? { ext: x.ext } : {}) });
-  return m.map(({ id, ext }) => ({ id, ext }));
+  return m.map(({ id, ext }) => ({ arq: id, ext }));
 }
 async function moverOcupante(tipo: TipoOcupante, id: number, piqueteId: number | null) {
   if (tipo === 'lote') await db.lotes.update(id, { piqueteId });
@@ -374,9 +376,9 @@ export async function excluirOcupacao(id: number) {
     if (!o) return;
     await db.ocupacoes.delete(id);
     for (const m of [...(o.midiasEntrada ?? []), ...(o.midiasSaida ?? [])]) {
-      const l = await db.fotosAnotacao.get(m.id);
-      if (l?.estado === 'enviar') await db.fotosAnotacao.delete(m.id);
-      else await db.fotosAnotacao.put({ id: m.id, estado: 'apagar', em: Date.now(), ...(m.ext !== 'jpg' ? { ext: m.ext } : {}) });
+      const l = await db.fotosAnotacao.get(m.arq);
+      if (l?.estado === 'enviar') await db.fotosAnotacao.delete(m.arq);
+      else await db.fotosAnotacao.put({ id: m.arq, estado: 'apagar', em: Date.now(), ...(m.ext !== 'jpg' ? { ext: m.ext } : {}) });
     }
   });
 }
@@ -397,7 +399,16 @@ export function resumirModulo(modulo: Modulo, piquetes: Piquete[], ocupacoes: Oc
   const meus = piquetes.filter((p) => p.moduloId === modulo.id).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { numeric: true }));
   const ids = new Set(meus.map((p) => p.id));
   const ocs = ocupacoes.filter((o) => ids.has(o.piqueteId));
-  const estados = meus.map((p) => estadoPiquete(p, ocs, modulo, hoje));
+  const estados = meus.map((p) => {
+    const e = estadoPiquete(p, ocs, modulo, hoje);
+    const quem = ocupantes.find((o) => o.piqueteId === p.id);
+    if (quem) {
+      e.ocupante = quem;
+      e.uaHa = lotacaoPiquete(p.areaHa, [quem]);
+      if (e.situacao !== 'ocupado') { e.situacao = 'ocupado'; delete e.diasDescanso; } // lote antigo, sem registro de entrada
+    }
+    return e;
+  });
   const series = new Map(meus.map((p) => [p.id!, ndvi.filter((n) => n.piqueteId === p.id)]));
   const analise = new Map(estados.map((e) => [e.piquete.id!, analisarNdvi(e.piquete.nome, series.get(e.piquete.id!)!, meus.filter((x) => x.id !== e.piquete.id).map((x) => series.get(x.id!)!), e)]));
   const lotacao = lotacaoAlta(modulo, meus, ocupantes, ocs);

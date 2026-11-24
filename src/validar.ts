@@ -33,7 +33,7 @@ export const CATEGORIAS_ANOTACAO_V = ['cerca', 'agua', 'cocho', 'pasto', 'animal
 export const MAX_FOTOS_ANOTACAO = 4;
 export const MAX_MIDIAS = 4;
 export const EXTS_MIDIA_V = ['jpg', 'webm', 'ogg', 'm4a'] as const;
-const MIDIA: Record<string, Regra> = { id: { t: 'texto', max: 36, obrigatorio: true }, ext: { t: 'enum', valores: EXTS_MIDIA_V, obrigatorio: true } };
+const MIDIA: Record<string, Regra> = { arq: { t: 'texto', max: 36, obrigatorio: true }, ext: { t: 'enum', valores: EXTS_MIDIA_V, obrigatorio: true } };
 const MAX_PONTOS = 500; // o mesmo de src/pastoGeo.ts
 export const TIPOS_FORMULA_V = ['sal_mineral', 'proteinado', 'proteico_energetico', 'rip', 'tip', 'creep', 'confinamento', 'outro'] as const;
 

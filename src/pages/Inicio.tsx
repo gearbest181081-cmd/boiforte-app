@@ -9,6 +9,7 @@ import { Indicador, Topo } from '../components/ui';
 import { usePapel } from '../nuvem/useNuvem';
 import { nuvemConfigurada } from '../nuvem/cliente';
 import { contarAnotacoes } from '../anotacoes';
+import { resumoPasto } from '../pasto';
 
 export function Inicio() {
   const props = useLiveQuery(() => db.propriedades.toArray());
@@ -18,6 +19,7 @@ export function Inicio() {
   const tudo = useTudo();
   const papel = usePapel();
   const tarefas = useLiveQuery(contarAnotacoes);
+  const pasto = useLiveQuery(() => resumoPasto(), []);
   const [todos, setTodos] = useState(false);
   useEffect(() => { if (props?.length) garantirLembretesPadrao().catch(() => {}); }, [props?.length]);
   if (!props || !infos) return <Topo titulo="BoiForte" voltar={false} />;
@@ -45,7 +47,7 @@ export function Inicio() {
   const cabecas = infos.reduce((s, i) => s + (i.lote.qtdCabecas || 0), 0);
   const alertasEstoque = (estoque ?? []).filter((e) => e.situacao.nivel === 'ruim' || e.situacao.nivel === 'atencao')
     .map((e) => ({ nivel: e.situacao.nivel as 'ruim' | 'atencao', titulo: `Estoque: ${e.nome}`, texto: `${e.situacao.texto} Saldo de ${fmtNum(e.situacao.saldoKg, 0)} kg.${e.tipo === 'mistura' ? ' Hora de bater nova ração.' : ''}` }));
-  const alertas = ordenarAlertas([...infos.flatMap((i) => i.alertas), ...alertasEstoque, ...(tudo ? alertasInteligentes(tudo) : [])]);
+  const alertas = ordenarAlertas([...infos.flatMap((i) => i.alertas), ...alertasEstoque, ...(tudo ? alertasInteligentes(tudo) : []), ...(pasto ?? []).flatMap((r) => r.alertas)]);
   const tratos = (escala ?? []).filter((l) => l.formula);
   const tratosFeitos = tratos.filter((l) => l.fornecimento).length;
   const comPeso = infos.filter((i) => i.resumo.pesoAtual != null);

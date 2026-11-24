@@ -45,7 +45,7 @@ export interface Piquete {
   criadoEm: number;
 }
 /** Arquivo de foto ou áudio guardado com a ocupação (o arquivo fica em fotosAnotacao e no Storage). */
-export interface Midia { id: string; ext: ExtMidia }
+export interface Midia { arq: string; ext: ExtMidia } // arq: id do arquivo (o servidor descarta campos chamados "id")
 export type ExtMidia = 'jpg' | 'webm' | 'ogg' | 'm4a';
 /**
  * Ocupação de um piquete: quem entrou, quando entrou e quando saiu, com a altura do capim, foto e áudio

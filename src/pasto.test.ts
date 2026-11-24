@@ -167,7 +167,7 @@ describe('entrada e saída de piquete (celular)', () => {
     expect((await db.lotes.get(l1))?.piqueteId).toBeNull();
     await expect(entrarNoPiquete({ tipo: 'lote', ocupanteId: l2, piqueteId: pq2, data: '2026-11-03', cabecas: 30 })).rejects.toThrow(/ocupado nessa data/);
     const fechada = (await db.ocupacoes.where('piqueteId').equals(pq2).first())!;
-    expect(fechada).toMatchObject({ saida: '2026-11-10', alturaSaida: 40, notaSaida: 'capim bem pastejado', midiasSaida: [{ id: audio.id, ext: 'webm' }] });
+    expect(fechada).toMatchObject({ saida: '2026-11-10', alturaSaida: 40, notaSaida: 'capim bem pastejado', midiasSaida: [{ arq: audio.id, ext: 'webm' }] });
     expect(await db.fotosAnotacao.get(audio.id)).toMatchObject({ estado: 'enviar', ext: 'webm' });
     await excluirOcupacao(fechada.id!);
     expect(await db.fotosAnotacao.get(audio.id)).toBeUndefined();
