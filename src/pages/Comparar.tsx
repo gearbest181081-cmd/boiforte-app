@@ -7,7 +7,7 @@ import { calcularFormula, TIPOS, type TipoFormula } from '../nutricao';
 import { compararProdutos, NUTRIENTE_CHAVE, produtoAvulso, type ProdutoComp, type ResultadoComp } from '../comparar';
 import { fmtValor, nivelStatus, ROTULO_STATUS } from '../faixas';
 import { fmtNum } from '../calc';
-import { CampoEscolha, CampoNumero, CampoTexto, num, Opcoes, useAviso } from '../components/ui';
+import { AvisoNutricao, CampoEscolha, CampoNumero, CampoTexto, num, Opcoes, useAviso } from '../components/ui';
 import { BotaoFoto } from '../components/Foto';
 import { CATEGORIAS } from './IngredienteForm';
 import { rs } from './Nutricao';
@@ -27,6 +27,7 @@ export function SimComparar() {
       <div className="cartao">
         <h3>Qual produto vale mais a pena?</h3>
         <p className="mudo">Compare fórmulas que você já cadastrou ou dois produtos pela foto da tabela nutricional.</p>
+        <AvisoNutricao />
         <Opcoes valor={modo} aoMudar={setModo} opcoes={[
           { valor: 'biblioteca', rotulo: 'Minhas fórmulas', dica: 'da Nutrição' },
           { valor: 'foto', rotulo: 'Dois rótulos', dica: 'foto ou digitando' },
