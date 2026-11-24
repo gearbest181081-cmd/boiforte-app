@@ -12,7 +12,7 @@ import {
 import { aceitarPonto, areaHa, lerContorno, limparContorno, type Ponto } from '../pastoGeo';
 import { CampoData, CampoEscolha, CampoNumero, CampoTexto, Indicador, num, Topo, useAviso, useOnline } from '../components/ui';
 import { CapturaMidias, VerMidias } from '../components/Midias';
-import { atualizarNdvi, nuvemConfigurada } from '../nuvem/cliente';
+import { atualizarNdvi, fotoSatelite, nuvemConfigurada } from '../nuvem/cliente';
 import { sincronizarAgora, useEstadoNuvem, usePapel } from '../nuvem/useNuvem';
 
 const SITUACAO: Record<EstadoPiquete['situacao'], { nome: string; classe: string }> = {
@@ -98,7 +98,8 @@ export function Pasto() {
   );
 }
 
-const nivelNdvi = (v: number) => (v < 0.35 ? { nome: 'Fraco', classe: 'ruim' } : v < 0.55 ? { nome: 'Médio', classe: 'atencao' } : { nome: 'Bom', classe: 'bom' });
+// Mesmas faixas do gráfico (FAIXAS): fraco < 0,35 ≤ médio < 0,6 ≤ bom.
+const nivelNdvi = (v: number) => (v < 0.35 ? { nome: 'Fraco', classe: 'ruim' } : v < 0.6 ? { nome: 'Médio', classe: 'atencao' } : { nome: 'Bom', classe: 'bom' });
 
 /** NDVI de todos os piquetes do módulo, cada um com o gráfico, sem precisar abrir o piquete. */
 function NdviModulo({ r }: { r: ResumoModulo }) {
@@ -117,7 +118,7 @@ function NdviModulo({ r }: { r: ResumoModulo }) {
               <span><b>{e.piquete.nome}</b> <span className={`etiqueta ${n.classe}`}>{n.nome}</span></span>
               <span><b style={{ fontSize: '1.2em' }}>{fmtNum(a.atual!.ndvi, 2)}</b> {a.tendencia ? SETA[a.tendencia] : ''} <span className="mudo">{fmtData(a.atual!.data).slice(0, 5)}</span></span>
             </div>
-            <GraficoNdvi serie={(series ?? []).filter((x) => x.piqueteId === e.piquete.id)} />
+            <PainelNdvi p={e.piquete} serie={(series ?? []).filter((x) => x.piqueteId === e.piquete.id)} />
             <Link to={`/pasto/piquete/${e.piquete.id}`} className="mudo">Abrir o piquete ›</Link>
           </div>
         );
@@ -235,7 +236,7 @@ export function PiqueteDetalhe() {
         </div>
 
         <h2>Satélite</h2>
-        <GraficoNdvi serie={serie(pid)} />
+        <PainelNdvi p={p} serie={serie(pid)} />
         {podeEditar && <Contorno p={p} />}
         {!podeEditar && !p.contorno?.length && <p className="mudo">Sem contorno: peça ao dono ou ao gerente para gravar.</p>}
 
@@ -266,28 +267,127 @@ export function PiqueteDetalhe() {
   );
 }
 
+const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const FAIXAS = [
+  { de: 0.6, ate: 1, nome: 'Bom', cor: 'var(--verde)', fundo: 'rgba(46, 125, 50, 0.16)' },
+  { de: 0.35, ate: 0.6, nome: 'Médio', cor: '#b7791f', fundo: 'rgba(214, 158, 46, 0.16)' },
+  { de: 0, ate: 0.35, nome: 'Fraco', cor: '#c53030', fundo: 'rgba(197, 48, 48, 0.14)' },
+];
+const faixaDe = (v: number) => FAIXAS.find((f) => v >= f.de) ?? FAIXAS[2];
+const leiturasLimpas = (serie: Ndvi[]) => [...serie].filter((x) => (x.nuvemPct ?? 0) <= 40).sort((a, b) => (a.data < b.data ? -1 : 1));
+
+/** Frase em palavras: como está o capim e para onde vai. */
+export function resumoNdvi(serie: { data: string; ndvi: number; nuvemPct?: number }[]): string | null {
+  const pts = [...serie].filter((x) => (x.nuvemPct ?? 0) <= 40).sort((a, b) => (a.data < b.data ? -1 : 1));
+  const ult = pts[pts.length - 1];
+  if (!ult) return null;
+  const f = faixaDe(ult.ndvi).nome.toLowerCase();
+  const antes = [...pts].reverse().find((x) => diasEntre(x.data, ult.data) >= 25);
+  let rumo = '';
+  if (antes) {
+    const d = ult.ndvi - antes.ndvi;
+    const dias = diasEntre(antes.data, ult.data);
+    rumo = Math.abs(d) < 0.05 ? ` Está parecido com ${dias} dias atrás.`
+      : d > 0 ? ` Está mais verde que ${dias} dias atrás (era ${fmtNum(antes.ndvi, 2)}).`
+        : ` Está menos verde que ${dias} dias atrás (era ${fmtNum(antes.ndvi, 2)}).`;
+  }
+  return `Capim ${f} pelo satélite: ${fmtNum(ult.ndvi, 2)} em ${fmtData(ult.data)}.${rumo}`;
+}
+
+/** Gráfico do verde do capim: faixas Fraco/Médio/Bom em palavras e os meses embaixo. */
 function GraficoNdvi({ serie }: { serie: Ndvi[] }) {
-  const pts = [...serie].filter((x) => (x.nuvemPct ?? 0) <= 40).sort((a, b) => (a.data < b.data ? -1 : 1)).slice(-36);
-  if (pts.length < 2) return <p className="mudo">{pts.length ? `Uma leitura: ${fmtNum(pts[0].ndvi, 2)} em ${fmtData(pts[0].data)}.` : 'Sem leituras do satélite ainda.'}</p>;
-  const W = 340, H = 140, m = { e: 32, d: 8, t: 8, b: 22 };
+  const pts = leiturasLimpas(serie).slice(-40);
+  if (pts.length < 2) return <p className="mudo">{pts.length ? `Uma leitura até agora: ${fmtNum(pts[0].ndvi, 2)} em ${fmtData(pts[0].data)}.` : 'Sem leituras do satélite ainda.'}</p>;
+  const W = 340, H = 150, m = { e: 6, d: 46, t: 6, b: 20 };
   const x0 = Date.parse(pts[0].data), x1 = Date.parse(pts[pts.length - 1].data);
-  const sx = (d: string) => m.e + ((Date.parse(d) - x0) / Math.max(1, x1 - x0)) * (W - m.e - m.d);
-  const sy = (v: number) => H - m.b - (Math.max(0, Math.min(1, v)) / 1) * (H - m.t - m.b);
+  const sx = (d: string | number) => m.e + (((typeof d === 'number' ? d : Date.parse(d)) - x0) / Math.max(1, x1 - x0)) * (W - m.e - m.d);
+  const sy = (v: number) => H - m.b - Math.max(0, Math.min(1, v)) * (H - m.t - m.b);
   const linha = pts.map((p, i) => `${i ? 'L' : 'M'}${sx(p.data).toFixed(1)},${sy(p.ndvi).toFixed(1)}`).join(' ');
+  // começo de cada mês no período
+  const meses: { x: number; nome: string }[] = [];
+  const d = new Date(x0); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() + 1);
+  for (; d.getTime() <= x1; d.setUTCMonth(d.getUTCMonth() + 1)) meses.push({ x: sx(d.getTime()), nome: MESES[d.getUTCMonth()] });
+  const passo = Math.ceil(meses.length / 6);
   return (
-    <svg className="grafico" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="NDVI do piquete ao longo do tempo">
-      {[0.2, 0.4, 0.6, 0.8].map((v) => (
-        <g key={v}>
-          <line x1={m.e} x2={W - m.d} y1={sy(v)} y2={sy(v)} stroke="var(--borda)" />
-          <text x={m.e - 4} y={sy(v) + 4} fontSize="11" textAnchor="end" fill="var(--texto-2)">{fmtNum(v, 1)}</text>
+    <svg className="grafico" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Verde do capim pelo satélite ao longo do tempo">
+      {FAIXAS.map((f) => (
+        <g key={f.nome}>
+          <rect x={m.e} y={sy(f.ate)} width={W - m.e - m.d} height={sy(f.de) - sy(f.ate)} fill={f.fundo} />
+          <text x={W - m.d + 5} y={(sy(f.de) + sy(f.ate)) / 2 + 4} fontSize="12" fontWeight="700" fill={f.cor}>{f.nome}</text>
         </g>
       ))}
-      <rect x={m.e} y={sy(0.35)} width={W - m.e - m.d} height={sy(0) - sy(0.35)} fill="var(--alerta-claro)" opacity={0.5} />
-      <path d={linha} fill="none" stroke="var(--verde)" strokeWidth={2.5} />
-      {pts.map((p) => <circle key={p.data} cx={sx(p.data)} cy={sy(p.ndvi)} r={3} fill="var(--verde)" />)}
-      <text x={m.e} y={H - 6} fontSize="11" fill="var(--texto-2)">{fmtData(pts[0].data).slice(0, 5)}</text>
-      <text x={W - m.d} y={H - 6} fontSize="11" textAnchor="end" fill="var(--texto-2)">{fmtData(pts[pts.length - 1].data).slice(0, 5)}</text>
+      {meses.filter((_, i) => i % passo === 0).map((mm) => (
+        <g key={mm.x}>
+          <line x1={mm.x} x2={mm.x} y1={m.t} y2={H - m.b} stroke="var(--borda)" strokeDasharray="2 3" />
+          <text x={mm.x} y={H - 5} fontSize="11" textAnchor="middle" fill="var(--texto-2)">{mm.nome}</text>
+        </g>
+      ))}
+      <path d={linha} fill="none" stroke="var(--texto)" strokeWidth={2.5} />
+      {pts.map((p) => <circle key={p.data} cx={sx(p.data)} cy={sy(p.ndvi)} r={3.2} fill={faixaDe(p.ndvi).cor} stroke="var(--fundo)" strokeWidth={1} />)}
     </svg>
+  );
+}
+
+/** Tudo do satélite de um piquete: frase, gráfico, foto e explicação. */
+function PainelNdvi({ p, serie }: { p: Piquete; serie: Ndvi[] }) {
+  const frase = resumoNdvi(serie);
+  return (
+    <>
+      {frase && <p data-testid="resumoNdvi">{frase}</p>}
+      <GraficoNdvi serie={serie} />
+      <FotoSatelite p={p} serie={serie} />
+    </>
+  );
+}
+
+/** Foto do satélite: como o olho vê, ou o mapa do verde (onde o capim está fraco dentro do piquete). */
+function FotoSatelite({ p, serie }: { p: Piquete; serie: Ndvi[] }) {
+  const est = useEstadoNuvem();
+  const online = useOnline();
+  const datas = leiturasLimpas(serie).filter((x) => (x.nuvemPct ?? 0) <= 15).map((x) => x.data).reverse();
+  const [aberta, setAberta] = useState(false);
+  const [tipo, setTipo] = useState<'verde' | 'cor'>('verde');
+  const [i, setI] = useState(0);
+  const [url, setUrl] = useState<string>();
+  const [estado, setEstado] = useState<'carregando' | 'erro' | 'ok'>('carregando');
+  const [erro, setErro] = useState('');
+  const data = datas[Math.min(i, datas.length - 1)];
+  const fazenda = est?.fazenda?.id;
+  useEffect(() => {
+    if (!aberta || !fazenda || !p.gid || !data) return;
+    let fim = false, u: string | undefined;
+    setEstado('carregando');
+    fotoSatelite(fazenda, p.gid, data, tipo)
+      .then((b) => { if (fim) return; u = URL.createObjectURL(b); setUrl(u); setEstado('ok'); })
+      .catch((e) => { if (!fim) { setErro((e as Error).message); setEstado('erro'); } });
+    return () => { fim = true; if (u) URL.revokeObjectURL(u); };
+  }, [aberta, fazenda, p.gid, data, tipo]);
+  if (!datas.length || !fazenda || !p.gid || !nuvemConfigurada()) return null;
+  if (!aberta) return <button type="button" className="btn sec largo" data-testid="verFotoSatelite" disabled={!online} onClick={() => setAberta(true)}>📷 Ver a foto do satélite</button>;
+  return (
+    <div className="cartao" data-testid="fotoSatelite" style={{ marginTop: 8 }}>
+      <div className="botoes" role="radiogroup" aria-label="Tipo de foto">
+        <button type="button" role="radio" aria-checked={tipo === 'verde'} className={`btn ${tipo === 'verde' ? '' : 'sec'}`} onClick={() => setTipo('verde')}>🌱 Mapa do verde</button>
+        <button type="button" role="radio" aria-checked={tipo === 'cor'} className={`btn ${tipo === 'cor' ? '' : 'sec'}`} onClick={() => setTipo('cor')}>🛰️ Foto real</button>
+      </div>
+      <div style={{ textAlign: 'center', margin: '10px 0', minHeight: 120, background: 'var(--fundo)', borderRadius: 8, padding: 6 }}>
+        {estado === 'ok' && url && <img src={url} alt={`${tipo === 'verde' ? 'Mapa do verde' : 'Foto do satélite'} do ${p.nome} em ${fmtData(data)}`} style={{ width: '100%', maxWidth: 400, imageRendering: 'auto' }} />}
+        {estado === 'carregando' && <p className="mudo" style={{ paddingTop: 40 }}>Buscando a foto do satélite…</p>}
+        {estado === 'erro' && <p className="mudo" style={{ paddingTop: 30 }}>{erro}</p>}
+      </div>
+      {tipo === 'verde' ? (
+        <p className="mudo" style={{ margin: 0 }}>
+          <b style={{ color: '#c53030' }}>■</b> fraco (capim rapado ou terra) · <b style={{ color: '#d69e2e' }}>■</b> médio · <b style={{ color: 'var(--verde)' }}>■</b> bom (capim verde e fechado) · <b style={{ color: '#999' }}>■</b> nuvem
+        </p>
+      ) : (
+        <p className="mudo" style={{ margin: 0 }}>Como o satélite vê o piquete de cima. Cada quadradinho tem 10 metros, então a foto fica borrada de perto.</p>
+      )}
+      <div className="linha-lote" style={{ marginTop: 8 }}>
+        <button type="button" className="btn sec" disabled={i >= datas.length - 1} onClick={() => setI(i + 1)}>‹ Antes</button>
+        <b>{fmtData(data)}</b>
+        <button type="button" className="btn sec" disabled={i === 0} onClick={() => setI(i - 1)}>Depois ›</button>
+      </div>
+    </div>
   );
 }
 

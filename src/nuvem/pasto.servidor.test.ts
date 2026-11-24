@@ -111,6 +111,17 @@ describe('pasto no servidor', () => {
     await expect(s.rpc(ana, 'pedir_ndvi', { f: fa })).rejects.toThrow();
   });
 
+  it('foto do satélite: quem é da fazenda recebe o contorno da nuvem; outra fazenda não; com limite', async () => {
+    const contorno = [{ lat: -20.2, lon: -54.2 }, { lat: -20.2, lon: -54.21 }, { lat: -20.21, lon: -54.21 }];
+    await enviar(ana, fa, [{ tabela: 'piquetes', gid: uuid(5), op: 'put', dados: { moduloId: uuid(2), nome: 'Piquete 5', areaHa: 10, contorno, criadoEm: 0 } }]);
+    expect(await s.rpc(vito, 'pedir_foto_satelite', { f: fa, p: uuid(5) })).toEqual(contorno);
+    await expect(s.rpc(beto, 'pedir_foto_satelite', { f: fa, p: uuid(5) })).rejects.toThrow(/não faz parte/);
+    await expect(s.rpc(beto, 'pedir_foto_satelite', { f: fb, p: uuid(5) })).rejects.toThrow(/sem contorno|não tem contorno/);
+    await expect(s.rpc(ana, 'pedir_foto_satelite', { f: fa, p: uuid(4) })).rejects.toThrow(/não tem contorno/);
+    for (let i = 0; i < 39; i++) await s.rpc(vito, 'pedir_foto_satelite', { f: fa, p: uuid(5) });
+    await expect(s.rpc(vito, 'pedir_foto_satelite', { f: fa, p: uuid(5) })).rejects.toThrow(/Muitas tentativas/);
+  });
+
   it('áudio do pasto no balde (webm/ogg/m4a), e nada fora disso', async () => {
     const f = (nome: string) => s.pg.query<{ f: string | null }>(`select bf_privado.fazenda_da_foto($1) as f`, [nome]).then((r) => r.rows[0].f);
     expect(await f(`${fa}/${uuid(901)}.webm`)).toBe(fa);
