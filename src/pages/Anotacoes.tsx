@@ -62,7 +62,7 @@ function useFotoUrl(id: string): { url?: string; falta?: boolean } {
   return r;
 }
 
-function Miniatura({ id, aoAbrir, grande }: { id: string; aoAbrir?: (url: string) => void; grande?: boolean }) {
+export function Miniatura({ id, aoAbrir, grande }: { id: string; aoAbrir?: (url: string) => void; grande?: boolean }) {
   const { url, falta } = useFotoUrl(id);
   if (!url) return <div className={`foto-mini vazia ${grande ? 'grande' : ''}`} aria-label="Foto">{falta ? '📷' : '…'}</div>;
   return (
@@ -72,7 +72,7 @@ function Miniatura({ id, aoAbrir, grande }: { id: string; aoAbrir?: (url: string
   );
 }
 
-function FotoTelaCheia({ url, fechar }: { url: string; fechar: () => void }) {
+export function FotoTelaCheia({ url, fechar }: { url: string; fechar: () => void }) {
   return (
     <div className="foto-cheia" role="dialog" aria-label="Foto" onClick={fechar}>
       <img src={url} alt="Foto da anotação" />

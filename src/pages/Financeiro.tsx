@@ -103,14 +103,15 @@ function Lancamentos() {
   const [valor, setValor] = useState('');
   const [data, setData] = useState(hojeISO());
   const [desc, setDesc] = useState('');
-  const [loteId, setLoteId] = useState(0);
-  const nomeLote = (id?: number | null) => (id ? lotes?.find((l) => l.id === id)?.nome ?? '?' : 'Rateado entre os lotes');
+  const [loteId, setLoteId] = useState('0'); // "12" = lote 12; "g5" = grupo de manejo 5 da Cria
+  const grupos = useLiveQuery(() => db.grupos.toArray());
+  const nomeLote = (id?: number | null, gid?: number | null) => (gid ? `Cria: ${grupos?.find((g) => g.id === gid)?.nome ?? '?'}` : id ? lotes?.find((l) => l.id === id)?.nome ?? '?' : 'Rateado entre os lotes e a Cria');
   const cats = tipo === 'despesa' ? CATEGORIAS_DESPESA : CATEGORIAS_RECEITA;
   const salvar = async () => {
     const v = num(valor);
     if (!v || v <= 0) return aviso('Informe o valor.', true);
     try {
-      await db.lancamentos.add({ data, tipo, categoria, valor: v, descricao: desc.trim() || undefined, loteId: loteId || null, origem: 'manual', criadoEm: Date.now() });
+      await db.lancamentos.add({ data, tipo, categoria, valor: v, descricao: desc.trim() || undefined, loteId: loteId.startsWith('g') ? null : Number(loteId) || null, grupoId: loteId.startsWith('g') ? Number(loteId.slice(1)) : null, origem: 'manual', criadoEm: Date.now() });
       aviso('Lançamento salvo.');
       setValor(''); setDesc(''); setNovo(false);
     } catch (e) { aviso((e as Error).message, true); }
@@ -128,9 +129,10 @@ function Lancamentos() {
           <CampoNumero rotulo="Valor" valor={valor} aoMudar={setValor} unidade="R$" nome="lancValor" />
           <CampoData rotulo="Data" valor={data} aoMudar={setData} nome="lancData" />
           <CampoTexto rotulo="Descrição" valor={desc} aoMudar={setDesc} nome="lancDesc" />
-          <CampoEscolha rotulo="De qual lote?" nome="lancLote" valor={loteId} aoMudar={(v) => setLoteId(Number(v))}>
-            <option value={0}>Geral da fazenda (ratear por cabeça)</option>
-            {lotes?.filter((l) => !l.encerrado).map((l) => <option key={l.id} value={l.id}>{l.nome}</option>)}
+          <CampoEscolha rotulo="De qual lote ou grupo da Cria?" nome="lancLote" valor={loteId} aoMudar={setLoteId}>
+            <option value="0">Geral da fazenda (ratear por cabeça)</option>
+            {lotes?.filter((l) => !l.encerrado).map((l) => <option key={l.id} value={String(l.id)}>{l.nome}</option>)}
+            {grupos?.filter((g) => !g.encerrado).map((g) => <option key={'g' + g.id} value={'g' + g.id}>Cria: {g.nome}</option>)}
           </CampoEscolha>
           <div className="botoes"><button className="btn" onClick={salvar}>Salvar lançamento</button><button className="btn sec" onClick={() => setNovo(false)}>Cancelar</button></div>
         </div>
@@ -143,7 +145,7 @@ function Lancamentos() {
               {lancs?.map((l) => (
                 <tr key={l.id}>
                   <td>{fmtData(l.data)}</td>
-                  <td>{NOMES_CATEGORIA[l.categoria]}{l.descricao ? ` · ${l.descricao}` : ''}<div className="mudo" style={{ fontSize: 13 }}>{nomeLote(l.loteId)}</div></td>
+                  <td>{NOMES_CATEGORIA[l.categoria]}{l.descricao ? ` · ${l.descricao}` : ''}<div className="mudo" style={{ fontSize: 13 }}>{nomeLote(l.loteId, l.grupoId)}</div></td>
                   <td className="n" style={{ color: l.tipo === 'receita' ? 'var(--ok)' : undefined }}>{l.tipo === 'receita' ? '+' : '−'}{rs(l.valor)}</td>
                   <td>{l.origem === 'manual' || !l.origem ? <button className="remover" aria-label="Apagar lançamento" onClick={async () => { if (window.confirm('Apagar este lançamento?')) await db.lancamentos.delete(l.id!); }}>×</button> : null}</td>
                 </tr>

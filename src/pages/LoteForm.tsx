@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -101,7 +102,9 @@ export function LoteForm() {
         )}
 
         <div className="campo"><span style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Fase</span>
-          <Opcoes valor={f.fase} aoMudar={trocarFase} opcoes={(Object.keys(FASES) as Fase[]).map((k) => ({ valor: k, rotulo: FASES[k].split(' (')[0] }))} />
+          {/* Cria tem módulo próprio (grupos de manejo); lote antigo de cria continua aparecendo para editar */}
+          <Opcoes valor={f.fase} aoMudar={trocarFase} opcoes={(Object.keys(FASES) as Fase[]).filter((k) => k !== 'cria' || f.fase === 'cria').map((k) => ({ valor: k, rotulo: FASES[k].split(' (')[0] }))} />
+          {!editando && <div className="dica" style={{ marginTop: 8 }}>Vacas, touros e bezerros ficam no menu <Link to="/cria">Cria</Link>, em grupos de manejo.</div>}
           {editando && <div className="dica" style={{ marginTop: 8 }}>Para passar o lote de RIP para TIP guardando o histórico, use o botão <b>Passar para TIP</b> na tela do lote.</div>}
         </div>
 

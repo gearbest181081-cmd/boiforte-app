@@ -9,6 +9,8 @@ import { Indicador, Topo } from '../components/ui';
 import { usePapel } from '../nuvem/useNuvem';
 import { nuvemConfigurada } from '../nuvem/cliente';
 import { contarAnotacoes } from '../anotacoes';
+import { alertasCria, ativoCria, cabecas as cabecasAnimal } from '../cria';
+import { useCria } from './Cria';
 
 export function Inicio() {
   const props = useLiveQuery(() => db.propriedades.toArray());
@@ -18,6 +20,7 @@ export function Inicio() {
   const tudo = useTudo();
   const papel = usePapel();
   const tarefas = useLiveQuery(contarAnotacoes);
+  const cria = useCria();
   const [todos, setTodos] = useState(false);
   useEffect(() => { if (props?.length) garantirLembretesPadrao().catch(() => {}); }, [props?.length]);
   if (!props || !infos) return <Topo titulo="BoiForte" voltar={false} />;
@@ -45,7 +48,10 @@ export function Inicio() {
   const cabecas = infos.reduce((s, i) => s + (i.lote.qtdCabecas || 0), 0);
   const alertasEstoque = (estoque ?? []).filter((e) => e.situacao.nivel === 'ruim' || e.situacao.nivel === 'atencao')
     .map((e) => ({ nivel: e.situacao.nivel as 'ruim' | 'atencao', titulo: `Estoque: ${e.nome}`, texto: `${e.situacao.texto} Saldo de ${fmtNum(e.situacao.saldoKg, 0)} kg.${e.tipo === 'mistura' ? ' Hora de bater nova ração.' : ''}` }));
-  const alertas = ordenarAlertas([...infos.flatMap((i) => i.alertas), ...alertasEstoque, ...(tudo ? alertasInteligentes(tudo) : [])]);
+  const criaAtivos = cria ? cria.animais.filter(ativoCria) : [];
+  const criaCab = criaAtivos.reduce((s, a) => s + cabecasAnimal(a), 0);
+  const alertas = ordenarAlertas([...infos.flatMap((i) => i.alertas), ...alertasEstoque, ...(tudo ? alertasInteligentes(tudo) : []),
+    ...(cria && criaAtivos.length ? alertasCria({ ...cria, hoje: hojeISO() }) : [])]);
   const tratos = (escala ?? []).filter((l) => l.formula);
   const tratosFeitos = tratos.filter((l) => l.fornecimento).length;
   const comPeso = infos.filter((i) => i.resumo.pesoAtual != null);
@@ -76,6 +82,13 @@ export function Inicio() {
             <div><b>Trato de hoje: {tratosFeitos} de {tratos.length} lotes</b>{tratosFeitos === tratos.length ? 'Tudo fornecido.' : 'Toque para marcar o que já foi dado.'}</div>
           </Link>
         )}
+
+        <Link to="/cria" className="alerta bom" style={{ textDecoration: 'none' }} data-testid="cartaoCria">
+          <span className="ic">🐄</span>
+          <div><b>Cria{criaCab ? `: ${criaCab} cabeças` : ''}</b>{criaCab
+            ? `${criaAtivos.filter((a) => a.categoria === 'matriz').length} matrizes, ${criaAtivos.filter((a) => a.categoria === 'bezerro').length} bezerros. Parto, monta, desmama e IPM.`
+            : 'Vacas, touros e bezerros em grupos de manejo, separado dos lotes.'}</div>
+        </Link>
 
         {tarefas && (
           <Link to="/anotacoes" className={`alerta ${tarefas.urgentes ? 'ruim' : tarefas.abertas ? 'atencao' : 'bom'}`} style={{ textDecoration: 'none' }} data-testid="cartaoAnotacoes">

@@ -21,6 +21,10 @@ import { RelatorioPesagem } from './pages/RelatorioPesagem';
 import { Nuvem } from './pages/Nuvem';
 import { FuncionarioForm, Funcionarios } from './pages/Funcionarios';
 import { AnotacaoDetalhe, AnotacaoForm, Anotacoes } from './pages/Anotacoes';
+import { Cria } from './pages/Cria';
+import { AnimalCriaForm, DesmamaCria, EventoCria, GrupoCria, PesagemCria } from './pages/CriaForms';
+import { AnimalCria } from './pages/CriaAnimal';
+import { CriaSimular } from './pages/CriaSimular';
 import { SincAutomatica } from './nuvem/useNuvem';
 import { SessaoProvider } from './nuvem/sessao';
 import { Porta } from './pages/Login';
@@ -61,6 +65,15 @@ export function App() {
               <Route path="/anotacoes/nova" element={<AnotacaoForm />} />
               <Route path="/anotacoes/:id" element={<AnotacaoDetalhe />} />
               <Route path="/anotacoes/:id/editar" element={<AnotacaoForm />} />
+              <Route path="/cria" element={<Cria />} />
+              <Route path="/cria/grupo/:id" element={<GrupoCria />} />
+              <Route path="/cria/animal/novo" element={<AnimalCriaForm />} />
+              <Route path="/cria/animal/:id" element={<AnimalCria />} />
+              <Route path="/cria/animal/:id/editar" element={<AnimalCriaForm />} />
+              <Route path="/cria/evento/:tipo" element={<EventoCria />} />
+              <Route path="/cria/pesar" element={<PesagemCria />} />
+              <Route path="/cria/desmama" element={<DesmamaCria />} />
+              <Route path="/cria/simular" element={<CriaSimular />} />
               <Route path="*" element={<Inicio />} />
             </Routes>
             <nav className="baixo" aria-label="Menu principal">

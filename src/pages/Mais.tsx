@@ -83,6 +83,7 @@ export function Mais() {
           <div><b>Nuvem e equipe</b>{nuvem?.fazenda ? (nuvem.pendentes ? `${nuvem.pendentes} alteração(ões) para enviar.` : nuvem.erros.length ? 'Há registros recusados. Toque para ver.' : `Ligado à ${nuvem.fazenda.nome}.`) : 'Guarde os dados fora do celular e trabalhe com a equipe.'}</div>
         </Link>
         <div className="grade" style={{ marginBottom: 12 }}>
+          <Link to="/cria" className="btn sec">Cria</Link>
           <Link to="/anotacoes" className="btn sec">Anotações e tarefas</Link>
           <Link to="/fazenda" className="btn sec">Fazenda</Link>
           <Link to="/nutricao" className="btn sec">Nutrição</Link>
