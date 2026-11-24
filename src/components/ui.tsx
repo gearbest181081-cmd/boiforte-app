@@ -417,3 +417,30 @@ export function Indicador({ rotulo, valor, sub }: { rotulo: string; valor: React
     </div>
   );
 }
+
+/**
+ * Campo de senha. É o único campo de escrever SEM microfone: falar a senha em voz alta deixa
+ * quem está perto ouvir. Tem o botão "Ver" para conferir o que digitou.
+ */
+export function CampoSenha({ rotulo, valor, aoMudar, nome = 'senha', nova, dica, aoEnter }: {
+  rotulo: string; valor: string; aoMudar: (v: string) => void; nome?: string;
+  /** Senha nova (cadastro): o celular pode sugerir e guardar. */
+  nova?: boolean; dica?: ReactNode; aoEnter?: () => void;
+}) {
+  const id = useId();
+  const [ver, setVer] = useState(false);
+  return (
+    <div className="campo">
+      <label htmlFor={id}>{rotulo}</label>
+      <div className="com-mic">
+        <input id={id} name={nome} type={ver ? 'text' : 'password'} value={valor} onChange={(e) => aoMudar(e.target.value)}
+          autoComplete={nova ? 'new-password' : 'current-password'} autoCapitalize="none" autoCorrect="off" spellCheck={false} maxLength={72}
+          onKeyDown={aoEnter ? (e) => { if (e.key === 'Enter') aoEnter(); } : undefined} />
+        <button type="button" className="mic ver-senha" aria-pressed={ver} aria-label={ver ? 'Esconder a senha' : 'Mostrar a senha'} onClick={() => setVer((v) => !v)}>
+          {ver ? 'Esconder' : 'Ver'}
+        </button>
+      </div>
+      {dica && <small>{dica}</small>}
+    </div>
+  );
+}

@@ -13,6 +13,9 @@ enable_refresh_token_rotation = true
 refresh_token_reuse_interval = 10
 enable_signup = true
 enable_anonymous_sign_ins = false
+# Senha: pelo menos 8, com letras e números (o servidor recusa senha fraca, não importa o que o app mande).
+minimum_password_length = 8
+password_requirements = "letters_digits"
 
 [auth.rate_limit]
 email_sent = 30
@@ -23,12 +26,22 @@ token_verifications = 30
 enable_signup = true
 enable_confirmations = true # obrigatório: sem isto, alguém cria conta com senha usando o e-mail de outra pessoa
 otp_length = 6
-otp_expiry = 600
+otp_expiry = 3600
 max_frequency = "60s"
+secure_password_change = false # trocar a senha sem link só acontece logo depois de entrar pelo link do e-mail
+
+# Primeiro acesso (conta nova e conta antiga sem senha) e "esqueci a senha": e-mail com link (e código de reserva).
+[auth.email.template.confirmation]
+subject = "Confirme seu e-mail no BoiForte"
+content_path = "./supabase/templates/confirmar.html"
 
 [auth.email.template.magic_link]
-subject = "Seu código do BoiForte"
-content_path = "./supabase/templates/codigo.html"
+subject = "Confirme seu e-mail no BoiForte"
+content_path = "./supabase/templates/confirmar.html"
+
+[auth.email.template.recovery]
+subject = "Criar senha nova no BoiForte"
+content_path = "./supabase/templates/nova-senha.html"
 
 [functions.ler-foto]
 verify_jwt = true

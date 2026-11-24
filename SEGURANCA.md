@@ -24,7 +24,7 @@ O que já está protegido:
 
 ### Tela de entrada (login)
 
-Com o app ligado ao servidor, ele só abre depois de entrar com o e-mail. A sessão fica guardada no aparelho,
+Com o app ligado ao servidor, ele só abre depois de entrar com e-mail e senha (no primeiro acesso, pelo link de confirmação do e-mail, e então a pessoa cadastra a senha). A sessão fica guardada no aparelho,
 então o app abre direto (inclusive sem internet) até a pessoa tocar em "Sair da conta" ou o servidor recusar a sessão.
 A tela de entrada protege a **tela**, não os dados: quem protege os dados da nuvem continua sendo o servidor, que confere
 a sessão em cada chamada. Os dados guardados no próprio celular não são criptografados.
@@ -52,7 +52,7 @@ Os testes `src/nuvem/servidor.test.ts` sobem essas mesmas migrações e tentam f
 | Excesso de uso / força bruta | Limites contados no banco: envio 120/min (até 500 itens e 4 MB), fazendas 5/dia, convites 30/dia, tentar código de convite 10/hora, foto 30/dia; até 2 milhões de registros por fazenda. Códigos de convite de 10 caracteres, válidos por 7 dias e de uso único. |
 | Fazenda sem dono / exclusão acidental | O último dono não pode sair nem ser rebaixado; apagar a fazenda exige o nome exato. |
 | Rastro | Auditoria de alterações de dinheiro e de exclusões (quem, quando, o quê). |
-| Login | Código de 6 números por e-mail (Supabase Auth), com "Confirm email" ligado. Nenhuma senha passa pelo app. Uma conta criada com senha pela API (fora do app) fica bloqueada no banco: não vê nem grava nada. Sessão com renovação automática. |
+| Login | E-mail e senha (Supabase Auth). Primeiro acesso e "esqueci a senha" por link (ou código de 6 números) no e-mail, com "Confirm email" ligado. Senha mínima de 8 com letras e números, conferida pelo servidor; tentativas limitadas por IP no Supabase. No banco: conta sem e-mail confirmado não vê nem grava nada, e a senha posta antes da confirmação é apagada quando o dono do e-mail confirma (ninguém "reserva" a conta de outro com uma senha). Trocar senha pelo perfil manda link ao e-mail (celular destravado na mão de outro não troca a senha). Sessão com renovação automática. |
 | Posse da fazenda | Fica só na tabela de membros. Apagar a conta de quem criou a fazenda não apaga a fazenda dos outros. |
 | Plano e número de pessoas | O plano fica na fazenda e só o servidor muda (`definir_plano`, chave de serviço); o app não tem permissão de alterar a tabela. Básico e Pro: quem assina + 1 pessoa; cada pessoa a mais é paga (até 50 no total). Uma trava no banco (gatilho em `membros`) recusa quem passar do limite, por qualquer caminho, trancando a linha da fazenda antes de contar (dois convites aceitos ao mesmo tempo não passam juntos). Convites em aberto ocupam vaga. Se o plano diminuir, ninguém é apagado: quem passou do limite fica pausado (não baixa, não envia, não usa foto); donos têm prioridade, depois quem entrou antes. |
 | Convite vazado | O dono vê os convites ainda não usados e pode cancelar cada um. |
