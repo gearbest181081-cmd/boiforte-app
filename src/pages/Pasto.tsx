@@ -13,11 +13,7 @@ import { aceitarPonto, areaHa, lerContorno, limparContorno, type Ponto } from '.
 import { CampoData, CampoEscolha, CampoNumero, CampoTexto, Indicador, num, Topo, useAviso, useOnline } from '../components/ui';
 import { CapturaMidias, VerMidias } from '../components/Midias';
 import { atualizarNdvi, nuvemConfigurada } from '../nuvem/cliente';
-<<<<<<< HEAD
 import { sincronizarAgora, useEstadoNuvem, usePapel } from '../nuvem/useNuvem';
-=======
-import { useEstadoNuvem, usePapel } from '../nuvem/useNuvem';
->>>>>>> 00abe9de3c806860336c690df9e5421c90e0b57d
 
 const SITUACAO: Record<EstadoPiquete['situacao'], { nome: string; classe: string }> = {
   ocupado: { nome: 'Com gado', classe: 'atencao' },
@@ -41,7 +37,6 @@ function Avisos({ lista }: { lista: { nivel: string; titulo: string; texto: stri
   );
 }
 
-<<<<<<< HEAD
 /** O que dizer depois de consultar o satélite. */
 export function mensagemSatelite(r: { piquetes: number; leituras: number; falhas?: number; motivo?: string }): string {
   const s = (n: number) => (n === 1 ? '' : 's');
@@ -51,8 +46,6 @@ export function mensagemSatelite(r: { piquetes: number; leituras: number; falhas
   return `Satélite consultado: ${r.leituras} leitura${s(r.leituras)} nova${s(r.leituras)}. Abra o piquete para ver o gráfico do NDVI.`;
 }
 
-=======
->>>>>>> 00abe9de3c806860336c690df9e5421c90e0b57d
 // ---------------------------------------------------------------- lista do pasto
 
 export function Pasto() {
@@ -70,12 +63,8 @@ export function Pasto() {
     setBuscando(true);
     try {
       const r = await atualizarNdvi(est.fazenda.id);
-<<<<<<< HEAD
       aviso(mensagemSatelite(r), !r.piquetes && !!r.falhas);
       if (r.leituras) sincronizarAgora().catch(() => {});
-=======
-      aviso(r.piquetes ? `Satélite consultado: ${r.piquetes} piquetes, ${r.leituras} leituras novas. Elas chegam na próxima sincronização.` : 'Nenhum piquete com contorno para o satélite.');
->>>>>>> 00abe9de3c806860336c690df9e5421c90e0b57d
     } catch (e) { aviso((e as Error).message, true); } finally { setBuscando(false); }
   };
 
