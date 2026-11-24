@@ -121,13 +121,13 @@ export function LoteForm() {
         <CampoData rotulo="Data de entrada" valor={f.data} aoMudar={set('data')} nome="dataEntrada" />
 
         {!editando && f.controle === 'lote' && (
-          <CampoNumero rotulo="Peso médio na entrada" valor={f.pesoEntrada} aoMudar={set('pesoEntrada')} unidade="kg" nome="pesoEntrada" dica="Vira a primeira pesagem do lote. Pode deixar em branco e pesar depois." />
+          <CampoNumero rotulo="Peso médio na entrada" valor={f.pesoEntrada} aoMudar={set('pesoEntrada')} unidade="kg" pesoVivo nome="pesoEntrada" dica="Vira a primeira pesagem do lote. Pode deixar em branco e pesar depois." />
         )}
         {!editando && f.controle === 'individual' && (
           <div className="dica">Depois de salvar, o app abre a pesagem para você lançar o brinco e o peso de cada animal.</div>
         )}
 
-        <CampoNumero rotulo="Peso alvo (saída)" valor={f.pesoAlvo} aoMudar={set('pesoAlvo')} unidade="kg" nome="pesoAlvo" dica="Peso que você quer atingir para vender ou mudar de fase." />
+        <CampoNumero rotulo="Peso alvo (saída)" valor={f.pesoAlvo} aoMudar={set('pesoAlvo')} unidade="kg" pesoVivo nome="pesoAlvo" dica="Peso que você quer atingir para vender ou mudar de fase." />
         <CampoNumero rotulo="GMD esperado" valor={f.gmdMeta} aoMudar={set('gmdMeta')} unidade="kg/dia" nome="gmdMeta" dica="Sugestão pela fase. O app avisa quando o lote ficar 10% abaixo." />
 
         {piquetes && piquetes.length > 0 && (
