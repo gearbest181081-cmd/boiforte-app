@@ -273,6 +273,11 @@ button.link { background: none; border: 0; padding: 4px 0; color: var(--verde); 
 .foto-cheia img { max-width: 100%; max-height: 80vh; object-fit: contain; border-radius: 8px; }
 .foto-cheia .btn { color: #fff; border-color: #fff; }
 
+/* Informativos fixos (nutrição e IA) */
+.informativo { border: 1px solid var(--borda); border-left: 4px solid var(--ouro); background: var(--cartao); color: var(--texto);
+  border-radius: 12px; padding: 10px 12px; margin: 10px 0; display: flex; gap: 10px; align-items: flex-start; font-size: 15px; }
+.informativo b { display: block; font-size: 16px; }
+.informativo .ic { font-size: 20px; line-height: 1.2; }
 /* Equipe: passo a passo para liberar um funcionário e o que cada papel pode fazer */
 .passos { list-style: none; counter-reset: passo; padding: 0; margin: 0; display: grid; gap: 16px; }
 .passos > li { counter-increment: passo; position: relative; padding-left: 44px; }

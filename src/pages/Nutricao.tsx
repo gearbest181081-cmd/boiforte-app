@@ -4,7 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db, garantirIngredientesPadrao } from '../db';
 import { avaliarFormula, calcularFormula, TIPOS } from '../nutricao';
 import { fmtNum } from '../calc';
-import { Opcoes, Topo } from '../components/ui';
+import { AvisoNutricao, Opcoes, Topo } from '../components/ui';
 import { useVeDinheiro } from '../nuvem/useNuvem';
 
 export const rs = (v: number | null | undefined, casas = 2) =>
@@ -27,6 +27,7 @@ export function Nutricao() {
     <>
       <Topo titulo="Nutrição" voltar />
       <main>
+        <AvisoNutricao />
         <Opcoes valor={aba} aoMudar={setAba} opcoes={[{ valor: 'formulas', rotulo: `Fórmulas (${formulas?.length ?? 0})` }, { valor: 'ingredientes', rotulo: `Ingredientes (${ingredientes?.length ?? 0})` }]} />
         <div style={{ height: 14 }} />
         {aba === 'formulas' && (

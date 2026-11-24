@@ -4,7 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db, excluirFormula, garantirIngredientesPadrao, lerConfig } from '../db';
 import { avaliarFormula, batida, calcularFormula, custoArrobaNutricao, kgCabDia, TIPOS, type TipoFormula } from '../nutricao';
 import { fmtNum } from '../calc';
-import { CampoEscolha, CampoNumero, CampoTexto, Entrada, Escolha, num, Opcoes, Topo, useAviso } from '../components/ui';
+import { AvisoNutricao, CampoEscolha, CampoNumero, CampoTexto, Entrada, Escolha, num, Opcoes, Topo, useAviso } from '../components/ui';
 import { rs } from './Nutricao';
 import { avaliarNutrientes } from '../faixas';
 import { GradeNutrientes } from '../components/Nutrientes';
@@ -88,6 +88,7 @@ export function FormulaForm() {
     <>
       <Topo titulo={editando ? nome || 'Fórmula' : 'Nova fórmula'} voltar />
       <main>
+        <AvisoNutricao />
         <CampoTexto rotulo="Nome da fórmula" valor={nome} aoMudar={setNome} nome="formulaNome" />
         <CampoEscolha rotulo="Tipo" nome="tipo" valor={tipo} aoMudar={(v) => trocarTipo(v as TipoFormula)} dica={perfil.descricao}>
           {(Object.keys(TIPOS) as TipoFormula[]).map((t) => <option key={t} value={t}>{TIPOS[t].nome}</option>)}
