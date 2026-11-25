@@ -5,7 +5,7 @@
 /** Ordem de envio: quem é referenciado vai antes de quem referencia. */
 export const ORDEM_SINC = [
   'propriedades', 'modulos', 'piquetes', 'ingredientes', 'formulas', 'lotes', 'animais', 'pesagens',
-  'batidas', 'fornecimentos', 'movimentos', 'sanidade', 'vendas', 'lancamentos', 'custosFixos', 'funcionarios', 'lembretes', 'anotacoes', 'ocupacoes', 'ndvi', 'config',
+  'batidas', 'fornecimentos', 'movimentos', 'sanidade', 'vendas', 'lancamentos', 'custosFixos', 'funcionarios', 'lembretes', 'anotacoes', 'ocupacoes', 'ndvi', 'gtas', 'config',
 ] as const;
 export type TabelaSinc = (typeof ORDEM_SINC)[number];
 
@@ -36,6 +36,7 @@ export const REFERENCIAS: Record<string, Referencias> = {
   // ocupanteId: lote (recria/engorda) ou grupo de manejo (cria), conforme "tipo"
   ocupacoes: { campos: { piqueteId: 'piquetes', ocupanteId: { porCampo: 'tipo', mapa: { lote: 'lotes', grupo: 'grupos' } } } },
   ndvi: { campos: { piqueteId: 'piquetes' } },
+  gtas: { campos: { propriedadeId: 'propriedades', loteId: 'lotes' } },
 };
 
 export function alvoDe(alvo: Alvo, registro: Record<string, unknown>): string | null {
@@ -81,6 +82,6 @@ export function mensagemConvite(papel: Papel, codigo: string, fazenda?: string):
 }
 
 /** Tabelas que o vaqueiro pode ver e gravar (o resto, principalmente o dinheiro e os salários dos funcionários, fica de fora). */
-export const VAQUEIRO_LE = ['propriedades', 'modulos', 'piquetes', 'lotes', 'animais', 'pesagens', 'ingredientes', 'formulas', 'movimentos', 'batidas', 'fornecimentos', 'sanidade', 'lembretes', 'config', 'anotacoes', 'ocupacoes', 'ndvi'] as const;
+export const VAQUEIRO_LE = ['propriedades', 'modulos', 'piquetes', 'lotes', 'animais', 'pesagens', 'ingredientes', 'formulas', 'movimentos', 'batidas', 'fornecimentos', 'sanidade', 'lembretes', 'config', 'anotacoes', 'ocupacoes', 'ndvi', 'gtas'] as const;
 // lotes: só a quantidade de cabeças (pesagem por brinco) e o piquete; lancamentos: só o custo de vacina (origem sanidade).
 export const VAQUEIRO_GRAVA = ['animais', 'pesagens', 'fornecimentos', 'movimentos', 'sanidade', 'lotes', 'lancamentos', 'anotacoes', 'ocupacoes'] as const;

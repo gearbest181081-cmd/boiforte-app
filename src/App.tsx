@@ -25,6 +25,8 @@ import { MoverGado, Pasto, PiqueteDetalhe } from './pages/Pasto';
 import { SincAutomatica } from './nuvem/useNuvem';
 import { SessaoProvider } from './nuvem/sessao';
 import { Porta } from './pages/Login';
+import { FazendaDocs } from './pages/FazendaDocs';
+import { GtaForm, Rastreabilidade } from './pages/Rastreabilidade';
 
 export function App() {
   return (
@@ -45,6 +47,10 @@ export function App() {
               <Route path="/pesar" element={<Pesagem />} />
               <Route path="/pesar/:loteId" element={<Pesagem />} />
               <Route path="/fazenda" element={<Fazenda />} />
+              <Route path="/fazenda/:id/documentos" element={<FazendaDocs />} />
+              <Route path="/rastreabilidade" element={<Rastreabilidade />} />
+              <Route path="/rastreabilidade/gta/nova" element={<GtaForm />} />
+              <Route path="/rastreabilidade/gta/:id" element={<GtaForm />} />
               <Route path="/mais" element={<Mais />} />
               <Route path="/nutricao" element={<Nutricao />} />
               <Route path="/nutricao/formula/:id" element={<FormulaForm />} />

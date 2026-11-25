@@ -7,6 +7,7 @@ import { ErroValidacao, MAX_BACKUP_BYTES, MAX_LINHAS_TABELA, validarRegistro } f
 import { calcularVenda, custoCompra, type Categoria } from './financeiro';
 import { LEMBRETES_PADRAO, type TipoSanidade } from './sanidade';
 import { somaDias } from './calc';
+import type { Ponto } from './geo';
 
 export type Fase = 'cria' | 'recria' | 'rip' | 'engorda_pasto' | 'tip' | 'confinamento';
 export type Sexo = 'macho' | 'femea' | 'misto';
@@ -22,14 +23,36 @@ export const FASES: Record<Fase, string> = {
 };
 export const SEXOS: Record<Sexo, string> = { macho: 'Macho', femea: 'Fêmea', misto: 'Misto' };
 
-export interface Propriedade { id?: number; gid?: string; nome: string; municipio?: string; uf?: string; areaHa?: number; criadoEm: number }
+export interface Propriedade {
+  id?: number; gid?: string; nome: string; municipio?: string; uf?: string; areaHa?: number; criadoEm: number;
+  // Rastreabilidade e exportação (EUDR): localização e documentos da fazenda.
+  produtor?: string; // nome do produtor (como no CAR / ITR)
+  lat?: number | null; lon?: number | null; // sede (WGS84)
+  contorno?: Ponto[]; // divisa da fazenda (polígono)
+  semDesmate?: boolean; // produtor declara: sem desmatamento depois de 31/12/2020
+  car?: string; carSituacao?: SituacaoCar; // recibo do CAR (Cadastro Ambiental Rural)
+  cib?: string; itrAno?: number | null; // CIB/NIRF da Receita e último ano em que a declaração do ITR foi entregue
+  ccir?: string; ccirAno?: number | null; // CCIR (INCRA) e ano pago
+  codEstab?: string; // código do estabelecimento no órgão de defesa do estado (usado na GTA e no PNIB)
+  ie?: string; // inscrição estadual de produtor rural
+}
+export type SituacaoCar = 'ativo' | 'pendente' | 'cancelado' | 'suspenso';
+/** GTA (Guia de Trânsito Animal): entrada ou saída de animais da fazenda. */
+export interface Gta {
+  id?: number; gid?: string; propriedadeId: number; loteId?: number | null; sentido: 'entrada' | 'saida';
+  numero: string; serie?: string; uf?: string; emissao: string; finalidade?: FinalidadeGta;
+  machos: number; femeas: number;
+  outroNome?: string; outroMunicipio?: string; outroUf?: string; outroCodigo?: string; // de onde veio / para onde foi
+  obs?: string; criadoEm: number;
+}
+export type FinalidadeGta = 'abate' | 'engorda' | 'recria' | 'reproducao' | 'exposicao' | 'outra';
 /**
  * Módulo de pastejo: o conjunto de piquetes por onde os mesmos animais rodam.
  * sistema: rotacionado (os animais mudam de piquete) ou contínuo. diasOcupacao/diasDescanso: o planejado.
  * capacidadeUA: quantas UA por hectare o módulo aguenta (lotação de suporte), para o aviso de lotação alta.
  */
 export interface Modulo {
-  id?: number; gid?: string; propriedadeId: number; nome: string;
+  id?: number; gid?: string; propriedadeId: number; nome: string; areaHa?: number;
   sistema?: 'rotacionado' | 'continuo'; diasOcupacao?: number; diasDescanso?: number; capacidadeUA?: number;
   criadoEm: number;
 }
@@ -181,7 +204,7 @@ export type CategoriaAnotacao = 'cerca' | 'agua' | 'cocho' | 'pasto' | 'animal' 
  */
 export interface FotoLocal { id: string; dados?: ArrayBuffer; estado: 'enviar' | 'ok' | 'apagar'; em: number; erro?: string; ext?: ExtMidia } // ext vazio = foto jpg
 
-export const TABELAS = ['propriedades', 'modulos', 'piquetes', 'lotes', 'animais', 'pesagens', 'ingredientes', 'formulas', 'movimentos', 'batidas', 'fornecimentos', 'config', 'lancamentos', 'custosFixos', 'vendas', 'sanidade', 'lembretes', 'funcionarios', 'anotacoes', 'ocupacoes', 'ndvi'] as const;
+export const TABELAS = ['propriedades', 'modulos', 'piquetes', 'lotes', 'animais', 'pesagens', 'ingredientes', 'formulas', 'movimentos', 'batidas', 'fornecimentos', 'config', 'lancamentos', 'custosFixos', 'vendas', 'sanidade', 'lembretes', 'funcionarios', 'anotacoes', 'ocupacoes', 'ndvi', 'gtas'] as const;
 
 export class BoiForteDB extends Dexie {
   propriedades!: Table<Propriedade, number>;
@@ -205,6 +228,7 @@ export class BoiForteDB extends Dexie {
   anotacoes!: Table<Anotacao, number>;
   ocupacoes!: Table<Ocupacao, number>;
   ndvi!: Table<Ndvi, number>;
+  gtas!: Table<Gta, number>;
   fotosAnotacao!: Table<FotoLocal, string>;
   pendentes!: Table<Pendente, [string, number | string]>;
   sincEstado!: Table<{ chave: string; valor: unknown }, string>;
@@ -277,6 +301,8 @@ export class BoiForteDB extends Dexie {
       ocupacoes: '++id, &gid, piqueteId, [tipo+ocupanteId], entrada',
       ndvi: '++id, &gid, piqueteId, data',
     });
+    // 7 fica para a Cria. 9: rastreabilidade (GTAs).
+    this.version(9).stores({ gtas: '++id, &gid, propriedadeId, loteId, emissao' });
     this.use(middlewarePendentes);
     // Toda gravação passa pela validação, venha de onde vier.
     for (const t of TABELAS) {
@@ -433,8 +459,10 @@ export function pontosDoAnimal(pesagens: Pesagem[], animalId: number): PontoPeso
 }
 
 export async function excluirLote(id: number) {
-  await db.transaction('rw', [db.lotes, db.pesagens, db.animais, db.fornecimentos, db.movimentos, db.lancamentos, db.vendas, db.sanidade, db.ocupacoes], async () => {
+  await db.transaction('rw', [db.lotes, db.pesagens, db.animais, db.fornecimentos, db.movimentos, db.lancamentos, db.vendas, db.sanidade, db.ocupacoes, db.gtas], async () => {
     await db.ocupacoes.where('[tipo+ocupanteId]').equals(['lote', id]).delete();
+    // A GTA é documento oficial: fica guardada, só perde o lote.
+    await db.gtas.where('loteId').equals(id).modify({ loteId: null });
     await db.lancamentos.where('loteId').equals(id).delete();
     await db.vendas.where('loteId').equals(id).delete();
     await db.sanidade.where('loteId').equals(id).delete();
@@ -461,7 +489,8 @@ export async function excluirPiquetes(ids: number[]) {
 }
 
 export async function excluirPropriedade(id: number) {
-  await db.transaction('rw', [db.propriedades, db.modulos, db.piquetes, db.lotes, db.pesagens, db.animais, db.fornecimentos, db.movimentos, db.lancamentos, db.vendas, db.sanidade, db.ocupacoes, db.ndvi], async () => {
+  await db.transaction('rw', [db.propriedades, db.modulos, db.piquetes, db.lotes, db.pesagens, db.animais, db.fornecimentos, db.movimentos, db.lancamentos, db.vendas, db.sanidade, db.ocupacoes, db.ndvi, db.gtas], async () => {
+    await db.gtas.where('propriedadeId').equals(id).delete();
     const mods = await db.modulos.where('propriedadeId').equals(id).toArray();
     for (const m of mods) await excluirPiquetes(await db.piquetes.where('moduloId').equals(m.id!).primaryKeys());
     await db.modulos.where('propriedadeId').equals(id).delete();

@@ -641,8 +641,10 @@ function confere(cond, msg) {
       await p2.getByText('Fêmea — 4º lote').waitFor();
       const loteId = await p2.evaluate(() => new Promise((ok) => { const r = indexedDB.open('boiforte'); r.onsuccess = () => { const t = r.result.transaction('lotes').objectStore('lotes').getAll(); t.onsuccess = () => ok(t.result[0].id); }; }));
       const formulaId = await p2.evaluate(() => new Promise((ok) => { const r = indexedDB.open('boiforte'); r.onsuccess = () => { const t = r.result.transaction('formulas').objectStore('formulas').getAll(); t.onsuccess = () => ok(t.result[0]?.id ?? 'nova'); }; }));
+      const propId = await p2.evaluate(() => new Promise((ok) => { const r = indexedDB.open('boiforte'); r.onsuccess = () => { const t = r.result.transaction('propriedades').objectStore('propriedades').getAll(); t.onsuccess = () => ok(t.result[0].id); }; }));
       const telas = ['/lotes', '/lotes/novo', `/lotes/${loteId}`, `/lotes/${loteId}/editar`, `/lotes/${loteId}/relatorio`, '/pesar', `/pesar/${loteId}`, '/fazenda', '/mais', '/nutricao',
-        `/nutricao/formula/${formulaId}`, '/nutricao/formula/nova', '/nutricao/ingrediente/novo', '/estoque', '/trato', '/financeiro', '/sanidade', '/simular', '/relatorios', '/nuvem', '/funcionarios', '/funcionarios/novo', '/anotacoes', '/anotacoes/nova', '/pasto', '/pasto/mover'];
+        `/nutricao/formula/${formulaId}`, '/nutricao/formula/nova', '/nutricao/ingrediente/novo', '/estoque', '/trato', '/financeiro', '/sanidade', '/simular', '/relatorios', '/nuvem', '/funcionarios', '/funcionarios/novo', '/anotacoes', '/anotacoes/nova', '/pasto', '/pasto/mover',
+        `/fazenda/${propId}/documentos`, '/rastreabilidade', '/rastreabilidade/gta/nova'];
       const semVoltar = [], semMic = [];
       for (const t of telas) {
         await p2.goto(URL + '#' + t);
@@ -730,6 +732,57 @@ function confere(cond, msg) {
       const loteSel = await p2.locator('select[name=lote]').evaluate((s) => s.options[s.selectedIndex].text);
       confere(/fêmea/i.test(loteSel), `falar o nome escolhe na lista (${loteSel})`);
       await ctx2.close();
+    }
+
+    console.log('21. Rastreabilidade: GPS da sede, contorno do CAR, arquivo da UE e GTA');
+    {
+      const ctx3 = await browser.newContext({ ...devices['Pixel 7'], locale: 'pt-BR', geolocation: { latitude: -20.4455, longitude: -54.6152, accuracy: 6 }, permissions: ['geolocation'] });
+      await ctx3.route(/supabase\.co/, (r) => r.abort());
+      const p3 = await ctx3.newPage();
+      p3.on('pageerror', (e) => erros.push(e.message));
+      p3.on('dialog', (d) => d.accept());
+      await p3.goto(URL);
+      if (nuvemNoBuild) { await p3.evaluate((v) => localStorage.setItem('boiforte-sessao', v), sessaoFalsa('22222222-2222-4222-8222-222222222222', 'rastro@exemplo.com')); await p3.reload(); }
+      await p3.getByRole('link', { name: 'Mais' }).click();
+      await p3.getByRole('button', { name: 'Carregar exemplo' }).click();
+      await p3.getByText('Fêmea — 4º lote').waitFor();
+      await p3.goto(URL + '#/rastreabilidade');
+      await p3.getByTestId('notaRastro').waitFor();
+      const notaAntes = Number((await p3.getByTestId('notaRastro').innerText()).match(/(\d+) de 100/)[1]);
+      confere((await p3.getByTestId('rastro-sede').getAttribute('data-nivel')) === 'ruim', `sem localização a nota é baixa (${notaAntes})`);
+      await p3.getByTestId('rastro-sede').click();
+      await p3.getByRole('button', { name: /Estou na sede/ }).click();
+      await p3.getByTestId('sede').waitFor();
+      confere(/20,445500° S, 54,615200° O/.test(await p3.getByTestId('sede').innerText()), 'GPS marca a sede');
+      const kml = '<kml><Placemark><Polygon><outerBoundaryIs><LinearRing><coordinates>-54.62,-20.45,0 -54.6104,-20.45,0 -54.6104,-20.441,0 -54.62,-20.441,0 -54.62,-20.45,0</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark></kml>';
+      await p3.getByTestId('arquivoContorno').setInputFiles({ name: 'car.kml', mimeType: 'application/vnd.google-earth.kml+xml', buffer: Buffer.from(kml) });
+      await p3.getByTestId('contorno').waitFor();
+      confere(/(99|100|101),\d ha · 4 pontos/.test(await p3.getByTestId('contorno').innerText()), 'contorno do CAR (KML) com área calculada');
+      await p3.locator('input[name=car]').fill('MS-5002704-0123456789ABCDEF0123456789ABCDEF');
+      await p3.locator('select[name=carSituacao]').selectOption('ativo');
+      await p3.locator('input[name=cib]').fill('12345678');
+      await p3.locator('input[name=itrAno]').fill(String(new Date().getMonth() >= 9 ? new Date().getFullYear() : new Date().getFullYear() - 1));
+      await p3.getByRole('checkbox').check();
+      await p3.getByRole('button', { name: 'Salvar documentos' }).click();
+      await p3.getByText('Documentos salvos.').waitFor();
+      await p3.screenshot({ path: path.join(FOTOS, '24-documentos-localizacao.png'), fullPage: true });
+      const [baixa] = await Promise.all([p3.waitForEvent('download'), p3.getByRole('button', { name: /arquivo para a União Europeia/ }).click()]);
+      const gj = JSON.parse(require('node:fs').readFileSync(await baixa.path(), 'utf8'));
+      confere(gj.features[0].geometry.type === 'Polygon' && gj.features[0].geometry.coordinates[0].length === 5 && gj.features[0].properties.ProducerCountry === 'BR', 'arquivo GeoJSON da União Europeia com o polígono');
+      await p3.goto(URL + '#/rastreabilidade/gta/nova');
+      await p3.locator('input[name=gtaNumero]').fill('654321');
+      await p3.locator('input[name=gtaMachos]').fill('30');
+      await p3.locator('select[name=gtaLote]').selectOption({ index: 1 });
+      await p3.locator('input[name=gtaOutroNome]').fill('Fazenda Boa Vista');
+      await p3.getByRole('button', { name: 'Salvar GTA' }).click();
+      await p3.getByText(/^GTA .*654321$/).waitFor().catch(async (e) => { await p3.screenshot({ path: path.join(FOTOS, 'erro-gta.png'), fullPage: true }); throw e; });
+      const notaDepois = Number((await p3.getByTestId('notaRastro').innerText()).match(/(\d+) de 100/)[1]);
+      confere(notaDepois > notaAntes && (await p3.getByTestId('rastro-car').getAttribute('data-nivel')) === 'bom', `nota sobe com os documentos (${notaAntes} → ${notaDepois})`);
+      await p3.screenshot({ path: path.join(FOTOS, '25-rastreabilidade.png'), fullPage: true });
+      await p3.locator('select[name=loteFicha]').selectOption({ index: 1 });
+      const [pdf] = await Promise.all([p3.waitForEvent('download'), p3.getByRole('button', { name: 'PDF da ficha' }).click()]);
+      confere(/^rastreabilidade-.*\.pdf$/.test(pdf.suggestedFilename()), 'ficha do lote em PDF');
+      await ctx3.close();
     }
 
     confere(erros.length === 0, 'nenhum erro de JavaScript' + (erros.length ? ': ' + erros.join(' | ') : ''));
