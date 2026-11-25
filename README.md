@@ -49,6 +49,7 @@ Aplicativo de gestão de **cria, recria e engorda** (a pasto, TIP e confinamento
 ## Pasto (módulos e piquetes)
 
 - O **módulo** é o conjunto de piquetes (rotacionado ou contínuo, com dias de ocupação, de descanso e capacidade de suporte em UA/ha); o **piquete** é a variável de decisão.
+- **Área do módulo** (ha, obrigatória no cadastro): a soma das áreas dos piquetes não pode passar dela. O app mostra quanto ainda cabe, avisa na hora ao digitar e o servidor confere de novo. A lotação (UA/ha) do módulo usa essa área; módulo antigo, sem área, mostra o aviso "Falta a área do módulo" e usa a soma dos piquetes.
 - **Um lote ou grupo por piquete**: o app só oferece piquetes vazios e o servidor recusa o segundo ocupante.
 - **Mudar de piquete**: altura do capim, nota (com voz), fotos e áudio na saída e na entrada. O histórico fica na ficha do piquete.
 - **Indicadores**: UA/ha do piquete e do módulo, pressão de pastejo e oferta de forragem na entrada (massa estimada pela altura), dias ocupado e de descanso, ocupação ideal para fechar o descanso, próximo piquete sugerido e aviso de lotação alta (também usado pela Cria).

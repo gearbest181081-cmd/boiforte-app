@@ -96,6 +96,20 @@ describe('área do módulo no servidor', () => {
     expect((await um(beto, fb, piquete(11, 2, { areaHa: 0.5 }))).erro).toMatch(/^Área do módulo: o módulo Retiro 2 tem 5 ha/);
   });
 
+  it('dado que já passou da área (gravado antes da trava): renomear e diminuir passam, crescer não', async () => {
+    await s.pg.exec('alter table public.registros disable trigger registros_area_modulo');
+    const r = await enviar(beto, fb, [modulo(5, { areaHa: 10 }), piquete(50, 5, { areaHa: 8 }), piquete(51, 5, { areaHa: 8 })]);
+    await s.pg.exec('alter table public.registros enable trigger registros_area_modulo');
+    expect(r.every((x) => x.ok)).toBe(true);
+    // o app grava com insert ... on conflict: a mudança pequena não pode ser barrada pela soma que já passou
+    expect((await um(beto, fb, piquete(50, 5, { areaHa: 8, nome: 'Novo nome' }))).ok).toBe(true);
+    expect((await um(beto, fb, piquete(51, 5, { areaHa: 9 }))).erro).toMatch(/no máximo 2 ha\.$/);
+    expect((await um(beto, fb, piquete(51, 5, { areaHa: 7 }))).ok).toBe(true);
+    expect((await um(beto, fb, modulo(5, { areaHa: 10, diasDescanso: 30 }))).ok).toBe(true); // mesma área: só o manejo
+    expect((await um(beto, fb, modulo(5, { areaHa: 12 }))).ok).toBe(true); // crescer sempre pode
+    expect((await um(beto, fb, modulo(5, { areaHa: 11 }))).erro).toMatch(/já somam 15 ha/);
+  });
+
   it('a migração só acrescenta a área ao módulo e pode rodar de novo', async () => {
     // Simula a ordem trocada: uma regra nova de outra migração (ex.: Cria) e a área do módulo apagada por um bloco antigo.
     await s.pg.query(`update public.bf_esquemas set regras = regras || '{"grupoId":{"t":"id","obrigatorio":false}}'::jsonb where tabela = 'animais'`);

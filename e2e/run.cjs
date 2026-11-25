@@ -90,18 +90,43 @@ function confere(cond, msg) {
     confere(true, 'tela de boas-vindas aparece');
     await foto('01-boas-vindas');
 
-    console.log('2. Cadastrar fazenda, módulo e piquete');
+    console.log('2. Cadastrar fazenda, módulo (com a área) e piquete');
     await page.getByRole('link', { name: /cadastrar minha fazenda/i }).click();
     await page.locator('input[name=fazendaNome]').fill('Fazenda Boa Vista');
     await page.getByRole('button', { name: 'Salvar fazenda' }).click();
     await page.getByRole('heading', { name: 'Fazenda Boa Vista' }).waitFor();
-    await page.getByLabel('Nome do novo módulo', { exact: true }).fill('Retiro de cima');
     await page.getByRole('button', { name: '+ Módulo' }).click();
+    await page.locator('input[name=moduloNome]').fill('Retiro de cima');
+    await page.getByRole('button', { name: 'Salvar módulo' }).click();
+    await page.locator('.toast', { hasText: 'Informe a área do módulo em hectares.' }).waitFor();
+    confere(true, 'módulo sem a área não salva');
+    await page.locator('.toast').click({ timeout: 1000 }).catch(() => {}); // fecha o aviso (some sozinho em 5 s)
+    await page.locator('input[name=moduloArea]').fill('30');
+    await foto('02a-novo-modulo');
+    await page.getByRole('button', { name: 'Salvar módulo' }).click();
+    await page.getByTestId('areaModulo').waitFor();
+    confere((await page.getByTestId('areaModulo').innerText()).includes('Área: 30 ha · piquetes: 0 ha · sobram 30 ha'), 'módulo mostra a área e quanto sobra');
     await page.getByRole('button', { name: '+ Piquete' }).click();
     await page.getByLabel('Nome do piquete', { exact: true }).fill('Piquete 3');
-    await page.getByLabel('Área', { exact: true }).fill('12');
+    confere(await page.getByText('Cabe até 30 ha neste módulo.').isVisible(), 'campo de área do piquete diz quanto cabe');
+    await page.locator('input[name=piqueteArea]').fill('35');
+    await page.getByTestId('passouAreaModulo').waitFor();
+    confere((await page.getByTestId('passouAreaModulo').innerText()).includes('Este piquete pode ter no máximo 30 ha.'), 'avisa na hora que 35 ha passa da área do módulo');
     await page.getByRole('button', { name: 'Salvar piquete' }).click();
-    await page.getByText('Piquete 3').waitFor();
+    await page.locator('.toast.erro', { hasText: 'O módulo Retiro de cima tem 30 ha. Este piquete pode ter no máximo 30 ha.' }).waitFor();
+    confere(!(await page.getByRole('link', { name: /Piquete 3/ }).count()), 'piquete maior que o módulo não é salvo');
+    await foto('02b-piquete-passa-da-area');
+    await page.locator('.toast').click({ timeout: 1000 }).catch(() => {}); // fecha o aviso (some sozinho em 5 s)
+    await page.locator('input[name=piqueteArea]').fill('12');
+    confere(!(await page.getByTestId('passouAreaModulo').count()), '12 ha cabe: o aviso some');
+    await page.getByRole('button', { name: 'Salvar piquete' }).click();
+    await page.getByRole('link', { name: /Piquete 3/ }).waitFor();
+    confere((await page.getByTestId('areaModulo').innerText()).includes('piquetes: 12 ha · sobram 18 ha'), 'depois de salvar, sobram 18 ha no módulo');
+    await page.getByRole('button', { name: 'Manejo do módulo' }).click();
+    await page.locator('input[name=modArea]').fill('10');
+    await page.getByTestId('moduloMenorQuePiquetes').waitFor();
+    confere(true, 'área do módulo menor que os piquetes avisa na hora');
+    await page.getByRole('button', { name: 'Cancelar' }).click();
     confere(true, 'fazenda, módulo e piquete salvos');
     await foto('02-fazenda');
 
@@ -577,6 +602,7 @@ function confere(cond, msg) {
     const pastoTxt = await page.getByTestId('moduloPasto').filter({ hasText: 'Retiro 1' }).innerText();
     confere(/UA\/ha/.test(pastoTxt) && /Com gado/.test(pastoTxt) && /Piquete 3/.test(pastoTxt), 'Pasto mostra lotação em UA/ha e a situação dos piquetes');
     confere(/Próximo piquete: Piquete 3/.test(pastoTxt), 'sugere o piquete que descansou');
+    confere(/Área: 50 ha · piquetes: 50 ha · todo dividido/.test(pastoTxt), 'Pasto mostra a área do módulo e quanto os piquetes usam');
     await foto('23-pasto');
     await page.getByTestId('moverGado').click();
     await page.locator('select[name=moverQuem]').selectOption({ label: 'Lote Macho — 1º lote' });

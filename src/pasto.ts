@@ -329,7 +329,11 @@ export async function atualizarModulo(id: number, mud: MudancaModulo): Promise<v
     if (!m) throw new ErroValidacao('Módulo não encontrado.');
     if ('areaHa' in mud) {
       if (mud.areaHa == null) { if (m.areaHa != null) throw new ErroValidacao('Informe a área do módulo em hectares.'); }
-      else conferirAreaModulo(mud.nome ?? m.nome, mud.areaHa, await db.piquetes.where('moduloId').equals(id).toArray());
+      // Igual ao servidor: só confere quando a área é informada pela primeira vez ou diminui. Manter a área
+      // (mudando só o manejo) ou aumentar sempre pode, mesmo que os piquetes já passem dela.
+      else if (m.areaHa == null || mud.areaHa < m.areaHa) {
+        conferirAreaModulo(mud.nome ?? m.nome, mud.areaHa, await db.piquetes.where('moduloId').equals(id).toArray());
+      }
     }
     await db.modulos.update(id, mud);
   });

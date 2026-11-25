@@ -280,6 +280,12 @@ describe('área do módulo × piquetes', () => {
       await atualizarPiquete(p1, { nome: 'P1 renomeado', capim: 'Mombaça' });
       await atualizarPiquete(p1, { areaHa: 5 });
       await expect(atualizarPiquete(p1, { areaHa: 6 })).rejects.toThrow('Este piquete pode ter no máximo 2 ha.');
+      // no módulo: mudar só o manejo ou aumentar a área pode (13 de 12 ainda passa); diminuir não
+      await atualizarModulo(mod, { areaHa: 10, diasDescanso: 30 });
+      await atualizarModulo(mod, { areaHa: 12 });
+      await expect(atualizarModulo(mod, { areaHa: 11 })).rejects.toThrow('já somam 13 ha');
+      expect(usoDaArea(await db.modulos.get(mod), await db.piquetes.where('moduloId').equals(mod).toArray()))
+        .toEqual({ areaModulo: 12, usada: 13, livre: 0 });
     });
   });
 });

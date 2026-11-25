@@ -5,6 +5,7 @@ import { BoiForteDB, usarBanco, db, TABELAS, registrarPesagemIndividual, registr
 import { carregarExemplo } from '../exemplo';
 import { subirServidor, type Servidor } from './servidorTeste';
 import { ligarFazenda, sincronizar, temDadosLocais, type Transporte, type FazendaNuvem } from './sinc';
+import { atualizarModulo, atualizarPiquete, novoPiquete, usoDaArea } from '../pasto';
 
 let s: Servidor;
 const transporte = (uid: string): Transporte => ({
@@ -141,5 +142,44 @@ describe('sincronização entre celulares', () => {
     await sincronizar(transporte(ana));
     expect(await db.pendentes.count()).toBe(0);
     expect(await temDadosLocais()).toBe(true);
+  }, 30000);
+
+  it('área do módulo: diminuir o piquete e depois o módulo sobe sem recusa', async () => {
+    usarBanco(A);
+    const mod = (await db.modulos.toArray()).find((m) => m.nome === 'Retiro 1')!; // 50 ha; piquetes 15 + 20 + 15
+    const pq = (await db.piquetes.where('moduloId').equals(mod.id!).toArray()).find((p) => p.areaHa === 20)!;
+    await atualizarPiquete(pq.id!, { areaHa: 10 });
+    await atualizarModulo(mod.id!, { areaHa: 40 });
+    // o módulo sobe antes do piquete e o servidor recusa (ainda soma 50); depois que o piquete subiu, vai de novo
+    const r = await sincronizar(transporte(ana));
+    expect(r.erros).toEqual([]);
+    expect(await db.pendentes.count()).toBe(0);
+    usarBanco(B);
+    await sincronizar(transporte(gil));
+    expect((await db.modulos.where('gid').equals(mod.gid!).first())?.areaHa).toBe(40);
+  }, 30000);
+
+  it('dois celulares sem internet no mesmo módulo: o piquete que não coube volta recusado e dá para corrigir', async () => {
+    usarBanco(A);
+    const mod = (await db.modulos.toArray()).find((m) => m.nome === 'Retiro 1')!;
+    await atualizarModulo(mod.id!, { areaHa: 50 }); // piquetes: 15 + 10 + 15 = 40
+    await sincronizar(transporte(ana));
+    usarBanco(B);
+    await sincronizar(transporte(gil));
+    const modB = (await db.modulos.where('gid').equals(mod.gid!).first())!;
+    await novoPiquete({ moduloId: modB.id!, nome: 'Novo do Gil', areaHa: 8 }); // cabia no celular do Gil
+    usarBanco(A);
+    await novoPiquete({ moduloId: mod.id!, nome: 'Novo da Ana', areaHa: 6 });
+    expect((await sincronizar(transporte(ana))).erros).toEqual([]); // a Ana subiu primeiro: 46 de 50
+    usarBanco(B);
+    const r = await sincronizar(transporte(gil));
+    expect(r.erros).toEqual([{ tabela: 'piquetes', erro: 'Área do módulo: o módulo Retiro 1 tem 50 ha e os outros piquetes já usam 46 ha. O piquete Novo do Gil pode ter no máximo 4 ha.' }]);
+    // no celular do Gil chegou o piquete da Ana: a soma passa e a tela avisa
+    expect(usoDaArea(modB, await db.piquetes.where('moduloId').equals(modB.id!).toArray())).toMatchObject({ areaModulo: 50, usada: 54 });
+    // diminuir sempre pode no celular; aí sobe
+    const novo = (await db.piquetes.toArray()).find((p) => p.nome === 'Novo do Gil')!;
+    await atualizarPiquete(novo.id!, { areaHa: 4 });
+    expect((await sincronizar(transporte(gil))).erros).toEqual([]);
+    expect(await db.pendentes.count()).toBe(0);
   }, 30000);
 });

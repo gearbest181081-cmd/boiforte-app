@@ -175,7 +175,7 @@ function FormModulo({ propriedadeId, fechar }: { propriedadeId: number; fechar: 
   };
   return (
     <div data-testid="novoModulo">
-      <b>Novo módulo</b>
+      <p style={{ margin: '4px 0 8px' }}><b>Novo módulo</b></p>
       <CampoTexto rotulo="Nome do módulo" valor={nome} aoMudar={setNome} nome="moduloNome" placeholder="Ex.: Retiro de cima" />
       <CampoNumero rotulo="Área do módulo" valor={area} aoMudar={setArea} unidade="ha" nome="moduloArea"
         dica="A área total do módulo. A soma das áreas dos piquetes não vai poder passar disso." />
@@ -210,12 +210,18 @@ function AjustesModulo({ m, piquetes, fechar }: { m: Modulo; piquetes: Piquete[]
     <div style={{ marginTop: 10 }}>
       <CampoNumero rotulo="Área do módulo" valor={area} aoMudar={setArea} unidade="ha" nome="modArea"
         dica={usada > 0 ? `Os piquetes somam ${fmtNum(usada, 2)} ha: a área do módulo não pode ser menor que isso.` : 'A soma das áreas dos piquetes não vai poder passar disso.'} />
-      {a != null && a > 0 && usada > a + FOLGA_AREA_HA && (
+      {a != null && a > 0 && usada > a + FOLGA_AREA_HA && (m.areaHa == null || a < m.areaHa ? (
         <div className="alerta ruim" role="status" data-testid="moduloMenorQuePiquetes">
           <span className="ic">⚠️</span>
           <div><b>Menor que os piquetes</b>Os piquetes já somam {fmtNum(usada, 2)} ha. Aumente a área do módulo ou diminua a dos piquetes antes.</div>
         </div>
-      )}
+      ) : (
+        // os piquetes já passavam da área (ex.: dois celulares sem internet): manter ou aumentar a área pode
+        <div className="alerta atencao" role="status" data-testid="moduloMenorQuePiquetes">
+          <span className="ic">🔔</span>
+          <div><b>Os piquetes ainda passam da área</b>Eles somam {fmtNum(usada, 2)} ha. Pode salvar, mas depois diminua a área de algum piquete ou aumente mais a do módulo.</div>
+        </div>
+      ))}
       <Opcoes valor={sistema} aoMudar={setSistema} opcoes={[{ valor: 'rotacionado', rotulo: 'Rotacionado', dica: 'o gado roda nos piquetes' }, { valor: 'continuo', rotulo: 'Contínuo', dica: 'fica no mesmo pasto' }]} />
       {sistema === 'rotacionado' && (
         <div className="grade">
