@@ -7,6 +7,7 @@ import {
   caminhoFoto, contarAnotacoes, ErroFoto, excluirAnotacao, lerFoto, limparFotosAntigas, marcarFeita, novaFotoId, salvarAnotacao,
   sincronizarFotos, type ArmazemFotos,
 } from './anotacoes';
+import { restaurar } from './lixeira';
 import { ligarFazenda, sincronizar, type Transporte } from './nuvem/sinc';
 import { subirServidor, type Servidor } from './nuvem/servidorTeste';
 
@@ -91,7 +92,7 @@ describe('anotações no celular', () => {
     await expect(salvarAnotacao({ texto: 'x' }, ['../x'], [])).rejects.toThrow('Foto inválida');
   });
 
-  it('tirar foto da anotação: some na hora se nunca subiu; se já subiu, fica marcada para apagar da nuvem', async () => {
+  it('tirar foto da anotação: some na hora se nunca subiu; se já subiu, fica marcada para apagar da nuvem. Apagar a anotação guarda as fotos', async () => {
     const f1 = novaFotoId(), f2 = novaFotoId();
     const id = await salvarAnotacao({ texto: 'Bebedouro' }, [f1, f2], [{ id: f1, dados: bytes(1) }, { id: f2, dados: bytes(2) }]);
     await db.fotosAnotacao.update(f2, { estado: 'ok' }); // f2 já foi para a nuvem
@@ -101,9 +102,12 @@ describe('anotações no celular', () => {
     expect((await db.fotosAnotacao.get(f2))?.dados).toBeUndefined();
     const f3 = novaFotoId();
     await salvarAnotacao({ texto: 'Bebedouro vazando' }, [f3], [{ id: f3, dados: bytes(3) }], id);
-    await excluirAnotacao(id);
+    const pacote = await excluirAnotacao(id);
     expect(await db.anotacoes.count()).toBe(0);
-    expect(await db.fotosAnotacao.get(f3)).toBeUndefined();
+    // a anotação foi para a lixeira: a foto fica (no celular e na fila para subir) e volta junto
+    expect(await db.fotosAnotacao.get(f3)).toMatchObject({ estado: 'enviar' });
+    await restaurar(pacote!);
+    expect(await db.anotacoes.get(id)).toMatchObject({ texto: 'Bebedouro vazando', fotos: [{ foto: f3 }] });
   });
 
   it('fila das fotos: envia, apaga e baixa as que faltam; sem sinal para e tenta depois', async () => {
@@ -123,13 +127,17 @@ describe('anotações no celular', () => {
     await db.anotacoes.add({ texto: 'B', data: '2026-11-23', feita: false, fotos: [{ foto: f3 }], criadoEm: 0 });
     expect(await sincronizarFotos(a, F, true)).toMatchObject({ baixadas: 1 });
     expect(new Uint8Array((await lerFoto(f3))!)).toEqual(new Uint8Array(bytes(3)));
-    // apagar: some da nuvem e do celular; sem permissão também sai da fila
+    // tirar as fotos da anotação: somem da nuvem e do celular; sem permissão também sai da fila
     const id = (await db.anotacoes.toArray()).find((x) => x.texto === 'A');
     a.proibido.add(caminhoFoto(F, f2));
-    await excluirAnotacao(id!.id!);
+    await salvarAnotacao({ texto: 'A' }, [], [], id!.id!);
     expect(await sincronizarFotos(a, F, true)).toMatchObject({ apagadas: 2 });
     expect(a.arquivos.has(caminhoFoto(F, f1))).toBe(false);
     expect(await db.fotosAnotacao.count()).toBe(1);
+    // apagar a anotação (lixeira) não apaga a foto da nuvem
+    await excluirAnotacao((await db.anotacoes.toArray()).find((x) => x.texto === 'B')!.id!);
+    expect(await sincronizarFotos(a, F, true)).toMatchObject({ apagadas: 0 });
+    expect(a.arquivos.has(caminhoFoto(F, f3))).toBe(true);
   });
 
   it('consultor não envia nem apaga, só baixa', async () => {

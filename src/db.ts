@@ -187,10 +187,18 @@ export interface FotoLocal { id: string; dados?: ArrayBuffer; estado: 'enviar' |
  * pacote: o que foi apagado junto num toque (ex.: o lote com as pesagens e as vacinas).
  * dados: o registro como vai para a nuvem (referências pelo gid), para voltar certo em qualquer celular da equipe.
  * idLocal: o id que ele tinha neste celular (volta com o mesmo, se estiver livre). por: quem apagou (vem da nuvem).
- * tabela "*" (COPIA_INTEIRA): cópia inteira do celular, guardada antes de "Apagar todos os dados" ou de restaurar uma cópia.
+ * tabela "*" (COPIA_INTEIRA): cópia inteira do celular, guardada antes de "Apagar todos os dados", de restaurar uma cópia
+ * por cima ou de entrar numa fazenda da nuvem. Aí "dados" é só o resumo (SobreCopia); o conteúdo fica na tabela "copias".
  */
 export interface Apagado { tabela: string; gid: string; pacote: string; dados: Record<string, unknown>; idLocal?: number; em: number; por?: string }
 export const COPIA_INTEIRA = '*';
+/** Por que a cópia inteira foi guardada (aparece no título dela na lixeira). */
+export type MotivoCopia = 'apagar_tudo' | 'restaurar_arquivo' | 'entrar_fazenda' | 'voltar_copia';
+export interface SobreCopia { motivo: MotivoCopia; fazenda?: string; resumo: Record<string, number> }
+/** Conteúdo da cópia inteira: os dados, as fotos guardadas no celular e o que já estava na lixeira. */
+export interface CopiaInteira { gid: string; backup: Backup; fotos: FotoLocal[]; lixeira: Apagado[] }
+/** Quantas cópias inteiras ficam guardadas no celular (as mais novas). Cada uma pode ser grande, por causa das fotos. */
+export const MAX_COPIAS = 3;
 
 export const TABELAS = ['propriedades', 'modulos', 'piquetes', 'lotes', 'animais', 'pesagens', 'ingredientes', 'formulas', 'movimentos', 'batidas', 'fornecimentos', 'config', 'lancamentos', 'custosFixos', 'vendas', 'sanidade', 'lembretes', 'funcionarios', 'anotacoes', 'ocupacoes', 'ndvi'] as const;
 
@@ -218,6 +226,7 @@ export class BoiForteDB extends Dexie {
   ndvi!: Table<Ndvi, number>;
   fotosAnotacao!: Table<FotoLocal, string>;
   lixeira!: Table<Apagado, [string, string]>;
+  copias!: Table<CopiaInteira, string>;
   pendentes!: Table<Pendente, [string, number | string]>;
   sincEstado!: Table<{ chave: string; valor: unknown }, string>;
   sincEspera!: Table<{ tabela: string; gid: string; linha: unknown }, [string, string]>;
@@ -290,7 +299,7 @@ export class BoiForteDB extends Dexie {
       ndvi: '++id, &gid, piqueteId, data',
     });
     // Lixeira: o que foi apagado fica guardado para poder voltar (7 = Cria, 9 = Rastreabilidade).
-    this.version(10).stores({ lixeira: '[tabela+gid], pacote, em' });
+    this.version(10).stores({ lixeira: '[tabela+gid], pacote, tabela, em', copias: 'gid' });
     this.use(middlewarePendentes);
     // Toda gravação passa pela validação, venha de onde vier.
     for (const t of TABELAS) {
@@ -580,6 +589,31 @@ export async function importarBackup(b: unknown): Promise<void> {
       const linhas = bk.dados[t];
       if (Array.isArray(linhas) && linhas.length) await db.table(t).bulkAdd(linhas.map((l) => (l && typeof l === 'object' ? { ...l } : l)));
     }
+  });
+}
+
+// ---------- Cópia inteira na lixeira ----------
+
+/**
+ * Guarda na lixeira uma cópia inteira do celular (dados, fotos e o que já estava na lixeira), antes de apagar tudo,
+ * de restaurar uma cópia por cima ou de entrar numa fazenda da nuvem. Fica só neste celular (as MAX_COPIAS mais novas)
+ * e volta com voltarCopiaInteira (src/lixeira.ts). Devolve null se o celular estava vazio.
+ */
+export async function guardarCopiaInteira(motivo: MotivoCopia, fazenda?: string): Promise<string | null> {
+  return db.transaction('rw', [...TABELAS.map((t) => db.table(t)), db.fotosAnotacao, db.lixeira, db.copias], async () => {
+    const backup = await exportarBackup();
+    const lixeira = await db.lixeira.where('tabela').notEqual(COPIA_INTEIRA).toArray();
+    const resumo: Record<string, number> = {};
+    for (const t of TABELAS) if (t !== 'config' && t !== 'ndvi' && backup.dados[t].length) resumo[t] = backup.dados[t].length;
+    if (!Object.keys(resumo).length && !lixeira.length) return null;
+    const fotos = await db.fotosAnotacao.filter((f) => !!f.dados).toArray();
+    const gid = novoGid();
+    const sobre: SobreCopia = { motivo, resumo, ...(fazenda ? { fazenda } : {}) };
+    await db.copias.put({ gid, backup, fotos, lixeira });
+    await db.lixeira.put({ tabela: COPIA_INTEIRA, gid, pacote: gid, dados: sobre as unknown as Record<string, unknown>, em: Date.now() });
+    const velhas = (await db.lixeira.where('tabela').equals(COPIA_INTEIRA).toArray()).sort((a, b) => b.em - a.em).slice(MAX_COPIAS);
+    for (const v of velhas) { await db.lixeira.delete([v.tabela, v.gid]); await db.copias.delete(v.gid); }
+    return gid;
   });
 }
 

@@ -7,6 +7,7 @@ import {
 import { areaHa, aceitarPonto, lerContorno, limparContorno, paraGeoJson } from './pastoGeo';
 import { BoiForteDB, db, usarBanco, type Ocupacao, type Piquete } from './db';
 import { somaDias } from './calc';
+import { restaurar } from './lixeira';
 
 describe('contas do pasto', () => {
   it('UA e lotação do módulo (área do módulo inteiro)', () => {
@@ -171,8 +172,12 @@ describe('entrada e saída de piquete (celular)', () => {
     const fechada = (await db.ocupacoes.where('piqueteId').equals(pq2).first())!;
     expect(fechada).toMatchObject({ saida: '2026-11-10', alturaSaida: 40, notaSaida: 'capim bem pastejado', midiasSaida: [{ arq: audio.id, ext: 'webm' }] });
     expect(await db.fotosAnotacao.get(audio.id)).toMatchObject({ estado: 'enviar', ext: 'webm' });
-    await excluirOcupacao(fechada.id!);
-    expect(await db.fotosAnotacao.get(audio.id)).toBeUndefined();
+    // apagar a entrada manda para a lixeira: o áudio fica guardado e volta junto
+    const pacote = await excluirOcupacao(fechada.id!);
+    expect(await db.ocupacoes.get(fechada.id!)).toBeUndefined();
+    expect(await db.fotosAnotacao.get(audio.id)).toMatchObject({ estado: 'enviar', ext: 'webm' });
+    await restaurar(pacote!);
+    expect(await db.ocupacoes.get(fechada.id!)).toMatchObject({ saida: '2026-11-10', midiasSaida: [{ arq: audio.id, ext: 'webm' }] });
   });
 
   it('resumo do pasto com lotação e avisos', async () => {

@@ -2,7 +2,7 @@
 // com foto e o lugar (módulo e piquete). Tudo é gravado no celular primeiro e funciona sem sinal.
 // O registro da anotação vai para a nuvem pela sincronização normal; as fotos vão para o Storage do
 // Supabase, numa pasta por fazenda ("<fazenda>/<foto>.jpg"), e só quem é da fazenda abre (regras no servidor).
-import { db, novoGid, type Anotacao, type CategoriaAnotacao, type FotoLocal } from './db';
+import { db, naLixeira, novoGid, type Anotacao, type CategoriaAnotacao, type FotoLocal } from './db';
 import { ErroValidacao, MAX_FOTOS_ANOTACAO, RE_GID } from './validar';
 import { hojeISO } from './calc';
 
@@ -86,13 +86,9 @@ export async function marcarFeita(id: number, feita: boolean, quem?: string) {
   await db.anotacoes.update(id, feita ? { feita: true, feitaEm: hojeISO(), feitaPor: quem || undefined } : { feita: false, feitaEm: undefined, feitaPor: undefined });
 }
 
+/** Apaga a anotação mandando para a lixeira. As fotos ficam guardadas (no celular e na nuvem) para ela poder voltar. */
 export async function excluirAnotacao(id: number) {
-  await db.transaction('rw', db.anotacoes, db.fotosAnotacao, async () => {
-    const a = await db.anotacoes.get(id);
-    if (!a) return;
-    await db.anotacoes.delete(id);
-    await marcarParaApagar((a.fotos ?? []).map((x) => x.foto), Date.now());
-  });
+  return naLixeira(() => db.anotacoes.delete(id));
 }
 
 /** Foto que nunca subiu some na hora; a que já está na nuvem fica marcada para apagar lá. */
