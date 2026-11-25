@@ -44,6 +44,19 @@ export function anel(contorno: unknown): number[][] | null {
   return pts;
 }
 
+/**
+ * Quantos pixels de ~10 m cabem dentro do contorno (na grade de 0,0001° do pedido).
+ * A API conta como "sem dado" também os pixels do retângulo que ficam fora do piquete; por isso a nuvem é medida
+ * contra a área do piquete e não contra o total de pixels.
+ */
+export function pixelsDoPoligono(a: number[][]): number {
+  const lat0 = a.reduce((s, p) => s + p[1], 0) / a.length;
+  const kx = 111320 * Math.cos((lat0 * Math.PI) / 180), ky = 110574;
+  let area = 0;
+  for (let i = 0; i < a.length - 1; i++) area += a[i][0] * kx * a[i + 1][1] * ky - a[i + 1][0] * kx * a[i][1] * ky;
+  return Math.abs(area / 2) / ((0.0001 * kx) * (0.0001 * ky));
+}
+
 /** Corpo do pedido à Statistical API para um piquete. */
 export function pedidoEstatistica(contorno: unknown, ultima: string | null, hoje: string) {
   const a = anel(contorno);
@@ -67,7 +80,7 @@ export function pedidoEstatistica(contorno: unknown, ultima: string | null, hoje
 const n3 = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >= -1 && v <= 1 ? Math.round(v * 1000) / 1000 : undefined);
 
 /** Resposta da Statistical API → leituras. Intervalo sem pixel bom (tudo nuvem) fica de fora. */
-export function lerResposta(r: unknown): Leitura[] {
+export function lerResposta(r: unknown, pixels?: number): Leitura[] {
   const dados = (r as { data?: unknown[] })?.data;
   if (!Array.isArray(dados)) return [];
   const out: Leitura[] = [];
@@ -80,7 +93,51 @@ export function lerResposta(r: unknown): Leitura[] {
     const media = n3(st.mean);
     const total = Number(st.sampleCount), sem = Number(st.noDataCount);
     if (media === undefined || !(total > 0) || !(sem >= 0) || sem >= total) continue;
-    out.push({ data, ndvi: media, min: n3(st.min), max: n3(st.max), nuvemPct: Math.round((sem / total) * 1000) / 10 });
+    const fora = pixels && pixels > 0 ? Math.max(0, Math.min(1, 1 - (total - sem) / pixels)) : sem / total;
+    out.push({ data, ndvi: media, min: n3(st.min), max: n3(st.max), nuvemPct: Math.round(fora * 1000) / 10 });
   }
   return out;
+}
+
+// ---------------------------------------------------------------- foto do satélite (Process API)
+
+export const CDSE_IMAGEM = 'https://sh.dataspace.copernicus.eu/api/v1/process';
+export type TipoFoto = 'cor' | 'verde';
+
+/** Foto como o olho vê (cores reais, um pouco clareada). Fora do piquete fica transparente. */
+export const EVAL_COR = `//VERSION=3
+function setup() { return { input: [{ bands: ["B02", "B03", "B04", "dataMask"] }], output: { bands: 4 } }; }
+function evaluatePixel(s) { return [2.8 * s.B04, 2.8 * s.B03, 2.8 * s.B02, s.dataMask]; }`;
+
+/** Mapa do verde: vermelho = fraco (< 0,35), amarelo = médio, verde = bom (> 0,6). Nuvem em cinza. */
+export const EVAL_VERDE = `//VERSION=3
+function setup() { return { input: [{ bands: ["B04", "B08", "SCL", "dataMask"] }], output: { bands: 4 } }; }
+function evaluatePixel(s) {
+  if ([3, 8, 9, 10, 11].indexOf(s.SCL) >= 0) return [0.75, 0.75, 0.75, s.dataMask];
+  var soma = s.B08 + s.B04;
+  var v = soma > 0 ? (s.B08 - s.B04) / soma : 0;
+  var c = colorBlend(v, [0.2, 0.35, 0.5, 0.65, 0.8], [[0.75, 0.1, 0.1], [0.95, 0.45, 0.1], [0.97, 0.85, 0.2], [0.45, 0.75, 0.25], [0.05, 0.45, 0.15]]);
+  return [c[0], c[1], c[2], s.dataMask];
+}`;
+
+/** Pedido da foto de um piquete: a passagem com menos nuvem entre a data da leitura e 5 dias depois. */
+export function pedidoImagem(contorno: unknown, data: string, tipo: TipoFoto) {
+  const a = anel(contorno);
+  if (!a || !RE_DATA.test(data)) return null;
+  const lons = a.map((p) => p[0]), lats = a.map((p) => p[1]);
+  const lat0 = (Math.min(...lats) + Math.max(...lats)) / 2;
+  const larguraM = (Math.max(...lons) - Math.min(...lons)) * 111320 * Math.cos((lat0 * Math.PI) / 180);
+  const alturaM = (Math.max(...lats) - Math.min(...lats)) * 110574;
+  if (!(larguraM > 0 && alturaM > 0)) return null;
+  const lado = 400; // o satélite enxerga 10 m por pixel; a foto é ampliada para caber na tela
+  const k = lado / Math.max(larguraM, alturaM);
+  const width = Math.max(16, Math.round(larguraM * k)), height = Math.max(16, Math.round(alturaM * k));
+  return {
+    input: {
+      bounds: { geometry: { type: 'Polygon', coordinates: [a] }, properties: { crs: 'http://www.opengis.net/def/crs/OGC/1.3/CRS84' } },
+      data: [{ type: 'sentinel-2-l2a', dataFilter: { timeRange: { from: `${data}T00:00:00Z`, to: `${somaDias(data, 5)}T23:59:59Z` }, mosaickingOrder: 'leastCC' }, processing: { upsampling: 'BICUBIC' } }],
+    },
+    output: { width, height, responses: [{ identifier: 'default', format: { type: 'image/png' } }] },
+    evalscript: tipo === 'cor' ? EVAL_COR : EVAL_VERDE,
+  };
 }
