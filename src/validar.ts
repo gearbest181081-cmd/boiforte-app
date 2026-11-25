@@ -42,7 +42,7 @@ export const TIPOS_FORMULA_V = ['sal_mineral', 'proteinado', 'proteico_energetic
 const ESQUEMAS_BASE: Record<string, Record<string, Regra>> = {
   propriedades: { id: ID(false), nome: TXT(120, true), municipio: TXT(80), uf: TXT(2), areaHa: NUM(0, 10_000_000), criadoEm: CRIADO },
   modulos: {
-    id: ID(false), propriedadeId: ID(), nome: TXT(80, true), sistema: ENUM(['rotacionado', 'continuo'], false),
+    id: ID(false), propriedadeId: ID(), nome: TXT(80, true), areaHa: NUM(0.01, 1_000_000), sistema: ENUM(['rotacionado', 'continuo'], false),
     diasOcupacao: NUM(1, 365, false, true), diasDescanso: NUM(0, 365, false, true), capacidadeUA: NUM(0, 50), criadoEm: CRIADO,
   },
   piquetes: {
