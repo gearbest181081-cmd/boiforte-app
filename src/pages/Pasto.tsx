@@ -3,12 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, pontosDoLote, type Ndvi, type Ocupacao, type Piquete } from '../db';
+import { db, pontosDoLote, type Modulo, type Ndvi, type Ocupacao, type Piquete } from '../db';
 import { diasEntre, fmtData, fmtNum, hojeISO, pesoEstimado } from '../calc';
 import {
-  alvosPiquete, analisarNdvi, CAPINS, entrarNoPiquete, excluirOcupacao, ocupantesAtuais, pressaoPastejo, resumoPasto, sairDoPiquete,
-  type EstadoPiquete, type MidiaNova, type ResumoModulo, type TipoOcupante,
+  alvosPiquete, analisarNdvi, atualizarPiquete, CAPINS, dicaAreaPiquete, entrarNoPiquete, excluirOcupacao, ocupantesAtuais, pressaoPastejo, resumoPasto,
+  sairDoPiquete, usoDaArea, type EstadoPiquete, type MidiaNova, type ResumoModulo, type TipoOcupante,
 } from '../pasto';
+import { ErroValidacao } from '../validar';
+import { AreaDoModulo, PassouDaArea } from '../components/AreaModulo';
 import { aceitarPonto, areaHa, lerContorno, limparContorno, type Ponto } from '../pastoGeo';
 import { CampoData, CampoEscolha, CampoNumero, CampoTexto, Indicador, num, Topo, useAviso, useOnline } from '../components/ui';
 import { CapturaMidias, VerMidias } from '../components/Midias';
@@ -130,6 +132,9 @@ function NdviModulo({ r }: { r: ResumoModulo }) {
 function CartaoModulo({ r }: { r: ResumoModulo }) {
   const { modulo: m, lotacao: l } = r;
   const rot = m.sistema !== 'continuo';
+  const nav = useNavigate();
+  const papel = usePapel();
+  const podeEditar = papel !== 'vaqueiro' && papel !== 'consultor';
   return (
     <div className="cartao" data-testid="moduloPasto">
       <div className="linha-lote"><h3>{m.nome}</h3><span className="mudo">{rot ? 'Rotacionado' : 'Contínuo'}</span></div>
@@ -137,6 +142,7 @@ function CartaoModulo({ r }: { r: ResumoModulo }) {
         <Indicador rotulo="Lotação" valor={<>{fmtNum(l.uaHa, 2)} <small>UA/ha</small></>} sub={l.capacidade ? `Aguenta ${fmtNum(l.capacidade, 2)} UA/ha` : 'Sem capacidade gravada'} />
         <Indicador rotulo="Piquetes" valor={r.estados.length} sub={`${r.estados.filter((e) => e.situacao === 'ocupado').length} com gado`} />
       </div>
+      <AreaDoModulo uso={usoDaArea(m, r.estados.map((e) => e.piquete))} informar={podeEditar ? () => nav(`/fazenda?modulo=${m.id}`) : undefined} />
       {l.nivel !== 'sem_dados' && <p><span className={`etiqueta ${corLotacao(l.nivel)}`}>{l.nivel === 'alta' ? 'Lotação alta' : l.nivel === 'atencao' ? 'Perto do limite' : 'Lotação boa'}</span>{l.motivo}</p>}
       {rot && r.ideal && <p className="mudo">Com {r.estados.length} piquetes e {m.diasDescanso} dias de descanso, cada piquete deve ficar ocupado no máximo <b>{r.ideal} dias</b>.</p>}
       {rot && r.proximo && (
@@ -261,7 +267,7 @@ export function PiqueteDetalhe() {
           </div>
         ))}
 
-        {podeEditar && (editar ? <EditarPiquete p={p} fechar={() => setEditar(false)} /> : <button className="btn sec largo" onClick={() => setEditar(true)}>Editar piquete</button>)}
+        {podeEditar && (editar ? <EditarPiquete p={p} modulo={modulo} irmaos={irmaos} fechar={() => setEditar(false)} /> : <button className="btn sec largo" onClick={() => setEditar(true)}>Editar piquete</button>)}
       </main>
     </>
   );
@@ -405,8 +411,19 @@ function Contorno({ p }: { p: Piquete }) {
     if (c.length < 3) return aviso('O contorno precisa de pelo menos 3 pontos.', true);
     const ha = areaHa(c);
     const mudarArea = !p.areaHa || window.confirm(`O contorno dá ${fmtNum(ha, 2)} ha. Trocar a área do piquete (${fmtNum(p.areaHa, 2)} ha) por esta?`);
-    await db.piquetes.update(p.id!, { contorno: c, ...(mudarArea ? { areaHa: Math.round(ha * 100) / 100 } : {}) });
-    aviso(`Contorno salvo: ${c.length} pontos, ${fmtNum(ha, 2)} ha.`);
+    try {
+      if (mudarArea) {
+        try {
+          await atualizarPiquete(p.id!, { contorno: c, areaHa: Math.round(ha * 100) / 100 });
+        } catch (e) {
+          if (!(e instanceof ErroValidacao)) throw e;
+          // A área do contorno não cabe no módulo: guarda o contorno (o satélite precisa dele) e deixa a área como estava.
+          await atualizarPiquete(p.id!, { contorno: c });
+          return aviso(`Contorno salvo, mas a área do piquete não mudou: os ${fmtNum(ha, 2)} ha do contorno passam da área do módulo. ${e.message} Confira a área do módulo em Fazenda.`, true);
+        }
+      } else await atualizarPiquete(p.id!, { contorno: c });
+      aviso(`Contorno salvo: ${c.length} pontos, ${fmtNum(ha, 2)} ha.`);
+    } catch (e) { aviso((e as Error).message, true); }
   };
   const comecar = () => {
     if (!navigator.geolocation) return aviso('Este celular não tem GPS disponível para o app.', true);
@@ -460,17 +477,18 @@ function Contorno({ p }: { p: Piquete }) {
   );
 }
 
-function EditarPiquete({ p, fechar }: { p: Piquete; fechar: () => void }) {
+function EditarPiquete({ p, modulo, irmaos, fechar }: { p: Piquete; modulo?: Modulo; irmaos: Piquete[]; fechar: () => void }) {
   const aviso = useAviso();
   const nav = useNavigate();
   const ref = (v?: number) => (v == null ? '' : String(v).replace('.', ','));
   const [f, setF] = useState({ nome: p.nome, area: ref(p.areaHa), capim: p.capim ?? '', entrada: ref(p.alturaEntrada), saida: ref(p.alturaSaida), kg: ref(p.kgMsCm) });
   const set = (k: keyof typeof f) => (v: string) => setF((x) => ({ ...x, [k]: v }));
   const alvos = alvosPiquete({ capim: f.capim });
+  const uso = usoDaArea(modulo, irmaos, p.id); // sem contar este piquete
   const salvar = async () => {
     if (!f.nome.trim()) return aviso('Dê um nome ao piquete.', true);
     try {
-      await db.piquetes.update(p.id!, {
+      await atualizarPiquete(p.id!, {
         nome: f.nome.trim(), areaHa: num(f.area) ?? undefined, capim: f.capim.trim() || undefined,
         alturaEntrada: num(f.entrada) ?? undefined, alturaSaida: num(f.saida) ?? undefined, kgMsCm: num(f.kg) ?? undefined,
       });
@@ -490,9 +508,10 @@ function EditarPiquete({ p, fechar }: { p: Piquete; fechar: () => void }) {
       <h3>Editar piquete</h3>
       <CampoTexto rotulo="Nome" valor={f.nome} aoMudar={set('nome')} nome="pqNome" />
       <div className="grade">
-        <CampoNumero rotulo="Área" valor={f.area} aoMudar={set('area')} unidade="ha" nome="pqArea" />
+        <CampoNumero rotulo="Área" valor={f.area} aoMudar={set('area')} unidade="ha" nome="pqArea" dica={dicaAreaPiquete(uso)} />
         <CampoTexto rotulo="Capim" valor={f.capim} aoMudar={set('capim')} nome="pqCapim" dica={CAPINS.slice(0, 4).map((c) => c.nome.split(' ')[0]).join(', ') + '...'} />
       </div>
+      {(num(f.area) ?? 0) > (p.areaHa ?? 0) && <PassouDaArea uso={uso} area={num(f.area)} />}
       <div className="grade">
         <CampoNumero rotulo="Altura para entrar" valor={f.entrada} aoMudar={set('entrada')} unidade="cm" nome="pqEntrada" dica={alvos.entrada ? `Referência: ${alvos.entrada} cm` : undefined} />
         <CampoNumero rotulo="Altura para sair" valor={f.saida} aoMudar={set('saida')} unidade="cm" nome="pqSaida" dica={alvos.saida ? `Referência: ${alvos.saida} cm` : undefined} />

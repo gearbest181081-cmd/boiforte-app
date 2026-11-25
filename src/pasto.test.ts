@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
   alvosPiquete, analisarNdvi, entrarNoPiquete, estadoPiquete, lotacaoAlta, lotacaoModulo, ocupacaoIdeal, pressaoPastejo,
   quemEstaNoPiquete, referenciaCapim, sairDoPiquete, sugerirProximo, ua, resumoPasto, excluirOcupacao,
+  atualizarModulo, atualizarPiquete, conferirAreaModulo, conferirAreaPiquete, dicaAreaPiquete, novoModulo, novoPiquete, usoDaArea,
 } from './pasto';
 import { areaHa, aceitarPonto, lerContorno, limparContorno, paraGeoJson } from './pastoGeo';
 import { BoiForteDB, db, usarBanco, type Ocupacao, type Piquete } from './db';
@@ -17,6 +18,18 @@ describe('contas do pasto', () => {
     expect(l.ua).toBe(20);
     expect(l.uaHa).toBe(1);
     expect(l.cabecas).toBe(30);
+  });
+
+  it('lotação do módulo usa a área do módulo; sem ela, a soma dos piquetes', () => {
+    const pqs = [{ id: 1, areaHa: 10 }, { id: 2, areaHa: 10 }];
+    const oc = [{ piqueteId: 1, cabecas: 30, pesoMedio: 300 }]; // 20 UA
+    expect(lotacaoModulo(pqs, oc, 40)).toMatchObject({ areaHa: 40, areaPiquetes: 20, uaHa: 0.5 });
+    expect(lotacaoModulo(pqs, oc, null)).toMatchObject({ areaHa: 20, uaHa: 1 });
+    expect(lotacaoModulo([{ id: 1 }], oc, 25).uaHa).toBe(0.8); // piquete sem área: o módulo tem
+    // a capacidade de suporte é comparada com a lotação na área do módulo
+    expect(lotacaoAlta({ capacidadeUA: 0.55, areaHa: 40 }, pqs, oc).nivel).toBe('atencao'); // 0,5 de 0,55
+    expect(lotacaoAlta({ capacidadeUA: 0.55 }, pqs, oc).nivel).toBe('alta'); // 1 de 0,55 (só os 20 ha dos piquetes)
+    expect(lotacaoAlta({}, [{ id: 1 }], oc).motivo).toBe('Falta a área do módulo.');
   });
 
   it('lotação alta pela capacidade de suporte', () => {
@@ -184,5 +197,89 @@ describe('entrada e saída de piquete (celular)', () => {
     expect(r.lotacao.nivel).toBe('alta');
     expect(r.alertas.map((a) => a.titulo)).toEqual(expect.arrayContaining(['M: lotação alta', 'P1: 14 dias ocupado']));
     expect(r.proximo?.piquete.nome).toBe('P2');
+  });
+});
+
+describe('área do módulo × piquetes', () => {
+  const m = { nome: 'Retiro', areaHa: 30 };
+  const pqs = [{ id: 1, areaHa: 12 }, { id: 2, areaHa: 12 }, { id: 3 }];
+
+  it('quanto já foi usado e quanto sobra', () => {
+    expect(usoDaArea(m, pqs)).toEqual({ areaModulo: 30, usada: 24, livre: 6 });
+    expect(usoDaArea(m, pqs, 1)).toEqual({ areaModulo: 30, usada: 12, livre: 18 }); // editando o piquete 1
+    expect(usoDaArea({}, pqs)).toEqual({ areaModulo: null, usada: 24, livre: null }); // módulo antigo: sem limite
+    expect(usoDaArea({ areaHa: 20 }, pqs).livre).toBe(0); // nunca negativo
+    expect(dicaAreaPiquete(usoDaArea(m, pqs))).toBe('Cabe até 6 ha neste módulo.');
+    expect(dicaAreaPiquete(usoDaArea({ areaHa: 24 }, pqs))).toBe('O módulo já está todo dividido em piquetes.');
+    expect(dicaAreaPiquete(usoDaArea({}, pqs))).toBeUndefined();
+  });
+
+  it('piquete que não cabe: diz quanto cabe', () => {
+    expect(() => conferirAreaPiquete(m, pqs, 6)).not.toThrow();
+    expect(() => conferirAreaPiquete(m, pqs, 6.5)).toThrow('O módulo Retiro tem 30 ha e os outros piquetes já usam 24 ha. Este piquete pode ter no máximo 6 ha.');
+    expect(() => conferirAreaPiquete({ nome: 'R', areaHa: 24 }, pqs, 1)).toThrow(/não sobra área para este piquete/);
+    expect(() => conferirAreaPiquete({ nome: 'R', areaHa: 10 }, [], 11)).toThrow('O módulo R tem 10 ha. Este piquete pode ter no máximo 10 ha.');
+    expect(() => conferirAreaPiquete(m, pqs, 18, 1)).not.toThrow(); // o próprio piquete não conta duas vezes
+    expect(() => conferirAreaPiquete(m, pqs, undefined)).not.toThrow(); // sem área não pesa
+    expect(() => conferirAreaPiquete({ nome: 'Antigo' }, pqs, 999)).not.toThrow(); // módulo sem área: sem limite
+    // arredondamento: 3,33 + 3,33 + 3,34 = 10 (no computador dá 10,000000000000002)
+    expect(() => conferirAreaPiquete({ nome: 'R', areaHa: 10 }, [{ id: 1, areaHa: 3.33 }, { id: 2, areaHa: 3.33 }], 3.34)).not.toThrow();
+  });
+
+  it('módulo não pode ficar menor que os piquetes', () => {
+    expect(() => conferirAreaModulo('Retiro', 24, pqs)).not.toThrow();
+    expect(() => conferirAreaModulo('Retiro', 23.9, pqs)).toThrow('Os piquetes do módulo Retiro já somam 24 ha.');
+    expect(() => conferirAreaModulo('Retiro', 0, [])).toThrow('maior que zero');
+  });
+
+  describe('no celular', () => {
+    let pid: number;
+    beforeEach(async () => {
+      usarBanco(new BoiForteDB('area-' + Math.random()));
+      pid = await db.propriedades.add({ nome: 'F', criadoEm: 0 });
+    });
+
+    it('módulo novo precisa de área; piquetes até completar a área', async () => {
+      await expect(novoModulo({ propriedadeId: pid, nome: 'Retiro', areaHa: null })).rejects.toThrow('Informe a área do módulo');
+      await expect(novoModulo({ propriedadeId: pid, nome: '  ', areaHa: 10 })).rejects.toThrow(/nome ao módulo/);
+      const mod = await novoModulo({ propriedadeId: pid, nome: ' Retiro ', areaHa: 30 });
+      expect(await db.modulos.get(mod)).toMatchObject({ nome: 'Retiro', areaHa: 30 });
+      const p1 = await novoPiquete({ moduloId: mod, nome: 'P1', areaHa: 12 });
+      await novoPiquete({ moduloId: mod, nome: 'P2', areaHa: 12 });
+      await expect(novoPiquete({ moduloId: mod, nome: 'P3', areaHa: 7 })).rejects.toThrow('Este piquete pode ter no máximo 6 ha.');
+      expect(await db.piquetes.count()).toBe(2); // nada gravado
+      await novoPiquete({ moduloId: mod, nome: 'P3', areaHa: 6 });
+      await novoPiquete({ moduloId: mod, nome: 'Sem área' }); // sem área ainda pode
+      // crescer não cabe; diminuir e mudar o nome pode
+      await expect(atualizarPiquete(p1, { areaHa: 13 })).rejects.toThrow(/no máximo 12 ha/);
+      await atualizarPiquete(p1, { areaHa: 10, nome: 'P1 novo' });
+      expect(await db.piquetes.get(p1)).toMatchObject({ nome: 'P1 novo', areaHa: 10 });
+      await atualizarPiquete(p1, { areaHa: 12 });
+      // o módulo não fica menor que os piquetes (30 ha usados), nem em branco
+      await expect(atualizarModulo(mod, { areaHa: 29 })).rejects.toThrow('já somam 30 ha');
+      await expect(atualizarModulo(mod, { areaHa: undefined })).rejects.toThrow('Informe a área do módulo');
+      await atualizarModulo(mod, { areaHa: 40, diasDescanso: 30 });
+      expect(await db.modulos.get(mod)).toMatchObject({ areaHa: 40, diasDescanso: 30 });
+      await atualizarPiquete(p1, { areaHa: 22 });
+    });
+
+    it('módulo antigo, sem área: sem limite até informar a área', async () => {
+      const mod = await db.modulos.add({ propriedadeId: pid, nome: 'Antigo', criadoEm: 0 });
+      const p1 = await novoPiquete({ moduloId: mod, nome: 'P1', areaHa: 50 });
+      await atualizarPiquete(p1, { areaHa: 60 });
+      await atualizarModulo(mod, { diasDescanso: 28 }); // sem mexer na área
+      await expect(atualizarModulo(mod, { areaHa: 55 })).rejects.toThrow('já somam 60 ha');
+      await atualizarModulo(mod, { areaHa: 60 });
+      await expect(novoPiquete({ moduloId: mod, nome: 'P2', areaHa: 1 })).rejects.toThrow(/não sobra área/);
+    });
+
+    it('dado antigo acima da área: ainda dá para mudar o nome e diminuir, mas não crescer', async () => {
+      const mod = await db.modulos.add({ propriedadeId: pid, nome: 'M', areaHa: 10, criadoEm: 0 });
+      const p1 = await db.piquetes.add({ moduloId: mod, nome: 'P1', areaHa: 8, criadoEm: 0 });
+      await db.piquetes.add({ moduloId: mod, nome: 'P2', areaHa: 8, criadoEm: 0 }); // 16 de 10 (veio assim de antes)
+      await atualizarPiquete(p1, { nome: 'P1 renomeado', capim: 'Mombaça' });
+      await atualizarPiquete(p1, { areaHa: 5 });
+      await expect(atualizarPiquete(p1, { areaHa: 6 })).rejects.toThrow('Este piquete pode ter no máximo 2 ha.');
+    });
   });
 });

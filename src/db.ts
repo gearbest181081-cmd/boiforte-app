@@ -27,9 +27,11 @@ export interface Propriedade { id?: number; gid?: string; nome: string; municipi
  * Módulo de pastejo: o conjunto de piquetes por onde os mesmos animais rodam.
  * sistema: rotacionado (os animais mudam de piquete) ou contínuo. diasOcupacao/diasDescanso: o planejado.
  * capacidadeUA: quantas UA por hectare o módulo aguenta (lotação de suporte), para o aviso de lotação alta.
+ * areaHa: área do módulo inteiro. A soma das áreas dos piquetes não pode passar dela (conferido no celular e no
+ * servidor) e é ela que divide as UA na lotação do módulo. Módulo antigo sem área: sem limite, a lotação usa a soma dos piquetes.
  */
 export interface Modulo {
-  id?: number; gid?: string; propriedadeId: number; nome: string;
+  id?: number; gid?: string; propriedadeId: number; nome: string; areaHa?: number;
   sistema?: 'rotacionado' | 'continuo'; diasOcupacao?: number; diasDescanso?: number; capacidadeUA?: number;
   criadoEm: number;
 }

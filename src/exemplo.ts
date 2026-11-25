@@ -6,7 +6,7 @@ import { entrarNoPiquete } from './pasto';
 
 export async function carregarExemplo() {
   const pid = await db.propriedades.add({ nome: 'Fazenda Exemplo', municipio: 'Exemplo', uf: 'TO', areaHa: 120, criadoEm: Date.now() });
-  const mod = await db.modulos.add({ propriedadeId: pid, nome: 'Retiro 1', sistema: 'rotacionado', diasOcupacao: 5, diasDescanso: 30, capacidadeUA: 3, criadoEm: Date.now() });
+  const mod = await db.modulos.add({ propriedadeId: pid, nome: 'Retiro 1', areaHa: 50, sistema: 'rotacionado', diasOcupacao: 5, diasDescanso: 30, capacidadeUA: 3, criadoEm: Date.now() });
   const pq1 = await db.piquetes.add({ moduloId: mod, nome: 'Piquete 1', areaHa: 15, capim: 'Mombaça', criadoEm: Date.now() });
   const pq2 = await db.piquetes.add({ moduloId: mod, nome: 'Piquete 2', areaHa: 20, capim: 'Brizantha', criadoEm: Date.now() });
   const pq3 = await db.piquetes.add({ moduloId: mod, nome: 'Piquete 3', areaHa: 15, capim: 'Mombaça', criadoEm: Date.now() });
