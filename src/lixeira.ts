@@ -295,9 +295,8 @@ export async function restaurar(pacote: string, quem: QuemRestaura = {}): Promis
     if (!meu.length) throw new ErroValidacao('Isto já não está na lixeira (alguém pode ter restaurado).');
     if (meu.some((a) => a.tabela === COPIA_INTEIRA)) throw new ErroValidacao('Para a cópia inteira, use "Voltar esta cópia".');
     const fech = await fechamento(pacote, todos);
-    const linhas = todos
-      .filter((a) => fech.has(a.pacote) && a.tabela !== COPIA_INTEIRA && a.tabela !== 'config' && a.tabela !== 'ndvi' && temTabela(a.tabela))
-      .sort((a, b) => ordem(a.tabela) - ordem(b.tabela) || a.em - b.em);
+    const linhas = ordenarParaVoltar(todos
+      .filter((a) => fech.has(a.pacote) && a.tabela !== COPIA_INTEIRA && a.tabela !== 'config' && a.tabela !== 'ndvi' && temTabela(a.tabela)));
     const motivo = motivoNaoRestaura(linhas, quem.papel, !!quem.ligado);
     if (motivo) throw new ErroValidacao(motivo);
     const r = new Restauracao(linhas, await mapaDeNomes(todos));
@@ -305,6 +304,29 @@ export async function restaurar(pacote: string, quem: QuemRestaura = {}): Promis
     await r.depois();
     return { registros: r.voltaram.length, pacotes: fech.size, avisos: r.avisos };
   });
+}
+
+/**
+ * Quem é usado volta antes de quem usa: na ordem da nuvem (fazenda, módulo, piquete, lote, pesagem...) e, dentro da mesma
+ * tabela, o referenciado antes (a mãe antes do bezerro). Com ciclo, segue a ordem da nuvem.
+ */
+function ordenarParaVoltar(linhas: Apagado[]): Apagado[] {
+  const fila = [...linhas].sort((a, b) => ordem(a.tabela) - ordem(b.tabela) || a.em - b.em || (a.idLocal ?? 0) - (b.idLocal ?? 0));
+  const voltando = new Set(fila.map((a) => chave(a.tabela, a.gid)));
+  const feitos = new Set<string>();
+  const out: Apagado[] = [];
+  let resto = fila;
+  while (resto.length) {
+    const depois: Apagado[] = [];
+    for (const a of resto) {
+      const eu = chave(a.tabela, a.gid);
+      if (refsDe(a).every((r) => { const k = chave(r.alvo, r.gid); return k === eu || !voltando.has(k) || feitos.has(k); })) { out.push(a); feitos.add(eu); }
+      else depois.push(a);
+    }
+    if (depois.length === resto.length) { out.push(...depois); break; }
+    resto = depois;
+  }
+  return out;
 }
 
 class Restauracao {
