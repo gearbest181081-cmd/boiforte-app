@@ -5,10 +5,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, type Funcionario } from '../db';
+import { db, excluirRegistro, type Funcionario } from '../db';
 import { custoMensalFuncionario, folhaAtiva } from '../financeiro';
 import { fmtData, hojeISO } from '../calc';
 import { CampoData, CampoEscolha, CampoNumero, CampoTexto, num, Topo, useAviso } from '../components/ui';
+import { useApagar, VAI_PARA_LIXEIRA } from '../components/Apagar';
 import { rs } from './Nutricao';
 import { criarConvite, equipe, mudarPapel, NOME_PLANO, planoDaFazenda, PRECO_PESSOA_EXTRA, removerMembro, type Membro, type PlanoFazenda } from '../nuvem/cliente';
 import { mensagemConvite, PAPEIS, type Papel } from '../nuvem/esquema';
@@ -102,6 +103,7 @@ export function FuncionarioForm() {
 
 function Formulario({ f }: { f: Funcionario | null }) {
   const aviso = useAviso();
+  const apagarComDesfazer = useApagar();
   const nav = useNavigate();
   const papel = usePapel();
   const { conta } = useSessao();
@@ -152,10 +154,8 @@ function Formulario({ f }: { f: Funcionario | null }) {
   };
 
   const apagar = async () => {
-    if (!f || !window.confirm(`Apagar o cadastro de ${f.nome}? O salário dele sai das contas (inclusive dos meses passados). Se ele só saiu da fazenda, use "Saiu da fazenda".`)) return;
-    await db.funcionarios.delete(f.id!);
-    aviso('Cadastro apagado.');
-    voltarLista();
+    if (!f || !window.confirm(`Apagar o cadastro de ${f.nome}? O salário dele sai das contas (inclusive dos meses passados). Se ele só saiu da fazenda, use "Saiu da fazenda". ${VAI_PARA_LIXEIRA}`)) return;
+    if (await apagarComDesfazer(() => excluirRegistro('funcionarios', f.id!), `Cadastro de ${f.nome} apagado.`)) voltarLista();
   };
 
   return (

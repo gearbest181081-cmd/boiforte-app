@@ -27,20 +27,32 @@ export function Icone({ nome }: { nome: keyof typeof caminhos | string }) {
 }
 
 // ---------- Avisos rápidos (toast) ----------
-type Aviso = { texto: string; erro?: boolean } | null;
-const AvisoCtx = createContext<(texto: string, erro?: boolean) => void>(() => {});
+/** Botão no aviso (ex.: "Desfazer" depois de apagar). O aviso com botão fica mais tempo na tela. */
+export interface AcaoAviso { rotulo: string; fazer: () => void | Promise<void> }
+type Aviso = { texto: string; erro?: boolean; acao?: AcaoAviso } | null;
+type Mostrar = (texto: string, erro?: boolean, acao?: AcaoAviso) => void;
+const AvisoCtx = createContext<Mostrar>(() => {});
 export function AvisoProvider({ children }: { children: ReactNode }) {
   const [aviso, setAviso] = useState<Aviso>(null);
   const t = useRef<number>();
-  const mostrar = useCallback((texto: string, erro?: boolean) => {
-    setAviso({ texto, erro });
+  const mostrar = useCallback<Mostrar>((texto, erro, acao) => {
+    setAviso({ texto, erro, acao });
     window.clearTimeout(t.current);
-    t.current = window.setTimeout(() => setAviso(null), erro ? 5000 : 2800);
+    t.current = window.setTimeout(() => setAviso(null), acao ? 10000 : erro ? 5000 : 2800);
   }, []);
   return (
     <AvisoCtx.Provider value={mostrar}>
       {children}
-      {aviso && <div className={`toast ${aviso.erro ? 'erro' : ''}`} role="status" onClick={() => setAviso(null)}>{aviso.texto}</div>}
+      {aviso && (
+        <div className={`toast ${aviso.erro ? 'erro' : ''} ${aviso.acao ? 'com-acao' : ''}`} role="status" onClick={() => setAviso(null)}>
+          <span>{aviso.texto}</span>
+          {aviso.acao && (
+            <button type="button" className="toast-acao" onClick={(e) => { e.stopPropagation(); setAviso(null); void aviso.acao!.fazer(); }}>
+              {aviso.acao.rotulo}
+            </button>
+          )}
+        </div>
+      )}
     </AvisoCtx.Provider>
   );
 }

@@ -8,6 +8,7 @@ import { MudarFase } from './pages/MudarFase';
 import { Pesagem } from './pages/Pesagem';
 import { Fazenda } from './pages/Fazenda';
 import { Mais } from './pages/Mais';
+import { Lixeira } from './pages/Lixeira';
 import { Nutricao } from './pages/Nutricao';
 import { FormulaForm } from './pages/FormulaForm';
 import { IngredienteForm } from './pages/IngredienteForm';
@@ -46,6 +47,7 @@ export function App() {
               <Route path="/pesar/:loteId" element={<Pesagem />} />
               <Route path="/fazenda" element={<Fazenda />} />
               <Route path="/mais" element={<Mais />} />
+              <Route path="/lixeira" element={<Lixeira />} />
               <Route path="/nutricao" element={<Nutricao />} />
               <Route path="/nutricao/formula/:id" element={<FormulaForm />} />
               <Route path="/nutricao/ingrediente/:id" element={<IngredienteForm />} />

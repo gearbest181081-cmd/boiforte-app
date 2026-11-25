@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Link } from 'react-router-dom';
-import { db, excluirPiquetes, excluirPropriedade, type Modulo, type Propriedade } from '../db';
+import { db, excluirModulo, excluirPropriedade, type Modulo, type Propriedade } from '../db';
+import { useApagar, VAI_PARA_LIXEIRA } from '../components/Apagar';
 import { lotacaoModulo, ocupantesAtuais } from '../pasto';
 import { fmtNum } from '../calc';
 import { CampoNumero, CampoTexto, Entrada, num, Opcoes, Topo, useAviso } from '../components/ui';
@@ -68,6 +69,7 @@ function FormPropriedade({ aoSalvar, aoCancelar }: { aoSalvar: () => void; aoCan
 
 function CartaoPropriedade({ p }: { p: Propriedade }) {
   const aviso = useAviso();
+  const apagarComDesfazer = useApagar();
   const modulos = useLiveQuery(() => db.modulos.where('propriedadeId').equals(p.id!).toArray(), [p.id]);
   const nLotes = useLiveQuery(() => db.lotes.where('propriedadeId').equals(p.id!).count(), [p.id]);
   const [nomeMod, setNomeMod] = useState('');
@@ -77,9 +79,8 @@ function CartaoPropriedade({ p }: { p: Propriedade }) {
     setNomeMod('');
   };
   const apagar = async () => {
-    if (!window.confirm(`Apagar a fazenda "${p.nome}" com todos os lotes, pesagens, módulos e piquetes? Não dá para desfazer.`)) return;
-    await excluirPropriedade(p.id!);
-    aviso('Fazenda apagada.');
+    if (!window.confirm(`Apagar a fazenda "${p.nome}" com todos os lotes, pesagens, módulos e piquetes? ${VAI_PARA_LIXEIRA}`)) return;
+    await apagarComDesfazer(() => excluirPropriedade(p.id!), `Fazenda "${p.nome}" apagada.`);
   };
   return (
     <div className="cartao">
@@ -98,6 +99,7 @@ function CartaoPropriedade({ p }: { p: Propriedade }) {
 
 function BlocoModulo({ m }: { m: Modulo }) {
   const aviso = useAviso();
+  const apagarComDesfazer = useApagar();
   const piquetes = useLiveQuery(() => db.piquetes.where('moduloId').equals(m.id!).toArray(), [m.id]);
   const ocupantes = useLiveQuery(() => ocupantesAtuais(), [piquetes]);
   const [nome, setNome] = useState('');
@@ -111,9 +113,8 @@ function BlocoModulo({ m }: { m: Modulo }) {
     setNome(''); setArea(''); setCapim(''); setAberto(false);
   };
   const apagarMod = async () => {
-    if (!window.confirm(`Apagar o módulo "${m.nome}" e seus piquetes (com o histórico de entradas, saídas e satélite)?`)) return;
-    await excluirPiquetes((piquetes ?? []).map((p) => p.id!));
-    await db.modulos.delete(m.id!);
+    if (!window.confirm(`Apagar o módulo "${m.nome}" e seus piquetes (com o histórico de entradas, saídas e satélite)? ${VAI_PARA_LIXEIRA}`)) return;
+    await apagarComDesfazer(() => excluirModulo(m.id!), `Módulo "${m.nome}" apagado.`);
   };
   const lot = lotacaoModulo(piquetes ?? [], ocupantes ?? []);
   return (

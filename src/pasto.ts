@@ -2,7 +2,7 @@
 // Aqui ficam as contas (UA/ha, pressão de pastejo, dias de ocupação e descanso), a leitura do NDVI do satélite
 // com o aviso de degradação e as gravações de entrada e saída de animais (um ocupante por piquete).
 // As contas são funções puras (testadas em pasto.test.ts); a Cria usa lotacaoModulo/lotacaoAlta com os grupos de manejo.
-import { db, pontosDoLote, type ExtMidia, type Midia, type Modulo, type Ndvi, type Ocupacao, type Piquete } from './db';
+import { db, naLixeira, pontosDoLote, type ExtMidia, type Midia, type Modulo, type Ndvi, type Ocupacao, type Piquete } from './db';
 import { diasEntre, fmtData, fmtNum, hojeISO, pesoEstimado, somaDias } from './calc';
 import type { Alerta } from './alertas';
 import { ErroValidacao, MAX_MIDIAS, RE_GID } from './validar';
@@ -374,18 +374,9 @@ export async function entrarNoPiquete(d: DadosEntrada): Promise<number> {
   });
 }
 
-/** Apaga um registro de ocupação errado (e marca as fotos e áudios dele para apagar da nuvem). */
+/** Apaga um registro de ocupação errado, mandando para a lixeira (as fotos e áudios ficam guardados para ele poder voltar). */
 export async function excluirOcupacao(id: number) {
-  await db.transaction('rw', db.ocupacoes, db.fotosAnotacao, async () => {
-    const o = await db.ocupacoes.get(id);
-    if (!o) return;
-    await db.ocupacoes.delete(id);
-    for (const m of [...(o.midiasEntrada ?? []), ...(o.midiasSaida ?? [])]) {
-      const l = await db.fotosAnotacao.get(m.arq);
-      if (l?.estado === 'enviar') await db.fotosAnotacao.delete(m.arq);
-      else await db.fotosAnotacao.put({ id: m.arq, estado: 'apagar', em: Date.now(), ...(m.ext !== 'jpg' ? { ext: m.ext } : {}) });
-    }
-  });
+  return naLixeira(() => db.ocupacoes.delete(id));
 }
 
 // ---------------------------------------------------------------- resumo para telas e avisos

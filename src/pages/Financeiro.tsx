@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db';
+import { db, excluirRegistro } from '../db';
 import { useTudo } from '../hooks';
 import { CATEGORIAS_DESPESA, CATEGORIAS_RECEITA, drePeriodo, fluxoCaixa, folhaComoFixos, mesNome, NOMES_CATEGORIA, type Categoria } from '../financeiro';
 import { fmtData, hojeISO } from '../calc';
 import { CampoData, CampoEscolha, CampoNumero, CampoTexto, num, Opcoes, Topo, useAviso } from '../components/ui';
 import { rs } from './Nutricao';
+import { useApagar, VAI_PARA_LIXEIRA } from '../components/Apagar';
 
 export type Periodo = 'mes' | 'ano' | 'safra' | 'tudo';
 export function periodoDatas(p: Periodo, hoje = hojeISO()): [string, string] {
@@ -95,6 +96,7 @@ function Resumo() {
 
 function Lancamentos() {
   const aviso = useAviso();
+  const apagar = useApagar();
   const lancs = useLiveQuery(() => db.lancamentos.orderBy('data').reverse().limit(200).toArray());
   const lotes = useLiveQuery(() => db.lotes.toArray());
   const [novo, setNovo] = useState(false);
@@ -145,7 +147,7 @@ function Lancamentos() {
                   <td>{fmtData(l.data)}</td>
                   <td>{NOMES_CATEGORIA[l.categoria]}{l.descricao ? ` · ${l.descricao}` : ''}<div className="mudo" style={{ fontSize: 13 }}>{nomeLote(l.loteId)}</div></td>
                   <td className="n" style={{ color: l.tipo === 'receita' ? 'var(--ok)' : undefined }}>{l.tipo === 'receita' ? '+' : '−'}{rs(l.valor)}</td>
-                  <td>{l.origem === 'manual' || !l.origem ? <button className="remover" aria-label="Apagar lançamento" onClick={async () => { if (window.confirm('Apagar este lançamento?')) await db.lancamentos.delete(l.id!); }}>×</button> : null}</td>
+                  <td>{l.origem === 'manual' || !l.origem ? <button className="remover" aria-label="Apagar lançamento" onClick={async () => { if (window.confirm(`Apagar este lançamento? ${VAI_PARA_LIXEIRA}`)) await apagar(() => excluirRegistro('lancamentos', l.id!), 'Lançamento apagado.'); }}>×</button> : null}</td>
                 </tr>
               ))}
             </tbody>
@@ -158,6 +160,7 @@ function Lancamentos() {
 
 function Fixos() {
   const aviso = useAviso();
+  const apagar = useApagar();
   const fixos = useLiveQuery(() => db.custosFixos.toArray());
   const [nome, setNome] = useState('');
   const [valor, setValor] = useState('');
@@ -179,7 +182,7 @@ function Fixos() {
           <div><b>{f.nome}</b><div className="mudo">desde {fmtData(f.desde)}{f.ate ? ` até ${fmtData(f.ate)}` : ''}</div></div>
           <div style={{ textAlign: 'right' }}><b>{rs(f.valorMensal)}/mês</b><br />
             {!f.ate ? <button className="btn sec pequeno" style={{ marginTop: 6 }} onClick={() => db.custosFixos.update(f.id!, { ate: hojeISO() })}>Encerrar</button>
-              : <button className="remover" aria-label="Apagar" onClick={() => db.custosFixos.delete(f.id!)}>×</button>}
+              : <button className="remover" aria-label="Apagar custo fixo" onClick={() => apagar(() => excluirRegistro('custosFixos', f.id!), `Custo fixo "${f.nome}" apagado.`)}>×</button>}
           </div>
         </div>
       ))}

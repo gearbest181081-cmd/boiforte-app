@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, pontosDoLote, type Ndvi, type Ocupacao, type Piquete } from '../db';
+import { db, excluirPiquetes, pontosDoLote, type Ndvi, type Ocupacao, type Piquete } from '../db';
 import { diasEntre, fmtData, fmtNum, hojeISO, pesoEstimado } from '../calc';
 import {
   alvosPiquete, analisarNdvi, CAPINS, entrarNoPiquete, excluirOcupacao, ocupantesAtuais, pressaoPastejo, resumoPasto, sairDoPiquete,
@@ -12,6 +12,7 @@ import {
 import { aceitarPonto, areaHa, lerContorno, limparContorno, type Ponto } from '../pastoGeo';
 import { CampoData, CampoEscolha, CampoNumero, CampoTexto, Indicador, num, Topo, useAviso, useOnline } from '../components/ui';
 import { CapturaMidias, VerMidias } from '../components/Midias';
+import { useApagar, VAI_PARA_LIXEIRA } from '../components/Apagar';
 import { atualizarNdvi, fotoSatelite, nuvemConfigurada } from '../nuvem/cliente';
 import { sincronizarAgora, useEstadoNuvem, usePapel } from '../nuvem/useNuvem';
 
@@ -171,7 +172,7 @@ function CartaoModulo({ r }: { r: ResumoModulo }) {
 export function PiqueteDetalhe() {
   const { id } = useParams();
   const pid = Number(id);
-  const aviso = useAviso();
+  const apagarComDesfazer = useApagar();
   const papel = usePapel();
   const podeEditar = papel !== 'vaqueiro' && papel !== 'consultor';
   const dados = useLiveQuery(async () => {
@@ -205,9 +206,8 @@ export function PiqueteDetalhe() {
     : null;
 
   const apagarOcupacao = async (o: Ocupacao) => {
-    if (!window.confirm(`Apagar o registro de ${nomeDe(o)} de ${fmtData(o.entrada)}? Os animais não mudam de lugar.`)) return;
-    await excluirOcupacao(o.id!);
-    aviso('Registro apagado.');
+    if (!window.confirm(`Apagar o registro de ${nomeDe(o)} de ${fmtData(o.entrada)}? Os animais não mudam de lugar. ${VAI_PARA_LIXEIRA}`)) return;
+    await apagarComDesfazer(() => excluirOcupacao(o.id!), 'Registro apagado.');
   };
 
   return (
@@ -463,6 +463,7 @@ function Contorno({ p }: { p: Piquete }) {
 function EditarPiquete({ p, fechar }: { p: Piquete; fechar: () => void }) {
   const aviso = useAviso();
   const nav = useNavigate();
+  const apagarComDesfazer = useApagar();
   const ref = (v?: number) => (v == null ? '' : String(v).replace('.', ','));
   const [f, setF] = useState({ nome: p.nome, area: ref(p.areaHa), capim: p.capim ?? '', entrada: ref(p.alturaEntrada), saida: ref(p.alturaSaida), kg: ref(p.kgMsCm) });
   const set = (k: keyof typeof f) => (v: string) => setF((x) => ({ ...x, [k]: v }));
@@ -479,11 +480,8 @@ function EditarPiquete({ p, fechar }: { p: Piquete; fechar: () => void }) {
     } catch (e) { aviso((e as Error).message, true); }
   };
   const apagar = async () => {
-    if (!window.confirm(`Apagar o piquete "${p.nome}" com o histórico de entradas, saídas e satélite?`)) return;
-    const { excluirPiquetes } = await import('../db');
-    await excluirPiquetes([p.id!]);
-    aviso('Piquete apagado.');
-    nav('/pasto', { replace: true });
+    if (!window.confirm(`Apagar o piquete "${p.nome}" com o histórico de entradas, saídas e satélite? ${VAI_PARA_LIXEIRA}`)) return;
+    if (await apagarComDesfazer(() => excluirPiquetes([p.id!]), `Piquete "${p.nome}" apagado.`)) nav('/pasto', { replace: true });
   };
   return (
     <div className="cartao">

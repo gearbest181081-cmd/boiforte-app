@@ -1,12 +1,23 @@
 // Sincronização com a nuvem. O celular continua sendo o lugar onde se trabalha (funciona sem sinal);
 // quando tem internet, envia o que mudou e baixa o que outras pessoas da equipe lançaram.
 // Conflito: vale a última gravação que chegou ao servidor. O servidor confere e pode corrigir tudo.
-import { db, semAnotar, SO_DO_SERVIDOR, TABELAS, type Pendente } from '../db';
-import { alvoDe, ORDEM_SINC, REFERENCIAS, type Papel } from './esquema';
+import { COPIA_INTEIRA, db, guardarCopiaInteira, semAnotar, SO_DO_SERVIDOR, TABELAS, type Pendente } from '../db';
+import { ORDEM_SINC, trocarReferencias, type Papel } from './esquema';
 
-export interface OpEnvio { tabela: string; gid: string; op: 'put' | 'del'; dados?: Record<string, unknown> }
+/**
+ * lixeira, no "del": o pacote da lixeira (o servidor guarda o registro apagado, que pode voltar), ou false quando
+ * o próprio app troca um registro por outro (ex.: o lançamento da compra refeito), que não vai para a lixeira.
+ */
+export interface OpEnvio { tabela: string; gid: string; op: 'put' | 'del'; dados?: Record<string, unknown>; lixeira?: string | false }
 export interface Resultado { tabela: string; gid: string; ok: boolean; erro?: string; versao?: number }
-export interface LinhaRemota { tabela: string; gid: string; dados: Record<string, unknown> | null; excluido: boolean; versao: number | string }
+/**
+ * Linha que vem da nuvem. Apagada (excluido) com "lixeira": está na lixeira da fazenda, com os dados
+ * (apagado_em: quando; apagado_por: o nome de quem apagou). Servidor sem a lixeira manda só as 5 primeiras.
+ */
+export interface LinhaRemota {
+  tabela: string; gid: string; dados: Record<string, unknown> | null; excluido: boolean; versao: number | string;
+  lixeira?: string | null; apagado_em?: string | Date | null; apagado_por?: string | null;
+}
 export interface Transporte {
   enviar(fazendaId: string, ops: OpEnvio[]): Promise<Resultado[]>;
   baixar(fazendaId: string, desde: number, limite: number): Promise<LinhaRemota[]>;
@@ -19,7 +30,7 @@ const LOTE_ENVIO = 200;
 export const PIQUETE_OCUPADO = 'Piquete ocupado';
 const LOTE_BAIXA = 500;
 const ordem = (t: string) => { const i = (ORDEM_SINC as readonly string[]).indexOf(t); return i < 0 ? 99 : i; };
-const TABS_SINC = [...TABELAS, 'pendentes', 'sincEstado', 'sincEspera', 'fotosAnotacao'];
+const TABS_SINC = [...TABELAS, 'pendentes', 'sincEstado', 'sincEspera', 'fotosAnotacao', 'lixeira', 'copias'];
 
 // ---------- estado ----------
 
@@ -30,10 +41,10 @@ async function gravarEstado(chave: string, valor: unknown) { await db.sincEstado
 
 export const fazendaLigada = () => lerEstado<FazendaNuvem>('fazenda');
 
-/** Há dados no celular? (para não misturar fazendas sem querer) */
+/** Há dados no celular? (para não misturar fazendas sem querer). O que está na lixeira também conta. */
 export async function temDadosLocais(): Promise<boolean> {
   for (const t of ['propriedades', 'lotes', 'pesagens', 'lancamentos'] as const) if ((await db.table(t).count()) > 0) return true;
-  return false;
+  return (await db.lixeira.count()) > 0;
 }
 
 /**
@@ -43,12 +54,16 @@ export async function temDadosLocais(): Promise<boolean> {
  */
 export async function ligarFazenda(f: FazendaNuvem, modo: 'enviar' | 'baixar') {
   await semAnotar(TABS_SINC, async () => {
+    // O que estava no celular fica numa cópia inteira na lixeira (volta só fora da nuvem, para não ir para a fazenda).
+    if (modo === 'baixar') await guardarCopiaInteira('entrar_fazenda', f.nome);
     await db.pendentes.clear();
     await db.sincEspera.clear();
     await db.sincEstado.clear();
     if (modo === 'baixar') {
       for (const t of TABELAS) await db.table(t).clear();
       await db.fotosAnotacao.clear();
+      // A lixeira da fazenda desce da nuvem; a de antes foi junto na cópia inteira.
+      await db.lixeira.where('tabela').notEqual(COPIA_INTEIRA).delete();
     } else {
       const em = Date.now();
       for (const t of TABELAS) {
@@ -107,34 +122,15 @@ class Tradutor {
 }
 
 async function traduzir(tabela: string, r: Reg, para: 'nuvem' | 'local', tr: Tradutor): Promise<{ reg: Reg; faltou: boolean }> {
-  const refs = REFERENCIAS[tabela] ?? { campos: {} };
-  const out: Reg = { ...r };
-  delete out.id; delete out.gid;
   let faltou = false;
-  const conv = async (alvo: string | null, v: unknown) => {
+  const reg = await trocarReferencias(tabela, r, async (alvo, v) => {
     if (v == null || !alvo) return undefined;
     const x = para === 'nuvem' ? await tr.gid(alvo, v) : await tr.id(alvo, v);
     if (x == null) faltou = true;
     return x ?? undefined;
-  };
-  for (const [campo, a] of Object.entries(refs.campos)) {
-    if (!(campo in out)) continue;
-    const v = await conv(alvoDe(a, r), out[campo]);
-    if (v === undefined) delete out[campo]; else out[campo] = v;
-  }
-  for (const [lista, campos] of Object.entries(refs.listas ?? {})) {
-    if (!Array.isArray(out[lista])) continue;
-    out[lista] = await Promise.all((out[lista] as Reg[]).map(async (item) => {
-      const novo: Reg = { ...item };
-      for (const [campo, a] of Object.entries(campos)) {
-        const v = await conv(alvoDe(a, item), item[campo]);
-        if (v === undefined) delete novo[campo]; else novo[campo] = v;
-      }
-      return novo;
-    }));
-  }
+  });
   // referência para algo que não existe mais no celular: para a nuvem é só deixar sem; do servidor, espera chegar.
-  return { reg: out, faltou: para === 'local' && faltou };
+  return { reg, faltou: para === 'local' && faltou };
 }
 
 // ---------- envio ----------
@@ -152,7 +148,7 @@ async function enviar(t: Transporte, f: FazendaNuvem, rel: RelatorioSinc) {
       if (p.op === 'del') {
         const gid = p.tabela === 'config' ? String(p.chave) : p.gid;
         if (!gid) { sobra.push(p); continue; }
-        ops.push({ tabela: p.tabela, gid, op: 'del' }); de.push(p);
+        ops.push({ tabela: p.tabela, gid, op: 'del', ...(p.lixeira !== undefined ? { lixeira: p.lixeira } : {}) }); de.push(p);
         continue;
       }
       const r = (await db.table(p.tabela).get(p.chave)) as Reg | undefined;
@@ -193,6 +189,12 @@ async function removerSeIgual(lista: Pendente[]) {
 
 // ---------- recebimento ----------
 
+// A API manda a data como texto (ISO); o Postgres de teste, como Date.
+const emMs = (s?: string | Date | null) => {
+  const t = s instanceof Date ? s.getTime() : s ? Date.parse(s) : NaN;
+  return Number.isFinite(t) ? t : undefined;
+};
+
 async function aplicar(linhas: LinhaRemota[], rel: RelatorioSinc) {
   await semAnotar(TABS_SINC, async () => {
     const espera = (await db.sincEspera.toArray()).map((e) => e.linha as LinhaRemota);
@@ -204,21 +206,37 @@ async function aplicar(linhas: LinhaRemota[], rel: RelatorioSinc) {
       const cfg = l.tabela === 'config';
       const local = cfg ? ((await tab.get(l.gid)) as Reg | undefined) : ((await tab.where('gid').equals(l.gid).first()) as Reg | undefined);
       const chave = cfg ? l.gid : (local?.id as number | undefined);
-      const pend = chave != null ? await db.pendentes.get([l.tabela, chave]) : undefined;
+      const lx = cfg ? undefined : await db.lixeira.get([l.tabela, l.gid]);
+      // Apagado aqui e ainda não subiu: o "del" está na fila com o id que ele tinha neste celular.
+      const pend = chave != null ? await db.pendentes.get([l.tabela, chave])
+        : lx?.idLocal != null ? await db.pendentes.get([l.tabela, lx.idLocal]).then((p) => (p?.op === 'del' && p.gid === l.gid ? p : undefined)) : undefined;
       if (pend && !pend.erro) { await db.sincEspera.delete([l.tabela, l.gid]); continue; } // a mudança daqui ainda vai subir
       if (l.excluido || !l.dados) {
         if (chave != null) await tab.delete(chave);
+        // Na lixeira da fazenda: guarda aqui também, para qualquer celular da equipe poder restaurar.
+        // (Apagado sem lixeira, por um servidor antigo: o que já estiver na lixeira deste celular fica.)
+        if (!cfg && l.excluido && l.dados && l.lixeira && !SO_DO_SERVIDOR.has(l.tabela)) {
+          const por = l.apagado_por ?? lx?.por;
+          await db.lixeira.put({
+            tabela: l.tabela, gid: l.gid, pacote: l.lixeira, dados: l.dados, idLocal: (chave as number | undefined) ?? lx?.idLocal,
+            em: emMs(l.apagado_em) ?? lx?.em ?? Date.now(), ...(por ? { por } : {}),
+          });
+        }
       } else {
         const { reg, faltou } = await traduzir(l.tabela, l.dados, 'local', tr);
         if (faltou) { await db.sincEspera.put({ tabela: l.tabela, gid: l.gid, linha: l }); continue; }
+        // Alguém restaurou da lixeira: volta com o id que tinha neste celular, se ainda estiver livre.
+        let id = chave as number | undefined;
+        if (id == null && lx?.idLocal != null && !(await tab.get(lx.idLocal))) id = lx.idLocal;
         try {
           if (cfg) await tab.put(reg);
-          else if (chave != null) await tab.put({ ...reg, id: chave, gid: l.gid });
+          else if (id != null) { await tab.put({ ...reg, id, gid: l.gid }); tr.lembrar(l.tabela, id, l.gid); }
           else tr.lembrar(l.tabela, (await tab.add({ ...reg, gid: l.gid })) as number, l.gid);
         } catch (e) {
           rel.erros.push({ tabela: l.tabela, erro: (e as Error).message });
           continue;
         }
+        if (lx) await db.lixeira.delete([l.tabela, l.gid]);
       }
       if (chave != null) await db.pendentes.delete([l.tabela, chave]);
       await db.sincEspera.delete([l.tabela, l.gid]);

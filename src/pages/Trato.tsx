@@ -4,6 +4,7 @@ import { desfazerFornecimento, registrarFornecimento } from '../db';
 import { useEscala, type LinhaEscala } from '../hooks';
 import { fmtData, fmtNum, hojeISO, somaDias } from '../calc';
 import { AvisoNutricao, CampoNumero, EntradaData, num, Topo, useAviso } from '../components/ui';
+import { useApagar } from '../components/Apagar';
 import { rs } from './Nutricao';
 import { useVeDinheiro } from '../nuvem/useNuvem';
 
@@ -56,6 +57,7 @@ export function Trato() {
 
 function CartaoTrato({ linha: l, data }: { linha: LinhaEscala; data: string }) {
   const aviso = useAviso();
+  const apagarComDesfazer = useApagar();
   const [kg, setKg] = useState(l.kgTotal ? fmtNum(l.kgTotal, 1).replace(/\./g, '') : '');
   const [ocupado, setOcupado] = useState(false);
   const feito = !!l.fornecimento;
@@ -65,8 +67,7 @@ function CartaoTrato({ linha: l, data }: { linha: LinhaEscala; data: string }) {
     setOcupado(true);
     try {
       if (feito) {
-        await desfazerFornecimento(l.fornecimento!.id!);
-        aviso(`Trato do ${l.lote.nome} desmarcado. O estoque voltou.`);
+        await apagarComDesfazer(() => desfazerFornecimento(l.fornecimento!.id!), `Trato do ${l.lote.nome} desmarcado. O estoque voltou.`);
       } else {
         const kgReal = num(kg);
         if (kgReal == null || kgReal < 0) { aviso('Informe quantos kg foram fornecidos.', true); return; }

@@ -490,7 +490,9 @@ function confere(cond, msg) {
     await page.locator('input[name=ingConsumo]').fill('1 g por kg de PV');
     await page.locator('input[name=ing_consumoPct]').fill('0,1');
     await page.getByRole('button', { name: 'Salvar ingrediente' }).click();
-    await page.getByText('Produto salvo e já pronto para usar no trato.').waitFor();
+    // Salvou: o formulário fecha. (O aviso "Produto salvo..." pode ser trocado na hora pelo aviso de sem internet
+    // da tela da Nuvem, para onde o Voltar leva neste teste; o que vale é o produto aparecer na Nutrição.)
+    await page.getByRole('button', { name: 'Salvar ingrediente' }).waitFor({ state: 'detached' });
     await page.goto(URL + '#/nutricao');
     await page.getByText('Proteinado Águas').first().waitFor();
     confere(true, 'proteinado pronto vira ingrediente e fórmula de uma vez');
@@ -594,6 +596,43 @@ function confere(cond, msg) {
     await foto('25-ficha-piquete');
     await page.getByRole('link', { name: 'Início' }).click();
 
+    console.log('18d. Apagou sem querer: Desfazer no aviso e Lixeira');
+    {
+      const LOTE = 'Fêmea — 4º lote';
+      const abrirLote = async () => { await page.getByRole('link', { name: 'Início' }).click(); await page.locator('a.cartao', { hasText: LOTE }).click(); await page.getByRole('heading', { name: LOTE }).waitFor(); };
+      await abrirLote();
+      await page.getByRole('radio', { name: /Pesagens/ }).click();
+      const pesagensAntes = await page.locator('table.tab tbody tr').count();
+      await page.getByRole('radio', { name: /Resumo/ }).click();
+      await page.getByRole('button', { name: 'Apagar', exact: true }).click();
+      const toast = page.locator('.toast');
+      await toast.getByText('Foi para a Lixeira').waitFor();
+      confere(await toast.getByRole('button', { name: 'Desfazer' }).isVisible(), 'apagar o lote mostra o aviso com o botão Desfazer');
+      await foto('26-desfazer');
+      await toast.getByRole('button', { name: 'Desfazer' }).click();
+      await page.getByText('Pronto, voltou.').waitFor();
+      await abrirLote();
+      await page.getByRole('radio', { name: /Pesagens/ }).click();
+      confere((await page.locator('table.tab tbody tr').count()) === pesagensAntes && pesagensAntes > 0, `Desfazer trouxe o lote de volta com as ${pesagensAntes} pesagens`);
+      await page.getByRole('radio', { name: /Resumo/ }).click();
+      await page.getByRole('button', { name: 'Apagar', exact: true }).click();
+      await toast.getByText('Foi para a Lixeira').waitFor();
+      await page.getByRole('link', { name: 'Mais' }).click();
+      await page.getByRole('link', { name: /Lixeira \(\d+\)/ }).click();
+      const item = page.getByTestId('item-lixeira').filter({ hasText: `Lote ${LOTE}` });
+      await item.waitFor();
+      confere(/Junto: .*pesage/.test(await item.innerText()), 'a Lixeira mostra o lote e o que foi junto (pesagens...)');
+      confere(await page.getByTestId('item-lixeira').filter({ hasText: 'Apagar todos os dados' }).count() === 1, 'a Lixeira guardou a cópia de antes de "Apagar todos os dados"');
+      await foto('27-lixeira');
+      await item.getByRole('button', { name: /Restaurar/ }).click();
+      await page.getByText(`Pronto, voltou: Lote ${LOTE}.`).waitFor();
+      confere(!(await page.getByTestId('item-lixeira').filter({ hasText: `Lote ${LOTE}` }).count()), 'restaurado sai da Lixeira');
+      await abrirLote();
+      await page.getByRole('radio', { name: /Pesagens/ }).click();
+      confere((await page.locator('table.tab tbody tr').count()) === pesagensAntes, 'pela Lixeira o lote voltou inteiro');
+      await page.getByRole('link', { name: 'Início' }).click();
+    }
+
     if (nuvemNoBuild) {
       console.log('19. Perfil, sair e outra conta no mesmo celular');
       await page.getByRole('button', { name: /^Perfil de / }).click();
@@ -642,7 +681,7 @@ function confere(cond, msg) {
       const loteId = await p2.evaluate(() => new Promise((ok) => { const r = indexedDB.open('boiforte'); r.onsuccess = () => { const t = r.result.transaction('lotes').objectStore('lotes').getAll(); t.onsuccess = () => ok(t.result[0].id); }; }));
       const formulaId = await p2.evaluate(() => new Promise((ok) => { const r = indexedDB.open('boiforte'); r.onsuccess = () => { const t = r.result.transaction('formulas').objectStore('formulas').getAll(); t.onsuccess = () => ok(t.result[0]?.id ?? 'nova'); }; }));
       const telas = ['/lotes', '/lotes/novo', `/lotes/${loteId}`, `/lotes/${loteId}/editar`, `/lotes/${loteId}/relatorio`, '/pesar', `/pesar/${loteId}`, '/fazenda', '/mais', '/nutricao',
-        `/nutricao/formula/${formulaId}`, '/nutricao/formula/nova', '/nutricao/ingrediente/novo', '/estoque', '/trato', '/financeiro', '/sanidade', '/simular', '/relatorios', '/nuvem', '/funcionarios', '/funcionarios/novo', '/anotacoes', '/anotacoes/nova', '/pasto', '/pasto/mover'];
+        `/nutricao/formula/${formulaId}`, '/nutricao/formula/nova', '/nutricao/ingrediente/novo', '/estoque', '/trato', '/financeiro', '/sanidade', '/simular', '/relatorios', '/nuvem', '/funcionarios', '/funcionarios/novo', '/anotacoes', '/anotacoes/nova', '/pasto', '/pasto/mover', '/lixeira'];
       const semVoltar = [], semMic = [];
       for (const t of telas) {
         await p2.goto(URL + '#' + t);

@@ -5,6 +5,7 @@ import { db, excluirFormula, garantirIngredientesPadrao, lerConfig } from '../db
 import { avaliarFormula, batida, calcularFormula, custoArrobaNutricao, kgCabDia, TIPOS, type TipoFormula } from '../nutricao';
 import { fmtNum } from '../calc';
 import { AvisoNutricao, CampoEscolha, CampoNumero, CampoTexto, Entrada, Escolha, num, Opcoes, Topo, useAviso } from '../components/ui';
+import { useApagar, VAI_PARA_LIXEIRA } from '../components/Apagar';
 import { rs } from './Nutricao';
 import { avaliarNutrientes } from '../faixas';
 import { GradeNutrientes } from '../components/Nutrientes';
@@ -14,6 +15,7 @@ type Linha = { ingredienteId: number; qtd: string };
 const br = (x: number, c = 2) => x.toLocaleString('pt-BR', { maximumFractionDigits: c });
 
 export function FormulaForm() {
+  const apagarComDesfazer = useApagar();
   const { id } = useParams();
   const editando = id != null && id !== 'nova';
   const veDinheiro = useVeDinheiro();
@@ -80,8 +82,8 @@ export function FormulaForm() {
     nav(`/nutricao/formula/${novo}`, { replace: true });
   };
   const apagar = async () => {
-    if (!window.confirm(`Apagar a fórmula "${nome}"?`)) return;
-    try { await excluirFormula(Number(id)); aviso('Fórmula apagada.'); nav('/nutricao', { replace: true }); } catch (e) { aviso((e as Error).message, true); }
+    if (!window.confirm(`Apagar a fórmula "${nome}"? ${VAI_PARA_LIXEIRA}`)) return;
+    if (await apagarComDesfazer(() => excluirFormula(Number(id)), `Fórmula "${nome}" apagada.`)) nav('/nutricao', { replace: true });
   };
 
   const ingsOrdenados = (ingredientes ?? []).slice().sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
