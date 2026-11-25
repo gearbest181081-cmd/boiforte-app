@@ -44,6 +44,38 @@ export function alvoDe(alvo: Alvo, registro: Record<string, unknown>): string | 
   return typeof v === 'string' ? alvo.mapa[v] ?? null : null;
 }
 
+/** Onde está a referência que está sendo trocada: campo do registro ou campo de um item de lista. */
+export interface LugarRef { campo: string; lista?: string }
+
+/**
+ * Troca as referências de um registro (campos e listas) pelo que "conv" devolver: id do celular → gid da nuvem, ou o contrário.
+ * "id" e "gid" saem do resultado. Referência que conv não acha (undefined) sai do registro.
+ */
+export async function trocarReferencias(
+  tabela: string, r: Record<string, unknown>, conv: (alvo: string | null, valor: unknown, lugar: LugarRef) => Promise<unknown>,
+): Promise<Record<string, unknown>> {
+  const refs = REFERENCIAS[tabela] ?? { campos: {} };
+  const out: Record<string, unknown> = { ...r };
+  delete out.id; delete out.gid;
+  for (const [campo, a] of Object.entries(refs.campos)) {
+    if (!(campo in out)) continue;
+    const v = await conv(alvoDe(a, r), out[campo], { campo });
+    if (v === undefined) delete out[campo]; else out[campo] = v;
+  }
+  for (const [lista, campos] of Object.entries(refs.listas ?? {})) {
+    if (!Array.isArray(out[lista])) continue;
+    out[lista] = await Promise.all((out[lista] as Record<string, unknown>[]).map(async (item) => {
+      const novo: Record<string, unknown> = { ...item };
+      for (const [campo, a] of Object.entries(campos)) {
+        const v = await conv(alvoDe(a, item), item[campo], { campo, lista });
+        if (v === undefined) delete novo[campo]; else novo[campo] = v;
+      }
+      return novo;
+    }));
+  }
+  return out;
+}
+
 /** Papéis da equipe. O servidor é quem decide; o app só esconde o que a pessoa não pode usar. */
 export type Papel = 'dono' | 'gerente' | 'vaqueiro' | 'consultor';
 export const PAPEIS: Record<Papel, { nome: string; texto: string }> = {

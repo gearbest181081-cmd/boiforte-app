@@ -107,34 +107,15 @@ class Tradutor {
 }
 
 async function traduzir(tabela: string, r: Reg, para: 'nuvem' | 'local', tr: Tradutor): Promise<{ reg: Reg; faltou: boolean }> {
-  const refs = REFERENCIAS[tabela] ?? { campos: {} };
-  const out: Reg = { ...r };
-  delete out.id; delete out.gid;
   let faltou = false;
-  const conv = async (alvo: string | null, v: unknown) => {
+  const reg = await trocarReferencias(tabela, r, async (alvo, v) => {
     if (v == null || !alvo) return undefined;
     const x = para === 'nuvem' ? await tr.gid(alvo, v) : await tr.id(alvo, v);
     if (x == null) faltou = true;
     return x ?? undefined;
-  };
-  for (const [campo, a] of Object.entries(refs.campos)) {
-    if (!(campo in out)) continue;
-    const v = await conv(alvoDe(a, r), out[campo]);
-    if (v === undefined) delete out[campo]; else out[campo] = v;
-  }
-  for (const [lista, campos] of Object.entries(refs.listas ?? {})) {
-    if (!Array.isArray(out[lista])) continue;
-    out[lista] = await Promise.all((out[lista] as Reg[]).map(async (item) => {
-      const novo: Reg = { ...item };
-      for (const [campo, a] of Object.entries(campos)) {
-        const v = await conv(alvoDe(a, item), item[campo]);
-        if (v === undefined) delete novo[campo]; else novo[campo] = v;
-      }
-      return novo;
-    }));
-  }
+  });
   // referência para algo que não existe mais no celular: para a nuvem é só deixar sem; do servidor, espera chegar.
-  return { reg: out, faltou: para === 'local' && faltou };
+  return { reg, faltou: para === 'local' && faltou };
 }
 
 // ---------- envio ----------

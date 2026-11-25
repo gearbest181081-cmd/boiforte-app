@@ -7,6 +7,7 @@ import { ErroValidacao, MAX_BACKUP_BYTES, MAX_LINHAS_TABELA, validarRegistro } f
 import { calcularVenda, custoCompra, type Categoria } from './financeiro';
 import { LEMBRETES_PADRAO, type TipoSanidade } from './sanidade';
 import { somaDias } from './calc';
+import { trocarReferencias } from './nuvem/esquema';
 
 export type Fase = 'cria' | 'recria' | 'rip' | 'engorda_pasto' | 'tip' | 'confinamento';
 export type Sexo = 'macho' | 'femea' | 'misto';
@@ -181,6 +182,16 @@ export type CategoriaAnotacao = 'cerca' | 'agua' | 'cocho' | 'pasto' | 'animal' 
  */
 export interface FotoLocal { id: string; dados?: ArrayBuffer; estado: 'enviar' | 'ok' | 'apagar'; em: number; erro?: string; ext?: ExtMidia } // ext vazio = foto jpg
 
+/**
+ * Registro na lixeira. Nada do que a pessoa apaga some: o registro sai da tabela dele e fica aqui até alguém restaurar.
+ * pacote: o que foi apagado junto num toque (ex.: o lote com as pesagens e as vacinas).
+ * dados: o registro como vai para a nuvem (referências pelo gid), para voltar certo em qualquer celular da equipe.
+ * idLocal: o id que ele tinha neste celular (volta com o mesmo, se estiver livre). por: quem apagou (vem da nuvem).
+ * tabela "*" (COPIA_INTEIRA): cópia inteira do celular, guardada antes de "Apagar todos os dados" ou de restaurar uma cópia.
+ */
+export interface Apagado { tabela: string; gid: string; pacote: string; dados: Record<string, unknown>; idLocal?: number; em: number; por?: string }
+export const COPIA_INTEIRA = '*';
+
 export const TABELAS = ['propriedades', 'modulos', 'piquetes', 'lotes', 'animais', 'pesagens', 'ingredientes', 'formulas', 'movimentos', 'batidas', 'fornecimentos', 'config', 'lancamentos', 'custosFixos', 'vendas', 'sanidade', 'lembretes', 'funcionarios', 'anotacoes', 'ocupacoes', 'ndvi'] as const;
 
 export class BoiForteDB extends Dexie {
@@ -206,6 +217,7 @@ export class BoiForteDB extends Dexie {
   ocupacoes!: Table<Ocupacao, number>;
   ndvi!: Table<Ndvi, number>;
   fotosAnotacao!: Table<FotoLocal, string>;
+  lixeira!: Table<Apagado, [string, string]>;
   pendentes!: Table<Pendente, [string, number | string]>;
   sincEstado!: Table<{ chave: string; valor: unknown }, string>;
   sincEspera!: Table<{ tabela: string; gid: string; linha: unknown }, [string, string]>;
@@ -277,6 +289,8 @@ export class BoiForteDB extends Dexie {
       ocupacoes: '++id, &gid, piqueteId, [tipo+ocupanteId], entrada',
       ndvi: '++id, &gid, piqueteId, data',
     });
+    // Lixeira: o que foi apagado fica guardado para poder voltar (7 = Cria, 9 = Rastreabilidade).
+    this.version(10).stores({ lixeira: '[tabela+gid], pacote, em' });
     this.use(middlewarePendentes);
     // Toda gravação passa pela validação, venha de onde vier.
     for (const t of TABELAS) {
@@ -310,7 +324,8 @@ export function novoGid(): string {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
 
-export interface Pendente { tabela: string; chave: number | string; op: 'put' | 'del'; gid?: string; em: number; erro?: string }
+/** Alteração esperando para subir. lixeira: no "del", o pacote da lixeira (a nuvem guarda o registro apagado junto com ele). */
+export interface Pendente { tabela: string; chave: number | string; op: 'put' | 'del'; gid?: string; em: number; erro?: string; lixeira?: string }
 // O NDVI vem só do servidor (satélite): o celular nunca manda.
 export const SO_DO_SERVIDOR = new Set<string>(['ndvi']);
 const SINC = new Set<string>(TABELAS.filter((t) => !SO_DO_SERVIDOR.has(t)));
@@ -319,6 +334,43 @@ const SINC = new Set<string>(TABELAS.filter((t) => !SO_DO_SERVIDOR.has(t)));
 function silenciosa(): boolean {
   for (let t = Dexie.currentTransaction as (Transaction & { __silencioso?: boolean; parent?: unknown }) | null; t; t = t.parent as typeof t) if (t.__silencioso) return true;
   return false;
+}
+
+/** Apagando dentro de naLixeira: tudo o que sair das tabelas vai para a lixeira com o mesmo pacote. */
+interface CtxLixeira { pacote: string; em: number; apagados: { tabela: string; reg: Record<string, unknown> }[] }
+function lixeiraAtual(): CtxLixeira | null {
+  for (let t = Dexie.currentTransaction as (Transaction & { __lixeira?: CtxLixeira; parent?: unknown }) | null; t; t = t.parent as typeof t) if (t.__lixeira) return t.__lixeira;
+  return null;
+}
+
+/**
+ * Apaga mandando para a lixeira: tudo o que fn tirar das tabelas (o lote, as pesagens dele...) fica guardado num pacote
+ * e pode voltar com restaurarPacote (src/lixeira.ts). Na nuvem, o servidor também guarda (só marca como apagado).
+ * Devolve o pacote (ou null se nada foi apagado). Dentro de outra naLixeira, usa o pacote dela.
+ */
+export async function naLixeira(fn: () => Promise<unknown>): Promise<string | null> {
+  const ja = lixeiraAtual();
+  if (ja) { await fn(); return ja.pacote; }
+  const ctx: CtxLixeira = { pacote: novoGid(), em: Date.now(), apagados: [] };
+  await db.transaction('rw', db.tables, async (tx) => {
+    (tx as Transaction & { __lixeira?: CtxLixeira }).__lixeira = ctx;
+    await fn();
+    if (!ctx.apagados.length) return;
+    // Referências viram gid: do que continua no celular ou do que foi apagado junto (já não está na tabela).
+    const gidApagado = new Map(ctx.apagados.map((a) => [`${a.tabela}:${a.reg.id}`, a.reg.gid as string]));
+    const tabelas = new Set(db.tables.map((t) => t.name));
+    const linhas: Apagado[] = [];
+    for (const a of ctx.apagados) {
+      if (typeof a.reg.gid !== 'string') continue;
+      const dados = await trocarReferencias(a.tabela, a.reg, async (alvo, v) => {
+        if (v == null || !alvo || typeof v !== 'number') return undefined;
+        return gidApagado.get(`${alvo}:${v}`) ?? (tabelas.has(alvo) ? ((await db.table(alvo).get(v)) as { gid?: string } | undefined)?.gid : undefined);
+      });
+      linhas.push({ tabela: a.tabela, gid: a.reg.gid, pacote: ctx.pacote, dados, idLocal: a.reg.id as number, em: ctx.em });
+    }
+    await db.lixeira.bulkPut(linhas);
+  });
+  return ctx.apagados.length ? ctx.pacote : null;
 }
 
 /**
@@ -357,8 +409,13 @@ const middlewarePendentes: Middleware<DBCore> = {
               if (req.type === 'delete') chaves = req.keys;
               else chaves = (await t.query({ trans: req.trans, query: { index: t.schema.primaryKey, range: req.range }, values: false })).result;
               const antes = nome === 'config' ? [] : await t.getMany({ trans: req.trans, keys: chaves });
+              const lx = lixeiraAtual();
+              if (lx) for (const r of antes) if (r) lx.apagados.push({ tabela: nome, reg: r as Record<string, unknown> });
               const res = await t.mutate(req);
-              await anotar(req.trans, chaves.map((k, i) => ({ tabela: nome, chave: k as number | string, op: 'del', gid: nome === 'config' ? String(k) : (antes[i] as { gid?: string } | undefined)?.gid, em })));
+              await anotar(req.trans, chaves.map((k, i) => ({
+                tabela: nome, chave: k as number | string, op: 'del', gid: nome === 'config' ? String(k) : (antes[i] as { gid?: string } | undefined)?.gid, em,
+                ...(lx ? { lixeira: lx.pacote } : {}),
+              })));
               return res;
             }
             const res = await t.mutate(req);
@@ -432,8 +489,12 @@ export function pontosDoAnimal(pesagens: Pesagem[], animalId: number): PontoPeso
   return ordenar(out);
 }
 
+// Tudo o que a pessoa apaga vai para a lixeira (naLixeira) e pode voltar. Cada função devolve o pacote da lixeira,
+// que a tela usa no botão "Desfazer".
+
+/** Apaga o lote com tudo o que é dele: pesagens, animais, trato, vendas, vacinas, lançamentos e entradas em piquetes. */
 export async function excluirLote(id: number) {
-  await db.transaction('rw', [db.lotes, db.pesagens, db.animais, db.fornecimentos, db.movimentos, db.lancamentos, db.vendas, db.sanidade, db.ocupacoes], async () => {
+  return naLixeira(async () => {
     await db.ocupacoes.where('[tipo+ocupanteId]').equals(['lote', id]).delete();
     await db.lancamentos.where('loteId').equals(id).delete();
     await db.vendas.where('loteId').equals(id).delete();
@@ -449,37 +510,39 @@ export async function excluirLote(id: number) {
 
 /** Apaga piquetes com o histórico de ocupação e o NDVI deles; lote que estava lá fica sem piquete. */
 export async function excluirPiquetes(ids: number[]) {
-  if (!ids.length) return;
-  const grupos = db.tables.find((t) => t.name === 'grupos'); // grupos de manejo da cria (quando existir)
-  await db.transaction('rw', [db.piquetes, db.lotes, db.ocupacoes, db.ndvi, ...(grupos ? [grupos] : [])], async () => {
+  if (!ids.length) return null;
+  return naLixeira(async () => {
+    const grupos = db.tables.find((t) => t.name === 'grupos'); // grupos de manejo da cria (quando existir)
     await db.lotes.where('piqueteId').anyOf(ids).modify({ piqueteId: null });
-    if (grupos) await db.table('grupos').filter((g: { piqueteId?: number | null }) => g.piqueteId != null && ids.includes(g.piqueteId)).modify({ piqueteId: null });
+    if (grupos) await grupos.filter((g: { piqueteId?: number | null }) => g.piqueteId != null && ids.includes(g.piqueteId)).modify({ piqueteId: null });
     await db.ocupacoes.where('piqueteId').anyOf(ids).delete();
+    // O NDVI só vem do satélite: some daqui e, na nuvem, fica guardado e volta junto com o piquete.
     await db.ndvi.where('piqueteId').anyOf(ids).delete();
     await db.piquetes.bulkDelete(ids);
   });
 }
 
+/** Apaga o módulo com os piquetes dele. */
+export async function excluirModulo(id: number) {
+  return naLixeira(async () => {
+    await excluirPiquetes(await db.piquetes.where('moduloId').equals(id).primaryKeys());
+    await db.modulos.delete(id);
+  });
+}
+
 export async function excluirPropriedade(id: number) {
-  await db.transaction('rw', [db.propriedades, db.modulos, db.piquetes, db.lotes, db.pesagens, db.animais, db.fornecimentos, db.movimentos, db.lancamentos, db.vendas, db.sanidade, db.ocupacoes, db.ndvi], async () => {
-    const mods = await db.modulos.where('propriedadeId').equals(id).toArray();
-    for (const m of mods) await excluirPiquetes(await db.piquetes.where('moduloId').equals(m.id!).primaryKeys());
-    await db.modulos.where('propriedadeId').equals(id).delete();
-    const lotes = await db.lotes.where('propriedadeId').equals(id).toArray();
-    for (const l of lotes) {
-      const fs = await db.fornecimentos.where('loteId').equals(l.id!).primaryKeys();
-      for (const f of fs) await db.movimentos.where('[origem+refId]').equals(['fornecimento', f]).delete();
-      await db.fornecimentos.where('loteId').equals(l.id!).delete();
-      await db.lancamentos.where('loteId').equals(l.id!).delete();
-      await db.ocupacoes.where('[tipo+ocupanteId]').equals(['lote', l.id!]).delete();
-      await db.vendas.where('loteId').equals(l.id!).delete();
-      await db.sanidade.where('loteId').equals(l.id!).delete();
-      await db.pesagens.where('loteId').equals(l.id!).delete();
-      await db.animais.where('loteId').equals(l.id!).delete();
-    }
-    await db.lotes.where('propriedadeId').equals(id).delete();
+  return naLixeira(async () => {
+    // Os lotes saem antes dos piquetes: assim cada lote vai para a lixeira ainda com o piquete onde estava
+    // e, se a fazenda voltar, volta para o mesmo lugar.
+    for (const l of await db.lotes.where('propriedadeId').equals(id).primaryKeys()) await excluirLote(l);
+    for (const m of await db.modulos.where('propriedadeId').equals(id).primaryKeys()) await excluirModulo(m);
     await db.propriedades.delete(id);
   });
+}
+
+/** Apaga um registro sozinho (pesagem, lançamento, custo fixo, lembrete, funcionário...), mandando para a lixeira. */
+export async function excluirRegistro(tabela: (typeof TABELAS)[number], id: number) {
+  return naLixeira(() => db.table(tabela).delete(id));
 }
 
 // ---------- Cópia de segurança ----------
@@ -601,8 +664,9 @@ export async function registrarBatida(formulaId: number, data: string, kg: numbe
   });
 }
 
+/** Desfaz a batida (os ingredientes voltam para o estoque). A batida fica na lixeira. */
 export async function desfazerBatida(batidaId: number) {
-  await db.transaction('rw', db.movimentos, db.batidas, async () => {
+  return naLixeira(async () => {
     await db.movimentos.where('[origem+refId]').equals(['batida', batidaId]).delete();
     await db.batidas.delete(batidaId);
   });
@@ -643,8 +707,9 @@ export async function registrarFornecimento(dados: { loteId: number; data: strin
   });
 }
 
+/** Desmarca o trato do dia (o estoque volta). O trato desmarcado fica na lixeira. */
 export async function desfazerFornecimento(fornecimentoId: number) {
-  await db.transaction('rw', db.movimentos, db.fornecimentos, async () => {
+  return naLixeira(async () => {
     await db.movimentos.where('[origem+refId]').equals(['fornecimento', fornecimentoId]).delete();
     await db.fornecimentos.delete(fornecimentoId);
   });
@@ -653,14 +718,14 @@ export async function desfazerFornecimento(fornecimentoId: number) {
 export async function excluirFormula(id: number) {
   const emUso = await db.lotes.where('formulaId').equals(id).count();
   if (emUso) throw new ErroValidacao(`Esta fórmula é a dieta de ${emUso} lote(s). Troque a dieta deles antes de apagar.`);
-  await db.formulas.delete(id);
+  return naLixeira(() => db.formulas.delete(id));
 }
 
 export async function excluirIngrediente(id: number) {
   const fs = await db.formulas.toArray();
   const usado = fs.filter((f) => f.itens.some((i) => i.ingredienteId === id));
   if (usado.length) throw new ErroValidacao(`Este ingrediente está em ${usado.length} fórmula(s): ${usado.map((f) => f.nome).join(', ')}.`);
-  await db.transaction('rw', db.ingredientes, db.movimentos, async () => {
+  return naLixeira(async () => {
     await db.movimentos.where('ingredienteId').equals(id).delete();
     await db.ingredientes.delete(id);
   });
@@ -714,8 +779,9 @@ export async function registrarSaida(loteId: number, d: { data: string; tipo: 'v
   });
 }
 
+/** Desfaz a venda/morte: as cabeças voltam para o lote. A saída fica na lixeira (restaurar tira as cabeças de novo). */
 export async function desfazerSaida(vendaId: number) {
-  await db.transaction('rw', db.lotes, db.vendas, async () => {
+  return naLixeira(async () => {
     const v = await db.vendas.get(vendaId);
     if (!v) return;
     const lote = await db.lotes.get(v.loteId);
@@ -750,8 +816,9 @@ export async function concluirEventoSanitario(id: number, data: string, custo?: 
   });
 }
 
+/** Apaga a aplicação (ou o agendamento) com a despesa dela. Vai para a lixeira. */
 export async function excluirEventoSanitario(id: number) {
-  await db.transaction('rw', db.sanidade, db.lancamentos, async () => {
+  return naLixeira(async () => {
     await db.lancamentos.where('[origem+refId]').equals(['sanidade', id]).delete();
     await db.sanidade.delete(id);
   });
