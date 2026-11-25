@@ -1,4 +1,4 @@
-import { useAbaNoEndereco } from '../abaNoEndereco';
+import { useAbaNoEndereco } from '../navegacao';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, excluirLote, FASES, lerConfig, pontosDoAnimal, pontosDoLote, SEXOS } from '../db';
@@ -87,9 +87,9 @@ export function LoteDetalhe() {
         <Link to={`/pesar/${lote.id}`} className="btn largo" style={{ marginBottom: 14 }}>Nova pesagem</Link>
         {podeLancar && (
           <div className="acoes-lote">
-            <Link to={`/lotes/${lote.id}?aba=saude`} replace className="btn sec pequeno" data-testid="acaoVacina">💉 Vacina ou remédio</Link>
-            {podeMudarFase && <Link to={`/lotes/${lote.id}?aba=dinheiro&acao=venda`} replace className="btn sec pequeno" data-testid="acaoVenda">💰 Venda ou morte</Link>}
-            <Link to={`/pasto/mover?de=lote:${lote.id}`} className="btn sec pequeno" data-testid="acaoMover">🐂 Mudar de piquete</Link>
+            <Link to={`/lotes/${lote.id}?aba=saude`} replace className="btn sec pequeno" data-testid="acaoVacina"><span className="ic" aria-hidden="true">💉</span>Vacina ou remédio</Link>
+            {podeMudarFase && <Link to={`/lotes/${lote.id}?aba=dinheiro&acao=venda`} replace className="btn sec pequeno" data-testid="acaoVenda"><span className="ic" aria-hidden="true">💰</span>Venda ou morte</Link>}
+            <Link to={`/pasto/mover?de=lote:${lote.id}`} className="btn sec pequeno" data-testid="acaoMover"><span className="ic" aria-hidden="true">🐂</span>Mudar de piquete</Link>
           </div>
         )}
 

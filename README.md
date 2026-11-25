@@ -93,7 +93,7 @@ A cada envio para `main`, o GitHub Actions roda os testes e publica o app no Git
 - `src/pasto.ts` e `src/pastoGeo.ts`: contas do pasto, ocupação dos piquetes, leitura do NDVI e contorno do piquete; `supabase/functions/ndvi`: busca do satélite.
 - `supabase/`: banco (migrações com todas as regras) e funções do servidor (leitura por foto).
 - `src/pages/`: telas.
-- `src/menu.ts`: todas as funções do Menu (título, ícone, palavras da busca e quem pode ver) e os atalhos do Início; `src/navegacao.ts`: para onde o Voltar e cada aviso levam.
+- `src/menu.ts`: todas as funções do Menu (título, ícone, palavras da busca e quem pode ver) e os atalhos do Início; `src/navegacao.ts`: para onde o Voltar e cada aviso levam, aba no endereço e tela nova abrindo do alto.
 
 ### Regras para telas novas
 

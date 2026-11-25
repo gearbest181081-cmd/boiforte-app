@@ -780,6 +780,7 @@ function confere(cond, msg) {
       const destino = (await aviso.getAttribute('href')).replace(/^.*#/, '');
       await aviso.click();
       confere(await esperar(async () => p2.url().endsWith('#' + destino)), `aviso do Início leva para onde se resolve (${destino})`);
+      confere(await esperar(async () => (await p2.evaluate(() => window.scrollY)) === 0), 'a tela aberta pelo aviso começa do alto (não herda a rolagem do Início)');
 
       await p2.goto(URL + '#/sanidade');
       await p2.getByTestId('sanLancar').click();
@@ -802,6 +803,24 @@ function confere(cond, msg) {
       await p2.getByRole('button', { name: 'Salvar fazenda' }).click();
       await p2.getByText('Campo Grande / MS').first().waitFor();
       confere(!(await p2.getByTestId('editarFazendaForm').count()), 'Fazenda: o botão Editar muda o município e o estado');
+      // Vaqueiro: celular ligado à fazenda com esse papel (o servidor fica fora do ar no teste)
+      await p2.evaluate(() => new Promise((ok, erro) => {
+        const r = indexedDB.open('boiforte');
+        r.onsuccess = () => {
+          const t = r.result.transaction('sincEstado', 'readwrite');
+          t.objectStore('sincEstado').put({ chave: 'fazenda', valor: { id: '00000000-0000-4000-8000-000000000001', nome: 'Fazenda Exemplo', papel: 'vaqueiro' } });
+          t.oncomplete = () => ok(); t.onerror = () => erro(t.error);
+        };
+      }));
+      await p2.goto(URL);
+      await p2.reload();
+      await p2.getByTestId('atalho-pesar').waitFor();
+      const atalhosVaq = await p2.locator('[data-testid^="atalho-"]').evaluateAll((l) => l.map((e) => e.dataset.testid.replace('atalho-', '')));
+      confere(atalhosVaq.join(',') === 'pesar,vacina,mover,anotar,trato,pasto', `vaqueiro: atalhos sem venda nem lote novo (${atalhosVaq.join(', ')})`);
+      await p2.getByRole('link', { name: 'Menu', exact: true }).click();
+      await p2.locator('input[name=buscaMenu]').waitFor();
+      confere(!(await p2.getByTestId('menu-financeiro').count()) && !(await p2.getByTestId('menu-venda').count()) && !(await p2.getByRole('heading', { name: 'Dinheiro', exact: true }).count()),
+        'vaqueiro: o Menu não mostra dinheiro nem venda');
       await ctx2.close();
     }
 

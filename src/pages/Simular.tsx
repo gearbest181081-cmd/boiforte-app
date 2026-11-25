@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useAbaNoEndereco } from '../abaNoEndereco';
+import { useAbaNoEndereco } from '../navegacao';
 import { analisarLotes, useTudo, type AnaliseLote } from '../hooks';
 import { seMudarGmd, seSegurar, simularCompra } from '../simulacao';
 import { fmtData, fmtNum, hojeISO, somaDias } from '../calc';

@@ -50,6 +50,7 @@
 a.alerta > div { flex: 1; min-width: 0; }
 .alerta-seta { flex: none; align-self: center; font-size: 28px; line-height: 1; opacity: .75; }
 
-/* Ações rápidas no alto da tela do lote */
-.acoes-lote { display: flex; flex-wrap: wrap; gap: 8px; margin: -4px 0 14px; }
-.acoes-lote > .btn { flex: 1 1 150px; }
+/* Ações rápidas no alto da tela do lote: desenho em cima e o nome embaixo, lado a lado */
+.acoes-lote { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; margin: -4px 0 14px; }
+.acoes-lote > .btn { flex-direction: column; gap: 4px; min-height: 72px; padding: 8px 6px; font-size: 15px; line-height: 1.2; text-align: center; }
+.acoes-lote .ic { font-size: 24px; line-height: 1; }

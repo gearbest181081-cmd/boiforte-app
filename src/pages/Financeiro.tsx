@@ -8,7 +8,7 @@ import { fmtData, hojeISO } from '../calc';
 import { CampoData, CampoEscolha, CampoNumero, CampoTexto, num, Opcoes, Topo, useAviso } from '../components/ui';
 import { rs } from './Nutricao';
 import { usePapel } from '../nuvem/useNuvem';
-import { useAbaNoEndereco } from '../abaNoEndereco';
+import { useAbaNoEndereco } from '../navegacao';
 
 export type Periodo = 'mes' | 'ano' | 'safra' | 'tudo';
 export function periodoDatas(p: Periodo, hoje = hojeISO()): [string, string] {

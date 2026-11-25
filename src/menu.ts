@@ -111,7 +111,7 @@ export const ITENS_MENU: ItemMenu[] = [
     palavras: 'conta senha trocar sair email perfil' },
   { id: 'copia', icone: '💾', titulo: 'Cópia de segurança', descricao: 'Guardar tudo num arquivo ou trazer de volta', para: '/mais?ver=copia', secao: 'dados',
     palavras: 'copia backup seguranca salvar arquivo restaurar recuperar trocar celular guardar' },
-  { id: 'instalar', icone: '📲', titulo: 'Instalar no celular', descricao: 'Pôr o BoiForte na tela inicial e abrir sem internet', para: '/mais?ver=instalar', secao: 'dados',
+  { id: 'instalar', icone: '📲', titulo: 'Instalar no celular', descricao: 'Pôr o app na tela inicial do celular e abrir sem internet', para: '/mais?ver=instalar', secao: 'dados',
     palavras: 'instalar tela inicial icone atalho baixar app aplicativo' },
   { id: 'exemplo', icone: '🧪', titulo: 'Ver um exemplo pronto', descricao: 'Fazenda de exemplo para conhecer o app', para: '/mais?ver=exemplo', secao: 'dados',
     palavras: 'exemplo conhecer testar demonstracao treinar aprender' },

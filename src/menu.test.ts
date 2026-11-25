@@ -128,6 +128,10 @@ describe('Menu: busca escrevendo ou falando', () => {
     expect(procurarNoMenu('xyzw')).toEqual([]);
   });
 
+  it('"boi" não acha o nome do app (BoiForte)', () => {
+    expect(procurarNoMenu('vender boi').map((i) => i.id)).not.toContain('instalar');
+  });
+
   it('procura só no que a pessoa pode ver', () => {
     expect(ids(procurarNoMenu('salário', itensVisiveis('vaqueiro')))).not.toContain('funcionarios');
   });
