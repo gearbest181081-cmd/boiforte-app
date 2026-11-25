@@ -52,7 +52,7 @@ export type FinalidadeGta = 'abate' | 'engorda' | 'recria' | 'reproducao' | 'exp
  * capacidadeUA: quantas UA por hectare o módulo aguenta (lotação de suporte), para o aviso de lotação alta.
  */
 export interface Modulo {
-  id?: number; gid?: string; propriedadeId: number; nome: string;
+  id?: number; gid?: string; propriedadeId: number; nome: string; areaHa?: number;
   sistema?: 'rotacionado' | 'continuo'; diasOcupacao?: number; diasDescanso?: number; capacidadeUA?: number;
   criadoEm: number;
 }

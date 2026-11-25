@@ -51,7 +51,7 @@ const ESQUEMAS_BASE: Record<string, Record<string, Regra>> = {
     ccir: TXT(20), ccirAno: NUM(1990, 2100, false, true), codEstab: TXT(30), ie: TXT(30),
   },
   modulos: {
-    id: ID(false), propriedadeId: ID(), nome: TXT(80, true), sistema: ENUM(['rotacionado', 'continuo'], false),
+    id: ID(false), propriedadeId: ID(), nome: TXT(80, true), areaHa: NUM(0.01, 1_000_000), sistema: ENUM(['rotacionado', 'continuo'], false),
     diasOcupacao: NUM(1, 365, false, true), diasDescanso: NUM(0, 365, false, true), capacidadeUA: NUM(0, 50), criadoEm: CRIADO,
   },
   piquetes: {
