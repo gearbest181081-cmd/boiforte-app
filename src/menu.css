@@ -1,0 +1,55 @@
+/* ---------- Menu com todas as funções (tela Menu) ---------- */
+.menu-busca input { font-size: 18px; }
+.menu-lista {
+  background: var(--cartao); border: 1px solid var(--borda); border-radius: var(--raio); box-shadow: var(--sombra);
+  overflow: hidden; margin-bottom: 12px;
+}
+.menu-item {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 66px; padding: 10px 12px 10px 14px;
+  color: inherit; text-decoration: none; background: none; border: 0; border-top: 1px solid var(--borda);
+  font: inherit; text-align: left; cursor: pointer;
+}
+.menu-item:first-child { border-top: 0; }
+.menu-item:active { background: var(--verde-claro); }
+.menu-ic {
+  flex: none; width: 46px; height: 46px; border-radius: 12px; background: var(--verde-claro);
+  display: grid; place-items: center; font-size: 25px; line-height: 1;
+}
+.menu-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.menu-txt b { font-size: 17px; line-height: 1.25; }
+.menu-txt small { font-size: 14px; color: var(--texto-2); line-height: 1.3; }
+.menu-seta { flex: none; font-size: 28px; line-height: 1; color: var(--texto-2); }
+
+/* Ajuste do Menu aberto por um link: rola até ele e pisca a borda */
+[id^="aj-"] { scroll-margin-top: 84px; }
+.destaque { animation: destaque 2.4s ease-out; }
+@keyframes destaque {
+  0%, 60% { box-shadow: 0 0 0 4px var(--ouro); }
+  100% { box-shadow: var(--sombra); }
+}
+
+/* ---------- Atalhos do Início ---------- */
+.atalhos-bloco { margin: 14px 0 6px; }
+.atalhos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+@media (max-width: 359px) { .atalhos { grid-template-columns: 1fr 1fr; } }
+.atalho {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  min-height: 96px; padding: 10px 6px; border-radius: var(--raio); border: 2px solid var(--borda);
+  background: var(--cartao); color: var(--texto); box-shadow: var(--sombra);
+  text-decoration: none; text-align: center; font-size: 15px; font-weight: 700; line-height: 1.2;
+}
+.atalho .ic { font-size: 32px; line-height: 1; }
+.atalho:active { transform: scale(.98); background: var(--verde-claro); }
+.atalho.principal { background: var(--verde); border-color: var(--verde); color: var(--sobre-verde); }
+.ver-tudo {
+  display: flex; align-items: center; justify-content: center; min-height: 48px; margin-top: 4px;
+  color: var(--verde); font-weight: 700; text-decoration: none; font-size: 17px;
+}
+
+/* Aviso que leva para a tela onde se resolve: seta no fim */
+a.alerta > div { flex: 1; min-width: 0; }
+.alerta-seta { flex: none; align-self: center; font-size: 28px; line-height: 1; opacity: .75; }
+
+/* Ações rápidas no alto da tela do lote */
+.acoes-lote { display: flex; flex-wrap: wrap; gap: 8px; margin: -4px 0 14px; }
+.acoes-lote > .btn { flex: 1 1 150px; }

@@ -11,3 +11,23 @@ export function telaDeCima(caminho: string): string {
   if (p.length > 1) return `/${p[0]}`;
   return ABAS.has(p[0]) ? '/' : '/mais';
 }
+
+// ---------- Para onde cada aviso do Início leva ----------
+import type { Alerta } from './alertas';
+import type { ResumoModulo } from './pasto';
+
+/**
+ * Tela onde a pessoa resolve o aviso: o próprio aviso pode dizer (para), o de estoque vai para o Estoque
+ * e os do pasto vão para o piquete (ou para o Pasto, quando o aviso é do módulo todo).
+ */
+export function paraDoAviso(a: Alerta, pasto: ResumoModulo[] = []): string | undefined {
+  if (a.para) return a.para;
+  if (a.titulo.startsWith('Estoque:')) return '/estoque';
+  for (const r of pasto) {
+    const e = r.estados.find((x) => x.alertas.includes(a));
+    if (e) return `/pasto/piquete/${e.piquete.id}`;
+    for (const [piqueteId, an] of r.ndvi) if (an.alertas.includes(a)) return `/pasto/piquete/${piqueteId}`;
+    if (r.alertas.includes(a)) return '/pasto';
+  }
+  return undefined;
+}

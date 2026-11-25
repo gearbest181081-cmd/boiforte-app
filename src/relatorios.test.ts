@@ -73,6 +73,7 @@ describe('relatório com o exemplo', () => {
     await carregarExemplo();
     const al = alertasInteligentes(await carregarTudo());
     expect(al.some((a) => /Vacina/.test(a.titulo))).toBe(true);
+    expect(al.find((a) => /Vacina/.test(a.titulo))?.para, 'vacina marcada leva para a Sanidade').toBe('/sanidade');
     // lotes novos (menos de 45 dias no fim do mês passado) não disparam o aviso de custo da @
     expect(al.some((a) => /custo da @ subiu/.test(a.titulo))).toBe(false);
   });
@@ -91,5 +92,6 @@ describe('relatório com o exemplo', () => {
     const a = al.find((x) => /Lote 6: custo da @ subiu/.test(x.titulo));
     expect(a).toBeTruthy();
     expect(a!.nivel).toBe('atencao');
+    expect(a!.para, 'leva para o dinheiro do lote').toBe(`/lotes/${id}?aba=dinheiro`);
   });
 });

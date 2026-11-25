@@ -6,6 +6,10 @@ import { nomeParaMostrar, useSessao } from '../nuvem/sessao';
 import { useEstadoNuvem } from '../nuvem/useNuvem';
 import { useAviso } from './ui';
 
+const ABRIR_PERFIL = 'boiforte-abrir-perfil';
+/** Abre o quadro da conta de qualquer lugar (ex.: "Minha conta" no Menu). */
+export function abrirPerfil() { window.dispatchEvent(new Event(ABRIR_PERFIL)); }
+
 /** Botão redondo do perfil (canto de cima, à direita) e o quadro que abre ao tocar. */
 export function Perfil() {
   const { conta } = useSessao();
@@ -18,6 +22,11 @@ export function Perfil() {
     window.addEventListener('keydown', esc);
     return () => window.removeEventListener('keydown', esc);
   }, [aberto]);
+  useEffect(() => {
+    const abrir = () => setAberto(true);
+    window.addEventListener(ABRIR_PERFIL, abrir);
+    return () => window.removeEventListener(ABRIR_PERFIL, abrir);
+  }, []);
   if (!conta) return null;
   const nome = nomeParaMostrar(conta);
   const inicial = nome.trim().charAt(0).toUpperCase() || '?';

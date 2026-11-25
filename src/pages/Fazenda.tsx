@@ -6,6 +6,9 @@ import { lotacaoModulo, ocupantesAtuais } from '../pasto';
 import { fmtNum } from '../calc';
 import { CampoNumero, CampoTexto, Entrada, num, Opcoes, Topo, useAviso } from '../components/ui';
 
+// Mudar os dados da fazenda: só dono e gerente (sem nuvem, quem usa o celular)
+import { usePapel } from '../nuvem/useNuvem';
+
 const UFS: Record<string, string> = {
   acre: 'AC', alagoas: 'AL', amapa: 'AP', amazonas: 'AM', bahia: 'BA', ceara: 'CE', 'distrito federal': 'DF', 'espirito santo': 'ES', goias: 'GO',
   maranhao: 'MA', 'mato grosso': 'MT', 'mato grosso do sul': 'MS', 'minas gerais': 'MG', para: 'PA', paraiba: 'PB', parana: 'PR', pernambuco: 'PE',
@@ -21,6 +24,9 @@ export function sigla(v: string): string {
 export function Fazenda() {
   const props = useLiveQuery(() => db.propriedades.toArray());
   const [novo, setNovo] = useState(false);
+  const [editando, setEditando] = useState<number | null>(null);
+  const papel = usePapel();
+  const podeMudar = papel !== undefined && papel !== 'vaqueiro' && papel !== 'consultor';
   return (
     <>
       <Topo titulo="Fazenda" voltar />
@@ -28,8 +34,10 @@ export function Fazenda() {
         {props?.length === 0 && !novo && (
           <div className="dica">Comece cadastrando sua fazenda. Depois, se quiser, separe em módulos e piquetes.</div>
         )}
-        {props?.map((p) => <CartaoPropriedade key={p.id} p={p} />)}
-        {novo || props?.length === 0 ? <FormPropriedade aoSalvar={() => setNovo(false)} aoCancelar={props?.length ? () => setNovo(false) : undefined} /> : (
+        {props?.map((p) => (editando === p.id
+          ? <FormPropriedade key={p.id} p={p} aoSalvar={() => setEditando(null)} aoCancelar={() => setEditando(null)} />
+          : <CartaoPropriedade key={p.id} p={p} editar={podeMudar ? () => setEditando(p.id!) : undefined} />))}
+        {novo || props?.length === 0 ? <FormPropriedade aoSalvar={() => setNovo(false)} aoCancelar={props?.length ? () => setNovo(false) : undefined} /> : podeMudar && (
           <button className="btn sec largo" onClick={() => setNovo(true)}>+ Outra fazenda</button>
         )}
       </main>
@@ -37,21 +45,26 @@ export function Fazenda() {
   );
 }
 
-function FormPropriedade({ aoSalvar, aoCancelar }: { aoSalvar: () => void; aoCancelar?: () => void }) {
+/** Cadastro da fazenda. Com p, muda o nome, o município e a área de uma fazenda já cadastrada. */
+function FormPropriedade({ p, aoSalvar, aoCancelar }: { p?: Propriedade; aoSalvar: () => void; aoCancelar?: () => void }) {
   const aviso = useAviso();
-  const [nome, setNome] = useState('');
-  const [municipio, setMunicipio] = useState('');
-  const [uf, setUf] = useState('');
-  const [area, setArea] = useState('');
+  const [nome, setNome] = useState(p?.nome ?? '');
+  const [municipio, setMunicipio] = useState(p?.municipio ?? '');
+  const [uf, setUf] = useState(p?.uf ?? '');
+  const [area, setArea] = useState(p?.areaHa != null ? String(p.areaHa).replace('.', ',') : '');
   const salvar = async () => {
     if (!nome.trim()) return aviso('Informe o nome da fazenda.', true);
-    await db.propriedades.add({ nome: nome.trim(), municipio: municipio.trim() || undefined, uf: uf.trim().toUpperCase() || undefined, areaHa: num(area) ?? undefined, criadoEm: Date.now() });
-    aviso('Fazenda cadastrada.');
+    const dados = { nome: nome.trim(), municipio: municipio.trim() || undefined, uf: uf.trim().toUpperCase() || undefined, areaHa: num(area) ?? undefined };
+    try {
+      if (p) await db.propriedades.update(p.id!, dados);
+      else await db.propriedades.add({ ...dados, criadoEm: Date.now() });
+    } catch (e) { return aviso((e as Error).message, true); }
+    aviso(p ? 'Dados da fazenda salvos.' : 'Fazenda cadastrada.');
     aoSalvar();
   };
   return (
-    <div className="cartao">
-      <h3>Nova fazenda</h3>
+    <div className="cartao" data-testid={p ? 'editarFazendaForm' : undefined}>
+      <h3>{p ? 'Dados da fazenda' : 'Nova fazenda'}</h3>
       <CampoTexto rotulo="Nome da fazenda" valor={nome} aoMudar={setNome} nome="fazendaNome" />
       <div className="grade">
         <CampoTexto rotulo="Município" valor={municipio} aoMudar={setMunicipio} nome="fazendaMunicipio" />
@@ -66,7 +79,7 @@ function FormPropriedade({ aoSalvar, aoCancelar }: { aoSalvar: () => void; aoCan
   );
 }
 
-function CartaoPropriedade({ p }: { p: Propriedade }) {
+function CartaoPropriedade({ p, editar }: { p: Propriedade; editar?: () => void }) {
   const aviso = useAviso();
   const modulos = useLiveQuery(() => db.modulos.where('propriedadeId').equals(p.id!).toArray(), [p.id]);
   const nLotes = useLiveQuery(() => db.lotes.where('propriedadeId').equals(p.id!).count(), [p.id]);
@@ -83,7 +96,7 @@ function CartaoPropriedade({ p }: { p: Propriedade }) {
   };
   return (
     <div className="cartao">
-      <div className="linha-lote"><h3>{p.nome}</h3><span className="mudo">{nLotes ?? 0} lotes</span></div>
+      <div className="linha-lote"><h3>{p.nome} <span className="mudo" style={{ fontWeight: 400 }}>· {nLotes ?? 0} lotes</span></h3>{editar && <button type="button" className="btn sec pequeno" onClick={editar} data-testid="editarFazenda">✏️ Editar</button>}</div>
       <p className="mudo">{[p.municipio, p.uf].filter(Boolean).join(' / ')}{p.areaHa ? ` · ${p.areaHa} ha` : ''}</p>
       {modulos?.map((m) => <BlocoModulo key={m.id} m={m} />)}
       <hr />

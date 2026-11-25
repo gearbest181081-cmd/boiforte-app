@@ -54,6 +54,15 @@ Aplicativo de gestão de **cria, recria e engorda** (a pasto, TIP e confinamento
 - **Indicadores**: UA/ha do piquete e do módulo, pressão de pastejo e oferta de forragem na entrada (massa estimada pela altura), dias ocupado e de descanso, ocupação ideal para fechar o descanso, próximo piquete sugerido e aviso de lotação alta (também usado pela Cria).
 - **Satélite (NDVI do Sentinel-2)** por piquete, com aviso quando o verde cai em relação ao próprio piquete ou aos vizinhos depois do descanso. O contorno do piquete é gravado andando em volta com o GPS ou importando um KML.
 
+## Menu e atalhos (achar cada função)
+
+- **Menu** (último botão de baixo, antes chamado "Mais"): todas as funções separadas por assunto, com busca escrevendo ou falando ("vacina", "vender boi", "salário", "diesel"). Cada papel só vê o que pode usar.
+- **Início**: seis atalhos grandes com o que mais se faz no dia a dia, conforme o papel (o vaqueiro vê pesar, vacina, mudar de piquete, anotar, trato e pasto; o dono e o gerente veem venda e lote novo no lugar do trato e do pasto).
+- **Escolher o lote**: vacina ou remédio, venda ou morte, compra de gado, relatório de pesagem e mudança de fase abrem a lista de lotes e vão direto para o formulário certo do lote tocado.
+- **Tela do lote**: logo abaixo de "Nova pesagem", os botões de vacina, venda ou morte e mudar de piquete.
+- **Avisos com seta (›)** levam para onde se resolve: pesar o lote, aba Saúde ou Dinheiro do lote, ficha do piquete, Estoque ou Sanidade.
+- **Fazenda**: o dono e o gerente mudam o nome, o município e a área da fazenda pelo botão "Editar".
+
 Para ligar a nuvem, siga [CONFIGURAR.md](CONFIGURAR.md). Segurança em [SEGURANCA.md](SEGURANCA.md) e privacidade em [PRIVACIDADE.md](PRIVACIDADE.md).
 
 ## Para desenvolver
@@ -84,6 +93,7 @@ A cada envio para `main`, o GitHub Actions roda os testes e publica o app no Git
 - `src/pasto.ts` e `src/pastoGeo.ts`: contas do pasto, ocupação dos piquetes, leitura do NDVI e contorno do piquete; `supabase/functions/ndvi`: busca do satélite.
 - `supabase/`: banco (migrações com todas as regras) e funções do servidor (leitura por foto).
 - `src/pages/`: telas.
+- `src/menu.ts`: todas as funções do Menu (título, ícone, palavras da busca e quem pode ver) e os atalhos do Início; `src/navegacao.ts`: para onde o Voltar e cada aviso levam.
 
 ### Regras para telas novas
 
@@ -92,4 +102,5 @@ A cada envio para `main`, o GitHub Actions roda os testes e publica o app no Git
   e, quando não houver rótulo visível, `Entrada`, `EntradaData` e `Escolha`. Só caixa de marcar, arquivo e senha (`CampoSenha`: falar a senha em voz alta deixa os outros ouvirem) ficam sem microfone.
   Nas 3 primeiras vezes que a pessoa toca num microfone, aparece a explicação de como falar.
 - **Toda tela tem Voltar.** O `Topo` já mostra o botão "Voltar" (só o Início fica sem). Se a tela abrir um formulário dentro dela, ponha também um botão "Cancelar".
+- **Toda função tem caminho fácil.** Tela ou ação nova entra em `src/menu.ts` (título, ícone, palavras que a pessoa falaria e quem pode ver); o teste `src/menu.test.ts` falha se uma tela principal do `App.tsx` ficar fora do Menu. Aviso que tem onde resolver leva `para` (o endereço da tela). As abas ficam no endereço (`/lotes/12?aba=saude`, `/financeiro?aba=fixos`, `/simular?aba=comparar`) para um botão abrir direto nelas.
 - O teste de ponta a ponta (passo 20) confere as duas regras em todas as telas da lista `telas`: acrescente lá as telas novas.

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, exportarBackup, importarBackup, lerArquivoBackup, lerConfig, lerConfigFin, TABELAS } from '../db';
-import { carregarExemplo } from '../exemplo';
+import { BotaoExemplo, MenuFuncoes, useRolarAoAbrir } from '../components/MenuFuncoes';
 import { desligarFazenda, fazendaLigada } from '../nuvem/sinc';
 import { useEstadoNuvem, usePapel } from '../nuvem/useNuvem';
 import { CampoNumero, mostrarDicaMicDeNovo, num, Topo, useAviso } from '../components/ui';
@@ -17,6 +17,7 @@ export function Mais() {
   const nuvem = useEstadoNuvem();
   const papel = usePapel();
   const veDinheiro = papel !== 'vaqueiro';
+  useRolarAoAbrir();
 
   useEffect(() => {
     const h = (e: Event) => { e.preventDefault(); setInstalar(e); };
@@ -56,13 +57,6 @@ export function Mais() {
     }
   };
 
-  const exemplo = async () => {
-    if (await fazendaLigada()) return aviso('O exemplo é só para conhecer o app. Desligue da nuvem antes, para ele não ir para a fazenda.', true);
-    await carregarExemplo();
-    aviso('Exemplo carregado.');
-    nav('/');
-  };
-
   const apagarTudo = async () => {
     const ligada = await fazendaLigada();
     if (!window.confirm(ligada ? 'Apagar os dados SÓ deste celular? Na nuvem continuam guardados, e o celular é desligado da fazenda.' : 'Apagar TODOS os dados do BoiForte deste celular? Faça uma cópia antes.')) return;
@@ -76,42 +70,36 @@ export function Mais() {
 
   return (
     <>
-      <Topo titulo="Mais" />
+      <Topo titulo="Menu" />
       <main>
         <Link to="/nuvem" className={`alerta ${nuvem?.fazenda ? (nuvem.pendentes || nuvem.erros.length ? 'atencao' : 'bom') : 'atencao'}`} style={{ textDecoration: 'none' }}>
           <span className="ic">☁️</span>
           <div><b>Nuvem e equipe</b>{nuvem?.fazenda ? (nuvem.pendentes ? `${nuvem.pendentes} alteração(ões) para enviar.` : nuvem.erros.length ? 'Há registros recusados. Toque para ver.' : `Ligado à ${nuvem.fazenda.nome}.`) : 'Guarde os dados fora do celular e trabalhe com a equipe.'}</div>
         </Link>
-        <div className="grade" style={{ marginBottom: 12 }}>
-          <Link to="/anotacoes" className="btn sec">Anotações e tarefas</Link>
-          <Link to="/fazenda" className="btn sec">Fazenda</Link>
-          <Link to="/pasto" className="btn sec">Pasto e piquetes</Link>
-          <Link to="/nutricao" className="btn sec">Nutrição</Link>
-          <Link to="/estoque" className="btn sec">Estoque</Link>
-          {veDinheiro && <Link to="/financeiro" className="btn sec">Dinheiro</Link>}
-          {veDinheiro && <Link to="/funcionarios" className="btn sec">Funcionários</Link>}
-          <Link to="/sanidade" className="btn sec">Sanidade</Link>
-          {veDinheiro && <Link to="/relatorios" className="btn sec">Relatórios</Link>}
-          {veDinheiro && <Link to="/simular" className="btn sec">Simulação</Link>}
-          <Link to="/lotes" className="btn sec">Lotes</Link>
-        </div>
-        <Mercado />
-        <ConfigFinanceira />
-        {!instalado && (
-          <div className="cartao">
-            <h3>Instalar no celular</h3>
-            <p className="mudo">Coloca o BoiForte na tela inicial e abre sem internet.</p>
-            {instalar ? (
-              <button className="btn largo" onClick={async () => { instalar.prompt(); await instalar.userChoice; setInstalar(null); }}>Instalar BoiForte</button>
-            ) : (
-              <p style={{ fontSize: 16 }}>No Android (Chrome): menu <b>⋮</b> → <b>Instalar app</b> ou <b>Adicionar à tela inicial</b>.<br />No iPhone (Safari): botão <b>Compartilhar</b> → <b>Adicionar à Tela de Início</b>.</p>
-            )}
-          </div>
-        )}
+        <MenuFuncoes />
 
-        <div className="cartao">
+        <h2>Ajustes</h2>
+        {veDinheiro && <Mercado />}
+        {veDinheiro && <ConfigFinanceira />}
+        <div className="cartao" id="aj-instalar">
+          <h3>Instalar no celular</h3>
+          {instalado ? <p className="mudo">O BoiForte já está instalado neste celular. Abra pelo ícone na tela inicial.</p> : (
+            <>
+              <p className="mudo">Coloca o BoiForte na tela inicial e abre sem internet.</p>
+              {instalar ? (
+                <button className="btn largo" onClick={async () => { instalar.prompt(); await instalar.userChoice; setInstalar(null); }}>Instalar BoiForte</button>
+              ) : (
+                <p style={{ fontSize: 16 }}>No Android (Chrome): menu <b>⋮</b> → <b>Instalar app</b> ou <b>Adicionar à tela inicial</b>.<br />No iPhone (Safari): botão <b>Compartilhar</b> → <b>Adicionar à Tela de Início</b>.</p>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="cartao" id="aj-copia">
           <h3>Cópia de segurança</h3>
-          <p className="mudo">Os dados ficam só neste celular. Faça uma cópia toda semana e mande para o seu WhatsApp ou e-mail. {espaco}</p>
+          <p className="mudo">{nuvem?.fazenda
+            ? 'Os dados também ficam guardados na nuvem. Se quiser, faça uma cópia em arquivo e guarde no seu WhatsApp ou e-mail.'
+            : 'Os dados ficam só neste celular. Faça uma cópia toda semana e mande para o seu WhatsApp ou e-mail.'} {espaco}</p>
           <div className="botoes">
             <button className="btn" onClick={baixar}>Fazer cópia</button>
             <button className="btn sec" onClick={() => arquivo.current?.click()}>Restaurar cópia</button>
@@ -119,13 +107,13 @@ export function Mais() {
           <input ref={arquivo} type="file" accept="application/json,.json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) restaurar(f); e.target.value = ''; }} />
         </div>
 
-        <div className="cartao">
+        <div className="cartao" id="aj-exemplo">
           <h3>Conhecer o app</h3>
           <p className="mudo">Carrega uma fazenda de exemplo com dois lotes (um pelo peso médio e outro por brinco), para você ver os gráficos e avisos.</p>
-          <button className="btn sec largo" onClick={exemplo}>Carregar exemplo</button>
+          <BotaoExemplo />
         </div>
 
-        <details className="cartao">
+        <details className="cartao" id="aj-voz">
           <summary>Como escrever falando</summary>
           <p style={{ marginTop: 10 }}>Todo campo de escrever tem um microfone verde ao lado. Toque nele, espere ficar vermelho e fale. Exemplos:</p>
           <ul style={{ paddingLeft: 20, marginTop: 0 }}>
@@ -138,7 +126,7 @@ export function Mais() {
           <button className="btn sec largo" onClick={() => { mostrarDicaMicDeNovo(); aviso('Pronto. A explicação aparece de novo nas próximas 3 vezes que você tocar no microfone.'); }}>Ver a explicação do microfone de novo</button>
         </details>
 
-        <div className="cartao">
+        <div className="cartao" id="aj-sobre">
           <h3>Sobre</h3>
           <p className="mudo">BoiForte versão 0.4. Rebanho e pesagens, nutrição e estoque, financeiro, sanidade, relatórios, simulações, nuvem com equipe, leitura por foto e balança Bluetooth.</p>
           <button className="btn perigo pequeno" onClick={apagarTudo}>Apagar todos os dados</button>
@@ -165,8 +153,8 @@ function Mercado() {
     aviso('Valores de mercado salvos.');
   };
   return (
-    <div className="cartao">
-      <h3>Mercado</h3>
+    <div className="cartao" id="aj-mercado">
+      <h3>Preço da arroba</h3>
       <p className="mudo">Usados no custo da @ produzida. Atualize com o preço da sua região.</p>
       <div className="grade">
         <CampoNumero rotulo="Preço da @" valor={vA} aoMudar={setArroba} unidade="R$" nome="precoArroba" />
@@ -187,18 +175,18 @@ function ConfigFinanceira() {
   const vC = com ?? String(+(cfg.comissaoVenda * 100).toFixed(3)).replace('.', ',');
   const salvar = async () => {
     const o = num(vO), c = num(vC);
-    if (o == null || o < 0 || o > 10) return aviso('O custo do dinheiro fica entre 0% e 10% ao mês.', true);
+    if (o == null || o < 0 || o > 10) return aviso('Os juros ficam entre 0% e 10% ao mês.', true);
     if (c == null || c < 0 || c > 20) return aviso('A comissão fica entre 0% e 20%.', true);
     await db.config.bulkPut([{ chave: 'oportunidadeMes', valor: o / 100 }, { chave: 'comissaoVenda', valor: c / 100 }]);
     setOp(null); setCom(null);
     aviso('Valores salvos.');
   };
   return (
-    <div className="cartao">
-      <h3>Dinheiro</h3>
-      <p className="mudo">O custo do dinheiro é quanto ele renderia aplicado (entra no resultado dos lotes). A comissão é o padrão das vendas.</p>
+    <div className="cartao" id="aj-juros">
+      <h3>Juros e comissão</h3>
+      <p className="mudo">Os juros são quanto o dinheiro renderia aplicado no banco (é o custo do dinheiro e entra no resultado dos lotes). A comissão é a de sempre nas vendas.</p>
       <div className="grade">
-        <CampoNumero rotulo="Custo do dinheiro" valor={vO} aoMudar={setOp} unidade="% ao mês" nome="oportunidadeMes" />
+        <CampoNumero rotulo="Juros do dinheiro" valor={vO} aoMudar={setOp} unidade="% ao mês" nome="oportunidadeMes" />
         <CampoNumero rotulo="Comissão de venda" valor={vC} aoMudar={setCom} unidade="%" nome="comissaoVenda" />
       </div>
       <button className="btn sec pequeno" onClick={salvar}>Salvar</button>

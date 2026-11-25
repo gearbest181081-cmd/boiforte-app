@@ -359,7 +359,7 @@ function confere(cond, msg) {
     await page.getByText('Falta lançar a compra do lote').waitFor({ state: 'detached' });
     // 40 × 3.000 × 1,02 + 1.000 = 123.400
     confere(/Compra de animais[\s\S]*?R\$\s123\.400,00/.test(await page.locator('main').innerText()), 'compra do lote = R$ 123.400,00 (comissão e frete)');
-    await page.getByRole('button', { name: 'Venda / baixa' }).click();
+    await page.getByRole('button', { name: 'Venda ou morte' }).click();
     await page.locator('input[name=saidaCab]').fill('10');
     await page.locator('input[name=saidaPeso]').fill('366');
     await page.locator('input[name=saidaPreco]').fill('320');
@@ -405,7 +405,7 @@ function confere(cond, msg) {
 
     console.log('14b. Funcionários com salário');
     await page.goto(URL + '#/mais');
-    await page.getByRole('link', { name: 'Funcionários' }).click();
+    await page.getByTestId('menu-funcionarios').click();
     await page.getByRole('link', { name: '+ Cadastrar funcionário' }).click();
     await page.locator('input[name=funcNome]').fill('João');
     await page.getByRole('button', { name: 'Vaqueiro', exact: true }).click();
@@ -547,7 +547,7 @@ function confere(cond, msg) {
     await ctx.setOffline(false);
 
     console.log('18. Exemplo e tela escura');
-    await page.getByRole('link', { name: 'Mais' }).click();
+    await page.getByRole('link', { name: 'Menu', exact: true }).click();
     await page.getByRole('button', { name: 'Carregar exemplo' }).click();
     await page.getByText('Fêmea — 4º lote').waitFor();
     confere(true, 'exemplo carregado');
@@ -636,7 +636,7 @@ function confere(cond, msg) {
       p2.on('dialog', (d) => d.accept());
       await p2.goto(URL);
       if (nuvemNoBuild) { await p2.evaluate((v) => localStorage.setItem('boiforte-sessao', v), sessaoFalsa('11111111-1111-4111-8111-111111111111', 'produtor@exemplo.com')); await p2.reload(); }
-      await p2.getByRole('link', { name: 'Mais' }).click();
+      await p2.getByRole('link', { name: 'Menu', exact: true }).click();
       await p2.getByRole('button', { name: 'Carregar exemplo' }).click();
       await p2.getByText('Fêmea — 4º lote').waitFor();
       const loteId = await p2.evaluate(() => new Promise((ok) => { const r = indexedDB.open('boiforte'); r.onsuccess = () => { const t = r.result.transaction('lotes').objectStore('lotes').getAll(); t.onsuccess = () => ok(t.result[0].id); }; }));
@@ -644,6 +644,8 @@ function confere(cond, msg) {
       const telas = ['/lotes', '/lotes/novo', `/lotes/${loteId}`, `/lotes/${loteId}/editar`, `/lotes/${loteId}/relatorio`, '/pesar', `/pesar/${loteId}`, '/fazenda', '/mais', '/nutricao',
         `/nutricao/formula/${formulaId}`, '/nutricao/formula/nova', '/nutricao/ingrediente/novo', '/estoque', '/trato', '/financeiro', '/sanidade', '/simular', '/relatorios', '/nuvem', '/funcionarios', '/funcionarios/novo', '/anotacoes', '/anotacoes/nova', '/pasto', '/pasto/mover'];
       const semVoltar = [], semMic = [];
+      // telas abertas pelo Menu já na parte certa (escolher o lote, formulário aberto, aba no endereço)
+      telas.push('/lotes?escolher=saude', '/lotes?escolher=venda', `/lotes/${loteId}?aba=dinheiro&acao=venda`, `/lotes/${loteId}?aba=saude`, '/financeiro?aba=lancamentos&acao=novo', '/simular?aba=comparar');
       for (const t of telas) {
         await p2.goto(URL + '#' + t);
         await p2.locator('header.topo h1').waitFor();
@@ -670,15 +672,15 @@ function confere(cond, msg) {
       await p2.goto(URL + '#/fazenda');
       await p2.getByRole('button', { name: 'Voltar', exact: true }).click();
       await p2.getByRole('button', { name: 'Carregar exemplo' }).waitFor();
-      confere(true, 'aberto direto na Fazenda, o Voltar leva ao Mais');
-      await p2.getByRole('link', { name: 'Mais' }).click();
-      await p2.getByRole('link', { name: 'Fazenda' }).click();
+      confere(true, 'aberto direto na Fazenda, o Voltar leva ao Menu');
+      await p2.getByRole('link', { name: 'Menu', exact: true }).click();
+      await p2.getByTestId('menu-fazenda').click();
       await p2.getByRole('button', { name: '+ Outra fazenda' }).click();
       await p2.getByRole('button', { name: 'Cancelar' }).click();
       confere(await p2.getByRole('button', { name: '+ Outra fazenda' }).isVisible(), 'cadastro de outra fazenda tem Cancelar');
       await p2.getByRole('button', { name: 'Voltar', exact: true }).click();
       await p2.getByRole('button', { name: 'Carregar exemplo' }).waitFor();
-      confere(true, 'Voltar da Fazenda volta para o Mais');
+      confere(true, 'Voltar da Fazenda volta para o Menu');
 
       // Microfone: explicação nas 3 primeiras vezes
       await p2.goto(URL + `#/pesar/${loteId}`);
@@ -729,6 +731,77 @@ function confere(cond, msg) {
       await p2.waitForTimeout(300);
       const loteSel = await p2.locator('select[name=lote]').evaluate((s) => s.options[s.selectedIndex].text);
       confere(/fêmea/i.test(loteSel), `falar o nome escolhe na lista (${loteSel})`);
+
+      console.log('20b. Achar as funções: Menu com busca, atalhos do Início, escolher o lote e avisos que levam onde resolver');
+      const esperar = async (fn, ms = 5000) => { for (const fim = Date.now() + ms; Date.now() < fim; await p2.waitForTimeout(50)) if (await fn()) return true; return false; };
+      const primeiroDoMenu = () => p2.locator('.menu-item').first().getAttribute('data-testid');
+      await p2.goto(URL);
+      await p2.getByTestId('atalho-pesar').waitFor();
+      const atalhos = await p2.locator('[data-testid^="atalho-"]').allInnerTexts();
+      confere(atalhos.length === 6 && /Pesar gado/.test(atalhos[0]) && atalhos.some((t) => /Vacina ou remédio/.test(t)) && atalhos.some((t) => /Venda ou morte/.test(t)),
+        `Início com 6 atalhos grandes (${atalhos.map((t) => t.replace(/\s+/g, ' ').trim()).join(', ')})`);
+      await foto('26-inicio-atalhos');
+      await p2.getByTestId('atalho-vacina').click();
+      await p2.getByTestId('escolherLote').waitFor();
+      await p2.screenshot({ path: path.join(FOTOS, '27-escolher-lote.png') });
+      await p2.locator('a.cartao', { hasText: 'Fêmea — 4º lote' }).click();
+      await p2.getByRole('button', { name: '+ Aplicação ou agendamento' }).waitFor();
+      confere(/aba=saude/.test(p2.url()) && (await p2.getByRole('radio', { name: 'Saúde' }).getAttribute('aria-checked')) === 'true', 'atalho Vacina: escolhe o lote e já abre a aba Saúde dele');
+      await p2.goto(URL);
+      await p2.getByTestId('atalho-venda').click();
+      await p2.locator('a.cartao', { hasText: 'Fêmea — 4º lote' }).click();
+      await p2.locator('input[name=saidaCab]').waitFor();
+      confere(true, 'atalho Venda ou morte: escolhe o lote e já abre o formulário de saída');
+      confere(await p2.getByTestId('acaoVacina').isVisible() && await p2.getByTestId('acaoMover').isVisible(), 'tela do lote tem os botões de vacina e de mudar de piquete no alto');
+
+      await p2.getByRole('link', { name: 'Menu', exact: true }).click();
+      await p2.locator('input[name=buscaMenu]').waitFor();
+      confere(await p2.getByRole('heading', { name: 'Dia a dia' }).isVisible() && await p2.getByRole('heading', { name: 'Dinheiro', exact: true }).isVisible(), 'Menu separa as funções por assunto');
+      await p2.screenshot({ path: path.join(FOTOS, '28-menu.png') });
+      await p2.locator('input[name=buscaMenu]').fill('salário');
+      confere(await esperar(async () => (await primeiroDoMenu()) === 'menu-funcionarios'), 'busca do Menu: "salário" acha Funcionários e salários');
+      await p2.locator('input[name=buscaMenu]').fill('');
+      await p2.evaluate(() => { window.__fala = 'vender boi'; });
+      await p2.getByRole('button', { name: 'Falar o que você quer fazer' }).click();
+      confere(await esperar(async () => (await primeiroDoMenu()) === 'menu-venda'), 'busca falando: "vender boi" acha Vender ou lançar morte');
+      await p2.screenshot({ path: path.join(FOTOS, '29-menu-busca-voz.png') });
+      await p2.locator('input[name=buscaMenu]').fill('xyzw');
+      await p2.getByTestId('menuNadaAchado').waitFor();
+      confere(await p2.getByRole('heading', { name: 'Dia a dia' }).isVisible(), 'busca sem resultado explica e continua mostrando o Menu');
+      await p2.locator('input[name=buscaMenu]').fill('');
+      await p2.getByTestId('menu-mercado').click();
+      confere(await esperar(async () => (await p2.locator('#aj-mercado.destaque').count()) > 0), 'Preço da arroba no Menu rola até o ajuste e destaca');
+      await p2.goto(URL + '#/mais?ver=juros');
+      confere(await esperar(async () => (await p2.locator('#aj-juros.destaque').count()) > 0), 'link de outra tela (/mais?ver=juros) abre o Menu no ajuste certo');
+
+      await p2.goto(URL);
+      const aviso = p2.getByTestId('avisoComLink').first();
+      await aviso.waitFor();
+      const destino = (await aviso.getAttribute('href')).replace(/^.*#/, '');
+      await aviso.click();
+      confere(await esperar(async () => p2.url().endsWith('#' + destino)), `aviso do Início leva para onde se resolve (${destino})`);
+
+      await p2.goto(URL + '#/sanidade');
+      await p2.getByTestId('sanLancar').click();
+      await p2.getByTestId('escolherLote').waitFor();
+      confere(true, 'Sanidade tem o botão Lançar vacina ou remédio');
+      await p2.goto(URL + '#/financeiro');
+      await p2.getByTestId('finLancar').click();
+      await p2.locator('input[name=lancValor]').waitFor();
+      confere(/aba=lancamentos/.test(p2.url()), 'Dinheiro: "+ Lançar despesa ou receita" abre o formulário direto');
+      await p2.goto(URL + '#/nutricao');
+      await p2.getByTestId('nutComparar').click();
+      await p2.getByRole('radio', { name: /Comparar produtos/ }).waitFor();
+      confere((await p2.getByRole('radio', { name: /Comparar produtos/ }).getAttribute('aria-checked')) === 'true', 'Nutrição leva direto para Comparar produtos');
+      await p2.goto(URL + '#/pasto');
+      confere(await p2.getByTestId('cadastrarPiquete').waitFor({ timeout: 5000 }).then(() => true, () => false), 'Pasto tem o botão para cadastrar módulo ou piquete');
+      await p2.goto(URL + '#/fazenda');
+      await p2.getByTestId('editarFazenda').first().click();
+      await p2.locator('input[name=fazendaMunicipio]').fill('Campo Grande');
+      await p2.locator('input[name=fazendaUf]').fill('MS');
+      await p2.getByRole('button', { name: 'Salvar fazenda' }).click();
+      await p2.getByText('Campo Grande / MS').first().waitFor();
+      confere(!(await p2.getByTestId('editarFazendaForm').count()), 'Fazenda: o botão Editar muda o município e o estado');
       await ctx2.close();
     }
 

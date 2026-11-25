@@ -266,7 +266,7 @@ function Equipe({ fazendaId, nomeFazenda, souDono }: { fazendaId: string; nomeFa
               {codigo ? (
                 <>
                   <a className="btn largo" target="_blank" rel="noopener noreferrer" href={linkWhatsApp(msg)} onClick={() => setMandou(true)}>Mandar no WhatsApp</a>
-                  <p className="mudo">A mensagem já vai com o passo a passo. Ele abre o BoiForte, entra com o e-mail dele, vai em <b>Mais › Nuvem e equipe</b> e digita o código. Quando ele entrar, o nome dele aparece em "Quem está na equipe" e o acesso já está liberado.</p>
+                  <p className="mudo">A mensagem já vai com o passo a passo. Ele abre o BoiForte, entra com o e-mail dele, toca em <b>Menu › Nuvem e equipe</b> e digita o código. Quando ele entrar, o nome dele aparece em "Quem está na equipe" e o acesso já está liberado.</p>
                   <button className="btn sec pequeno" onClick={outro}>Chamar outra pessoa</button>
                 </>
               ) : <p className="mudo" style={{ margin: 0 }}>Depois de gerar o código, mande pelo WhatsApp ou leia para ele.</p>}
@@ -311,7 +311,7 @@ function Equipe({ fazendaId, nomeFazenda, souDono }: { fazendaId: string; nomeFa
         </div>
       ))}
       {souDono && lista && lista.length > 0 && (
-        <p className="mudo">Para guardar o salário e o telefone de quem trabalha na fazenda, use <Link to="/funcionarios">Mais › Funcionários</Link>.</p>
+        <p className="mudo">Para guardar o salário e o telefone de quem trabalha na fazenda, use <Link to="/funcionarios">Menu › Funcionários e salários</Link>.</p>
       )}
     </>
   );

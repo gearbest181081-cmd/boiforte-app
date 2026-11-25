@@ -7,6 +7,8 @@ import { CATEGORIAS_DESPESA, CATEGORIAS_RECEITA, drePeriodo, fluxoCaixa, folhaCo
 import { fmtData, hojeISO } from '../calc';
 import { CampoData, CampoEscolha, CampoNumero, CampoTexto, num, Opcoes, Topo, useAviso } from '../components/ui';
 import { rs } from './Nutricao';
+import { usePapel } from '../nuvem/useNuvem';
+import { useAbaNoEndereco } from '../abaNoEndereco';
 
 export type Periodo = 'mes' | 'ano' | 'safra' | 'tudo';
 export function periodoDatas(p: Periodo, hoje = hojeISO()): [string, string] {
@@ -17,16 +19,27 @@ export function periodoDatas(p: Periodo, hoje = hojeISO()): [string, string] {
   return ['1990-01-01', hoje];
 }
 
+type AbaFin = 'resumo' | 'lancamentos' | 'fixos';
+
 export function Financeiro() {
-  const [aba, setAba] = useState<'resumo' | 'lancamentos' | 'fixos'>('resumo');
+  // a aba fica no endereço: o Menu abre direto em Lançamentos (?aba=lancamentos&acao=novo) ou em Custos fixos
+  const { aba: pedida, acao, trocar: setAba } = useAbaNoEndereco('resumo');
+  const aba: AbaFin = pedida === 'lancamentos' || pedida === 'fixos' ? pedida : 'resumo';
+  const abrirNovo = acao === 'novo';
+  const papel = usePapel();
+  const podeLancar = papel !== undefined && papel !== 'consultor'; // o vaqueiro nem chega aqui
   return (
     <>
-      <Topo titulo="Financeiro" voltar />
+      <Topo titulo="Dinheiro" voltar />
       <main>
         <Opcoes tres valor={aba} aoMudar={setAba} opcoes={[{ valor: 'resumo', rotulo: 'Resumo' }, { valor: 'lancamentos', rotulo: 'Lançamentos' }, { valor: 'fixos', rotulo: 'Custos fixos' }]} />
         <div style={{ height: 14 }} />
+        {aba === 'resumo' && podeLancar && (
+          <button type="button" className="btn largo" style={{ marginBottom: 14 }} data-testid="finLancar"
+            onClick={() => setAba('lancamentos', 'novo')}>+ Lançar despesa ou receita</button>
+        )}
         {aba === 'resumo' && <Resumo />}
-        {aba === 'lancamentos' && <Lancamentos />}
+        {aba === 'lancamentos' && <Lancamentos key={abrirNovo && podeLancar ? 'novo' : ''} abrir={abrirNovo && podeLancar} podeLancar={podeLancar} />}
         {aba === 'fixos' && <Fixos />}
       </main>
     </>
@@ -93,11 +106,11 @@ function Resumo() {
   );
 }
 
-function Lancamentos() {
+function Lancamentos({ abrir, podeLancar }: { abrir: boolean; podeLancar: boolean }) {
   const aviso = useAviso();
   const lancs = useLiveQuery(() => db.lancamentos.orderBy('data').reverse().limit(200).toArray());
   const lotes = useLiveQuery(() => db.lotes.toArray());
-  const [novo, setNovo] = useState(false);
+  const [novo, setNovo] = useState(abrir);
   const [tipo, setTipo] = useState<'despesa' | 'receita'>('despesa');
   const [categoria, setCategoria] = useState<Categoria>('outros');
   const [valor, setValor] = useState('');
@@ -122,7 +135,7 @@ function Lancamentos() {
           <Opcoes valor={tipo} aoMudar={(t) => { setTipo(t); setCategoria(t === 'despesa' ? 'outros' : 'outras_receitas'); }} opcoes={[{ valor: 'despesa', rotulo: 'Despesa' }, { valor: 'receita', rotulo: 'Receita' }]} />
           <div style={{ height: 12 }} />
           <CampoEscolha rotulo="Categoria" nome="categoria" valor={categoria} aoMudar={(v) => setCategoria(v as Categoria)}
-            dica="Compra e venda de gado se lançam dentro do lote. Insumos se lançam no Estoque.">
+            dica={<>Gado se lança no lote: <Link to="/lotes?escolher=venda">venda ou morte</Link> e <Link to="/lotes?escolher=compra">compra</Link>. Ração, sal e remédio: <Link to="/estoque">no Estoque</Link>.</>}>
             {Object.entries(cats).filter(([k]) => k !== 'compra_animais' && k !== 'venda_animais').map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </CampoEscolha>
           <CampoNumero rotulo="Valor" valor={valor} aoMudar={setValor} unidade="R$" nome="lancValor" />
@@ -134,7 +147,7 @@ function Lancamentos() {
           </CampoEscolha>
           <div className="botoes"><button className="btn" onClick={salvar}>Salvar lançamento</button><button className="btn sec" onClick={() => setNovo(false)}>Cancelar</button></div>
         </div>
-      ) : <button className="btn largo" onClick={() => setNovo(true)} style={{ marginBottom: 14 }}>+ Novo lançamento</button>}
+      ) : podeLancar && <button className="btn largo" onClick={() => setNovo(true)} style={{ marginBottom: 14 }}>+ Novo lançamento</button>}
       <div className="cartao rolagem">
         {lancs?.length === 0 ? <p className="mudo">Nenhum lançamento.</p> : (
           <table className="tab">

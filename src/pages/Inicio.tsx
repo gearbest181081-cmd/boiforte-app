@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Atalhos, BotaoExemplo } from '../components/MenuFuncoes';
+import { paraDoAviso } from '../navegacao';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, FASES, garantirLembretesPadrao } from '../db';
 import { alertasInteligentes, useEscala, useEstoque, useLotesInfo, useTudo, type LoteInfo } from '../hooks';
@@ -36,8 +38,8 @@ export function Inicio() {
           </div>
           <Link to="/fazenda" className="btn largo">Começar: cadastrar minha fazenda</Link>
           {nuvemConfigurada() && <Link to="/nuvem" className="btn sec largo" style={{ marginTop: 12 }}>Recebi um convite da equipe</Link>}
-          <div className="dica" style={{ marginTop: 16 }}>
-            Quer só conhecer? Em <Link to="/mais">Mais</Link> você pode carregar um exemplo pronto.
+          <div style={{ marginTop: 12 }}>
+            <BotaoExemplo>Só quero conhecer: abrir um exemplo</BotaoExemplo>
           </div>
         </main>
       </>
@@ -67,10 +69,7 @@ export function Inicio() {
 
         {papel === 'consultor' && <div className="dica">Você está como consultor: pode olhar tudo, mas o que mudar aqui não vai para a fazenda.</div>}
 
-        <div className="botoes">
-          <Link to="/pesar" className="btn">Pesar gado</Link>
-          <Link to="/lotes/novo" className="btn sec">Novo lote</Link>
-        </div>
+        <Atalhos />
 
         {tratos.length > 0 && (
           <Link to="/trato" className={`alerta ${tratosFeitos === tratos.length ? 'bom' : 'atencao'}`} style={{ textDecoration: 'none' }}>
@@ -92,12 +91,14 @@ export function Inicio() {
         {alertas.length > 0 && (
           <>
             <h2>Avisos</h2>
-            {alertas.slice(0, todos ? alertas.length : 6).map((a, i) => (
-              <div key={i} className={`alerta ${a.nivel}`}>
-                <span className="ic">{a.nivel === 'ruim' ? '⚠️' : a.nivel === 'atencao' ? '🔔' : '✅'}</span>
-                <div><b>{a.titulo}</b>{a.texto}</div>
-              </div>
-            ))}
+            {alertas.slice(0, todos ? alertas.length : 6).map((a, i) => {
+              // o aviso leva para a tela onde se resolve (pesar o lote, a aba Saúde, o piquete, o estoque…)
+              const para = paraDoAviso(a, pasto);
+              const corpo = <><span className="ic">{a.nivel === 'ruim' ? '⚠️' : a.nivel === 'atencao' ? '🔔' : '✅'}</span><div><b>{a.titulo}</b>{a.texto}</div></>;
+              return para
+                ? <Link key={i} to={para} className={`alerta ${a.nivel}`} style={{ textDecoration: 'none' }} data-testid="avisoComLink">{corpo}<span className="alerta-seta" aria-hidden="true">›</span></Link>
+                : <div key={i} className={`alerta ${a.nivel}`}>{corpo}</div>;
+            })}
             {alertas.length > 6 && !todos && <button className="btn sec largo" onClick={() => setTodos(true)}>Ver todos os {alertas.length} avisos</button>}
           </>
         )}
@@ -110,11 +111,12 @@ export function Inicio() {
   );
 }
 
-export function CartaoLote({ info }: { info: LoteInfo }) {
+/** Cartão do lote. Em "escolher o lote" (vacina, venda…), para leva direto à ação em vez da tela do lote. */
+export function CartaoLote({ info, para }: { info: LoteInfo; para?: string }) {
   const { lote, resumo: r, projecao: p, alertas } = info;
   const pior = alertas.find((a) => a.nivel === 'ruim') ?? alertas.find((a) => a.nivel === 'atencao');
   return (
-    <Link to={`/lotes/${lote.id}`} className="cartao">
+    <Link to={para ?? `/lotes/${lote.id}`} className="cartao">
       <div className="linha-lote">
         <h3>{lote.nome}</h3>
         <span className="num">{lote.qtdCabecas} cab</span>

@@ -25,6 +25,13 @@ describe('alertas', () => {
     expect(alertasDoLote(lote, [], '2026-11-05')[0].titulo).toContain('sem pesagem');
     expect(alertasDoLote({ ...lote, encerrado: true }, [], '2026-11-05')).toEqual([]);
   });
+  it('cada aviso leva para onde se resolve', () => {
+    const l = { ...lote, id: 5 };
+    expect(alertasDoLote(l, [], '2026-11-05')[0].para).toBe('/pesar/5');
+    expect(alertasDoLote(l, [{ data: '2026-09-01', peso: 250 }], '2026-11-05').find((x) => x.titulo.includes('dias sem pesar'))?.para).toBe('/pesar/5');
+    expect(alertasDoLote(l, [{ data: '2026-10-01', peso: 250 }, { data: '2026-10-31', peso: 245 }], '2026-11-05')[0].para).toBe('/lotes/5');
+    expect(alertasDoLote(lote, [], '2026-11-05')[0].para).toBeUndefined(); // lote ainda sem id
+  });
   it('ordena do pior para o melhor', () => {
     const o = ordenarAlertas([{ nivel: 'bom', titulo: '', texto: '' }, { nivel: 'ruim', titulo: '', texto: '' }]);
     expect(o[0].nivel).toBe('ruim');

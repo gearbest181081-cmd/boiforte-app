@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { usePapel } from '../nuvem/useNuvem';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { concluirEventoSanitario, db, excluirEventoSanitario, garantirLembretesPadrao, salvarEventoSanitario, type Lote } from '../db';
 import { emCarencia, pendenciasSanidade, proximaData, TIPOS_SANIDADE, type TipoSanidade } from '../sanidade';
@@ -106,6 +108,7 @@ export function Sanidade() {
   const [titulo, setTitulo] = useState('');
   const [mes, setMes] = useState('5');
   const [dia, setDia] = useState('31');
+  const papel = usePapel();
   if (!dados) return <Topo titulo="Sanidade" voltar />;
   const hoje = hojeISO();
   const nomes = new Map(dados.lotes.map((l) => [l.id!, l.nome]));
@@ -121,11 +124,18 @@ export function Sanidade() {
     <>
       <Topo titulo="Sanidade" voltar />
       <main>
+        {papel !== undefined && papel !== 'consultor' && <Link to="/lotes?escolher=saude" className="btn largo" data-testid="sanLancar">💉 Lançar vacina ou remédio</Link>}
         <h2>Próximos 30 dias</h2>
-        {pend.length === 0 && <p className="mudo">Nada agendado. As aplicações se agendam dentro de cada lote, na aba Saúde.</p>}
-        {pend.map((p, i) => <div key={i} className={`alerta ${p.nivel}`}><span className="ic">{p.nivel === 'ruim' ? '⚠️' : '💉'}</span><div><b>{p.titulo}</b>{p.texto}</div></div>)}
+        {pend.length === 0 && <p className="mudo">Nada agendado. Para lançar ou agendar uma dose, toque em <b>Lançar vacina ou remédio</b> e escolha o lote.</p>}
+        {pend.map((p, i) => {
+          // a dose marcada leva para a aba Saúde do lote, onde tem o botão "Feito hoje"
+          const corpo = <><span className="ic">{p.nivel === 'ruim' ? '⚠️' : '💉'}</span><div><b>{p.titulo}</b>{p.texto}</div></>;
+          return p.loteId
+            ? <Link key={i} to={`/lotes/${p.loteId}?aba=saude`} className={`alerta ${p.nivel}`} style={{ textDecoration: 'none' }}>{corpo}<span className="alerta-seta" aria-hidden="true">›</span></Link>
+            : <div key={i} className={`alerta ${p.nivel}`}>{corpo}</div>;
+        })}
         {carencias.length > 0 && <h2>Lotes em carência</h2>}
-        {carencias.map(({ l, c }) => <div key={l.id} className="cartao linha-lote"><span>{l.nome}<div className="mudo">{c!.produto}</div></span><b>até {fmtData(c!.data)}</b></div>)}
+        {carencias.map(({ l, c }) => <Link key={l.id} to={`/lotes/${l.id}?aba=saude`} className="cartao linha-lote"><span>{l.nome}<div className="mudo">{c!.produto}</div></span><b>até {fmtData(c!.data)} ›</b></Link>)}
 
         <h2>Calendário do ano</h2>
         <div className="dica">Prazos de declaração do rebanho e campanhas mudam de estado para estado. Confira com a agência de defesa agropecuária e ajuste aqui.</div>

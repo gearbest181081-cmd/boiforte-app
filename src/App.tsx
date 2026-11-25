@@ -72,7 +72,7 @@ export function App() {
               <NavLink to="/lotes"><Icone nome="lotes" />Lotes</NavLink>
               <NavLink to="/pesar" className="pesar"><span className="bola"><Icone nome="balanca" /></span><small>Pesar</small></NavLink>
               <NavLink to="/trato"><Icone nome="cocho" />Trato</NavLink>
-              <NavLink to="/mais"><Icone nome="mais" />Mais</NavLink>
+              <NavLink to="/mais"><Icone nome="menu" />Menu</NavLink>
             </nav>
           </Porta>
         </SessaoProvider>

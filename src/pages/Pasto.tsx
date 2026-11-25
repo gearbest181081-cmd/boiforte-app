@@ -56,6 +56,7 @@ export function Pasto() {
   const aviso = useAviso();
   const [buscando, setBuscando] = useState(false);
   const podeSatelite = !!est?.fazenda && (papel === 'dono' || papel === 'gerente') && nuvemConfigurada();
+  const podeCadastrar = papel !== undefined && papel !== 'vaqueiro' && papel !== 'consultor';
   const semContorno = useLiveQuery(() => db.piquetes.filter((p) => !p.contorno || p.contorno.length < 3).count(), []);
   const secaoNdvi = useRef<HTMLHeadingElement>(null);
 
@@ -83,6 +84,7 @@ export function Pasto() {
           </div>
         )}
         {resumo?.map((r) => <CartaoModulo key={r.modulo.id} r={r} />)}
+        {podeCadastrar && !!resumo?.length && <Link to="/fazenda" className="btn sec largo" data-testid="cadastrarPiquete">➕ Cadastrar módulo ou piquete</Link>}
         <h2 ref={secaoNdvi}>Satélite (NDVI)</h2>
         {podeSatelite && (
           <button className="btn sec largo" disabled={buscando || !online} onClick={satelite}>{buscando ? 'Consultando o satélite…' : '🛰️ Atualizar o satélite agora'}</button>

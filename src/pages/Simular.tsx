@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useAbaNoEndereco } from '../abaNoEndereco';
 import { analisarLotes, useTudo, type AnaliseLote } from '../hooks';
 import { seMudarGmd, seSegurar, simularCompra } from '../simulacao';
 import { fmtData, fmtNum, hojeISO, somaDias } from '../calc';
@@ -16,9 +18,14 @@ export function custoDiaCabeca(a: AnaliseLote): number | null {
   return (d.custoTotal - (d.custos.compra_animais ?? 0)) / d.dias / cab;
 }
 
+type AbaSim = 'gmd' | 'segurar' | 'compra' | 'comparar';
+const ABAS_SIM: AbaSim[] = ['gmd', 'segurar', 'compra', 'comparar'];
+
 export function Simular() {
   const tudo = useTudo();
-  const [aba, setAba] = useState<'gmd' | 'segurar' | 'compra' | 'comparar'>('gmd');
+  // a aba fica no endereço (/simular?aba=comparar): o Menu e a Nutrição abrem direto em "Comparar produtos"
+  const { aba: pedida, trocar: setAba } = useAbaNoEndereco('gmd');
+  const aba: AbaSim = ABAS_SIM.includes(pedida as AbaSim) ? (pedida as AbaSim) : 'gmd';
   const analise = useMemo(() => (tudo ? analisarLotes(tudo).filter((a) => !a.info.lote.encerrado) : []), [tudo]);
   const [loteId, setLoteId] = useState<string>('');
   if (!tudo) return <Topo titulo="Simulação" voltar />;
@@ -108,7 +115,7 @@ function SimSegurar({ a, precoArroba, rendimento }: { a: AnaliseLote | null; pre
           <CampoNumero rotulo="@ se vender hoje" valor={hojeP} aoMudar={setHojeP} unidade="R$" nome="segArrobaHoje" />
           <CampoNumero rotulo="@ travada" valor={trav} aoMudar={setTrav} unidade="R$" nome="segArrobaTravada" />
         </div>
-        <p className="mudo">Rendimento de carcaça: {fmtNum(rendimento * 100, 1)}% (muda em Mais › Mercado).</p>
+        <p className="mudo">Rendimento de carcaça: {fmtNum(rendimento * 100, 1)}% (muda em <Link to="/mais?ver=mercado">Menu › Preço da arroba</Link>).</p>
       </div>
       {r ? (
         <div className={`alerta ${r.retornoCab >= 0 ? 'bom' : 'ruim'}`} data-testid="resultadoSegurar">

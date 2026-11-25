@@ -5,7 +5,7 @@ import { db, garantirIngredientesPadrao } from '../db';
 import { avaliarFormula, calcularFormula, TIPOS } from '../nutricao';
 import { fmtNum } from '../calc';
 import { AvisoNutricao, Opcoes, Topo } from '../components/ui';
-import { useVeDinheiro } from '../nuvem/useNuvem';
+import { usePapel, useVeDinheiro } from '../nuvem/useNuvem';
 
 export const rs = (v: number | null | undefined, casas = 2) =>
   v == null || !Number.isFinite(v) ? '—' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: casas, maximumFractionDigits: casas });
@@ -16,6 +16,8 @@ export function Nutricao() {
   useEffect(() => { sessionStorageSet('abaNutricao', aba); }, [aba]);
   const ingredientes = useLiveQuery(() => db.ingredientes.toArray());
   const veDinheiro = useVeDinheiro();
+  const papel = usePapel();
+  const podeMudar = papel !== undefined && papel !== 'vaqueiro' && papel !== 'consultor'; // fórmulas e ingredientes: dono e gerente
   const formulas = useLiveQuery(() => db.formulas.toArray());
   const usoPorFormula = useLiveQuery(async () => {
     const m: Record<number, number> = {};
@@ -32,7 +34,8 @@ export function Nutricao() {
         <div style={{ height: 14 }} />
         {aba === 'formulas' && (
           <>
-            <Link to="/nutricao/formula/nova" className="btn largo" style={{ marginBottom: 14 }}>+ Nova fórmula</Link>
+            {podeMudar && <Link to="/nutricao/formula/nova" className="btn largo" style={{ marginBottom: 14 }}>+ Nova fórmula</Link>}
+            {veDinheiro && <Link to="/simular?aba=comparar" className="btn sec largo" style={{ marginBottom: 14 }} data-testid="nutComparar">🔍 Comparar produtos: qual vale mais a pena</Link>}
             {formulas?.length === 0 && <div className="dica">Monte aqui suas dietas e suplementos: RIP, TIP, creep, proteinado, proteico energético, confinamento. O app calcula PB, NDT, Ca, P e o custo por kg e avisa o que estiver fora da faixa.</div>}
             {formulas?.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map((f) => {
               const r = calcularFormula(f.itens, ingredientes ?? []);
@@ -55,8 +58,9 @@ export function Nutricao() {
         )}
         {aba === 'ingredientes' && (
           <>
-            <Link to="/nutricao/ingrediente/novo" className="btn largo" style={{ marginBottom: 14 }}>+ Novo ingrediente</Link>
-            <div className="dica">Valores na matéria natural, como no rótulo. Ajuste o preço que você paga e, para núcleos e sais, copie a composição do rótulo.</div>
+            {podeMudar && <Link to="/nutricao/ingrediente/novo" className="btn largo" style={{ marginBottom: 14 }}>+ Novo ingrediente</Link>}
+            <div className="dica">Valores na matéria natural, como no rótulo. Ajuste o preço que você paga e, para núcleos e sais, copie a composição do rótulo.
+              {podeMudar && <> Tem o saco do produto? Em <b>+ Novo ingrediente</b>, tire uma foto da tabela do rótulo e o app preenche.</>}</div>
             <div className="cartao rolagem">
               <table className="tab">
                 <thead><tr><th>Ingrediente</th><th className="n">PB%</th><th className="n">NDT%</th>{veDinheiro && <th className="n">R$/kg</th>}</tr></thead>

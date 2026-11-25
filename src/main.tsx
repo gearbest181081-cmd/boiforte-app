@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { App } from './App';
 import './styles.css';
+import './menu.css';
 import { nuvemConfigurada, sb } from './nuvem/cliente';
 
 // Chegou pelo link do e-mail de entrada: a biblioteca da nuvem lê a sessão do endereço e o app abre no início.
