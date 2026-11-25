@@ -3,8 +3,9 @@
 // e o app mostra tudo para a pessoa conferir antes de salvar.
 
 // balanca_lote: o visor com o lote (ou um grupo) inteiro em cima; o app divide pelas cabeças.
-export type TipoFoto = 'rotulo' | 'balanca' | 'balanca_lote';
-export const TIPOS_FOTO: readonly TipoFoto[] = ['rotulo', 'balanca', 'balanca_lote'];
+// brinco: foto do brinco na orelha do animal (Cria): devolve o número impresso.
+export type TipoFoto = 'rotulo' | 'balanca' | 'balanca_lote' | 'brinco';
+export const TIPOS_FOTO: readonly TipoFoto[] = ['rotulo', 'balanca', 'balanca_lote', 'brinco'];
 export const CATEGORIAS = ['ingrediente', 'nucleo', 'sal_mineral', 'sal_adensado', 'proteinado', 'proteico_energetico', 'racao'] as const;
 export type Categoria = (typeof CATEGORIAS)[number];
 /** Equivalente proteico da ureia: 1% de ureia dá ~2,81% de PB. */
@@ -44,6 +45,10 @@ export const ESQUEMA: Record<TipoFoto, Record<string, unknown>> = {
     type: 'object', additionalProperties: false, required: ['legivel', 'peso', 'brinco'],
     properties: { legivel: { type: 'boolean' }, peso: num, brinco: { type: ['string', 'null'] } },
   },
+  brinco: {
+    type: 'object', additionalProperties: false, required: ['legivel', 'brinco'],
+    properties: { legivel: { type: 'boolean' }, brinco: { type: ['string', 'null'] } },
+  },
   balanca_lote: {
     type: 'object', additionalProperties: false, required: ['legivel', 'peso_total', 'quantidade', 'peso_medio'],
     properties: { legivel: { type: 'boolean' }, peso_total: num, quantidade: { type: ['integer', 'null'] }, peso_medio: num },
@@ -74,6 +79,11 @@ export const PROMPT: Record<TipoFoto, string> = {
     'Se houver um número de brinco/identificação na tela, devolva em brinco; senão null.',
     'legivel = false se não der para ler o peso com segurança. Não estime.',
   ].join('\n'),
+  brinco: [
+    'A imagem mostra o brinco de identificação na orelha de um bovino (ou um bastão/leitor de chip com o número na tela).',
+    'brinco: o número ou código impresso no brinco, exatamente como está (letras e números, sem espaços). Se houver dois números, o maior/principal.',
+    'legivel = false se não der para ler com segurança. Não invente.',
+  ].join('\n'),
   balanca_lote: [
     'A imagem é o visor de uma balança de gado com um lote (vários animais) em cima, ou a tela de um indicador com o resumo da pesagem.',
     'peso_total: o peso total mostrado, em kg (se estiver em toneladas, converta para kg).',
@@ -103,11 +113,16 @@ export interface LeituraRotulo {
   consumo: string | null; consumoPctPV: number | null; observacao: string | null;
 }
 export interface LeituraBalanca { legivel: boolean; peso: number | null; brinco: string | null }
+export interface LeituraBrinco { legivel: boolean; brinco: string | null }
 export interface LeituraBalancaLote { legivel: boolean; pesoTotal: number | null; quantidade: number | null; pesoMedio: number | null }
 
 /** Limpa o que o modelo respondeu: só números plausíveis passam. */
-export function limparLeitura(tipo: TipoFoto, bruto: unknown): LeituraRotulo | LeituraBalanca | LeituraBalancaLote {
+export function limparLeitura(tipo: TipoFoto, bruto: unknown): LeituraRotulo | LeituraBalanca | LeituraBalancaLote | LeituraBrinco {
   const r = (bruto && typeof bruto === 'object' ? bruto : {}) as Record<string, unknown>;
+  if (tipo === 'brinco') {
+    const b = texto(r.brinco, 30)?.replace(/\s+/g, '') ?? null;
+    return { legivel: r.legivel === true && !!b, brinco: b || null };
+  }
   if (tipo === 'balanca_lote') {
     const pesoTotal = faixa(r.peso_total, 1, 200_000);
     const q = faixa(r.quantidade, 1, 5000);

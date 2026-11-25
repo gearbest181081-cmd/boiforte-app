@@ -37,6 +37,9 @@ describe('leitura por foto (regras do servidor)', () => {
   it('balança: peso fora da faixa não vale', () => {
     expect(limparLeitura('balanca', { legivel: true, peso: 352.5, brinco: '101' })).toEqual({ legivel: true, peso: 352.5, brinco: '101' });
     expect(limparLeitura('balanca', { legivel: true, peso: 5000, brinco: null })).toMatchObject({ legivel: false, peso: null });
+    // brinco na orelha (Cria)
+    expect(limparLeitura('brinco', { legivel: true, brinco: ' 1 2<3 ' })).toEqual({ legivel: true, brinco: '123' });
+    expect(limparLeitura('brinco', { legivel: true, brinco: null })).toEqual({ legivel: false, brinco: null });
   });
 
   it('balança com o lote todo: total, quantidade e média só se baterem', () => {

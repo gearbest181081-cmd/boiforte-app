@@ -20,7 +20,7 @@ export type CategoriaReceita = keyof typeof CATEGORIAS_RECEITA;
 export type Categoria = CategoriaDespesa | CategoriaReceita;
 export const NOMES_CATEGORIA: Record<string, string> = { ...CATEGORIAS_DESPESA, ...CATEGORIAS_RECEITA, nutricao: 'Nutrição (trato)', fixos: 'Custos fixos rateados', folha: 'Salários dos funcionários', oportunidade: 'Custo de oportunidade' };
 
-export interface LancamentoFin { data: string; tipo: 'despesa' | 'receita'; categoria: Categoria; valor: number; loteId?: number | null }
+export interface LancamentoFin { data: string; tipo: 'despesa' | 'receita'; categoria: Categoria; valor: number; loteId?: number | null; grupoId?: number | null }
 export interface CustoFixoFin { nome: string; valorMensal: number; desde: string; ate?: string | null }
 export interface VendaFin { loteId: number; data: string; tipo: 'venda' | 'morte'; cabecas: number; pesoMedio?: number; valorLiquido: number }
 export interface FornecimentoFin { loteId: number; data: string; custo: number }
@@ -92,7 +92,7 @@ function inicioDoMes(d: string): string { return d.slice(0, 8) + '01'; }
 
 /**
  * Rateia custos indiretos entre os lotes:
- * - lançamento sem lote: dividido pelas cabeça-dias de cada lote no mês do lançamento;
+ * - lançamento sem lote (e sem grupo da Cria): dividido pelas cabeça-dias de cada lote no mês do lançamento;
  * - custo fixo mensal: cada dia vale valorMensal × 12 ÷ 365, dividido pelas cabeças do dia.
  * Retorna R$ por lote até a data `ate`.
  */
@@ -108,7 +108,7 @@ export function ratear(lotes: LoteFin[], saidas: VendaFin[], lancamentos: Lancam
     return v;
   };
   for (const l of lancamentos) {
-    if (l.tipo !== 'despesa' || l.loteId || l.data > ate) continue;
+    if (l.tipo !== 'despesa' || l.loteId || l.grupoId || l.data > ate) continue; // de lote ou da Cria: custo direto, não rateia
     const ini = inicioDoMes(l.data), fim = fimDoMes(l.data);
     const pesos = lotes.map(() => 0);
     for (let d = ini; d <= fim; d = somaDias(d, 1)) diaCab(d).forEach((c, i) => { pesos[i] += c; });

@@ -12,7 +12,7 @@ export const TIPOS_SANIDADE = {
 } as const;
 export type TipoSanidade = keyof typeof TIPOS_SANIDADE;
 
-export interface EventoSan { loteId: number; data: string; feito: boolean; produto: string; tipo: TipoSanidade; carenciaDias?: number | null }
+export interface EventoSan { loteId?: number | null; data: string; feito: boolean; produto: string; tipo: TipoSanidade; carenciaDias?: number | null }
 export interface LembreteSan { titulo: string; mes: number; dia: number; antecedenciaDias: number }
 
 /** Data a partir da qual o lote pode ir para o abate (maior fim de carência das aplicações feitas). */
@@ -66,3 +66,25 @@ export const LEMBRETES_PADRAO: (LembreteSan & { obs: string })[] = [
   { titulo: 'Atualização / declaração do rebanho (2º semestre)', mes: 11, dia: 30, antecedenciaDias: 30, obs: 'Confira o prazo da agência de defesa do seu estado.' },
   { titulo: 'Comprovar vacinação de brucelose (fêmeas de 3 a 8 meses)', mes: 6, dia: 30, antecedenciaDias: 20, obs: 'Exigida pelo programa nacional; confira o calendário do seu estado.' },
 ];
+
+/**
+ * Aplicações de lotes e grupos de manejo ainda ativos, com o nome de onde foram (lote, grupo da Cria ou animal).
+ */
+export function eventosSanidadeAtivos<E extends EventoSan & { grupoId?: number | null; animalId?: number | null }>(
+  eventos: E[], lotes: { id?: number; nome: string; encerrado?: boolean }[], grupos: { id?: number; nome: string; encerrado?: boolean }[],
+  animais: { id?: number; brinco: string; grupoId?: number | null }[] = [],
+): (E & { nomeLote?: string })[] {
+  const lote = new Map(lotes.map((l) => [l.id!, l]));
+  const grupo = new Map(grupos.map((g) => [g.id!, g]));
+  const animal = new Map(animais.map((a) => [a.id!, a]));
+  const out: (E & { nomeLote?: string })[] = [];
+  for (const e of eventos) {
+    if (e.loteId) { const l = lote.get(e.loteId); if (l && !l.encerrado) out.push({ ...e, nomeLote: l.nome }); continue; }
+    const a = e.animalId ? animal.get(e.animalId) : undefined;
+    const g = grupo.get(e.grupoId ?? a?.grupoId ?? -1);
+    if (g?.encerrado) continue;
+    if (a) out.push({ ...e, nomeLote: `animal ${a.brinco}` });
+    else if (g) out.push({ ...e, nomeLote: g.nome });
+  }
+  return out;
+}

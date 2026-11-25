@@ -594,6 +594,63 @@ function confere(cond, msg) {
     await foto('25-ficha-piquete');
     await page.getByRole('link', { name: 'Início' }).click();
 
+    console.log('18c. Cria: grupo de manejo, matriz, touros por lote, parto, pesagem e desmama em lote de RIP');
+    await page.goto(URL + '#/cria');
+    await page.getByRole('link', { name: '+ Grupo de manejo' }).click();
+    await page.locator('input[name=grupoNome]').fill('Vacas do retiro');
+    await page.getByRole('button', { name: 'Salvar' }).click();
+    await page.getByRole('link', { name: '+ Animal neste grupo' }).click();
+    await page.locator('input[name=criaBrinco]').fill('9001');
+    await page.locator('input[name=criaRaca]').fill('Nelore');
+    await page.locator('input[name=criaNascimento]').fill('2019-05-01');
+    await page.getByRole('button', { name: 'Salvar' }).click();
+    await page.getByRole('heading', { name: 'Crias e reprodução' }).waitFor();
+    confere(/Permanência: 120 meses/.test(await page.locator('main').innerText()), 'matriz com período de permanência no lugar do peso alvo');
+    await page.goto(URL + '#/cria/animal/novo?categoria=touro');
+    await page.locator('select[name=criaGrupo]').selectOption({ label: 'Vacas do retiro' });
+    await page.getByRole('radio', { name: 'Lote de touros' }).click();
+    await page.locator('input[name=criaBrinco]').fill('Touros Nelore');
+    await page.locator('input[name=criaQtd]').fill('3');
+    await page.getByRole('button', { name: 'Salvar' }).click();
+    await page.getByText('3 touros').first().waitFor();
+    confere(true, 'touros lançados por lote');
+    await page.goto(URL + '#/cria/evento/parto');
+    await page.locator('select[name=evVaca]').selectOption({ label: '9001' });
+    await page.locator('input[name=evBzBrinco]').fill('9001-1');
+    await page.getByRole('radio', { name: 'Fêmea' }).click();
+    await page.locator('input[name=evBzPeso]').fill('31');
+    await foto('23-cria-parto');
+    await page.getByRole('button', { name: 'Salvar' }).click();
+    await page.getByRole('heading', { name: 'Até a desmama' }).waitFor();
+    const fichaBz = await page.locator('main').innerText();
+    confere(/Mãe: 9001/.test(fichaBz) && /Desmama prevista/.test(fichaBz), 'parto cria o bezerro com a mãe e a projeção da desmama');
+    await foto('24-cria-bezerro');
+    // bezerro de 7 meses para desmamar
+    await page.evaluate(() => new Promise((ok) => { const r = indexedDB.open('boiforte'); r.onsuccess = () => { const st = r.result.transaction('animais', 'readwrite').objectStore('animais'); const g = st.getAll(); g.onsuccess = () => { const b = g.result.find((a) => a.brinco === '9001-1'); const d = new Date(Date.now() - 215 * 864e5).toISOString().slice(0, 10); st.put({ ...b, nascimento: d }).onsuccess = ok; }; }; }));
+    await page.goto(URL + '#/cria');
+    await page.reload(); // a mudança foi direto no IndexedDB: recarrega para o app ler
+    await page.getByRole('radio', { name: 'Desmama' }).click();
+    await page.getByRole('link', { name: 'Fazer desmama' }).click();
+    await page.getByRole('button', { name: /Marcar os que têm 7 meses/ }).click();
+    await page.getByLabel('Peso de desmama de 9001-1').fill('205');
+    await page.locator('select[name=desFase]').selectOption('rip');
+    await foto('25-cria-desmama');
+    await page.getByRole('button', { name: 'Fazer a desmama' }).click();
+    await page.getByRole('link', { name: 'Nova pesagem' }).waitFor();
+    const lote = await page.locator('main').innerText();
+    confere(/RIP/.test(lote) && /1 cab/.test(lote), 'desmama vira lote de RIP com o bezerro');
+    await page.goto(URL + '#/cria');
+    await page.getByRole('radio', { name: 'IPM' }).click();
+    await page.getByRole('heading', { name: 'Ranking das matrizes' }).waitFor();
+    await foto('26-cria-ipm');
+    await page.getByRole('radio', { name: 'Decisões' }).click();
+    await foto('27-cria-decisoes');
+    confere(/touro/i.test(await page.locator('main').innerText()), 'decisões falam dos touros');
+    await page.goto(URL + '#/cria/simular');
+    await page.getByRole('radio', { name: 'Rebanho 5 anos' }).click();
+    await foto('28-cria-simulador');
+    await page.goto(URL + '#/');
+
     if (nuvemNoBuild) {
       console.log('19. Perfil, sair e outra conta no mesmo celular');
       await page.getByRole('button', { name: /^Perfil de / }).click();
@@ -642,7 +699,8 @@ function confere(cond, msg) {
       const loteId = await p2.evaluate(() => new Promise((ok) => { const r = indexedDB.open('boiforte'); r.onsuccess = () => { const t = r.result.transaction('lotes').objectStore('lotes').getAll(); t.onsuccess = () => ok(t.result[0].id); }; }));
       const formulaId = await p2.evaluate(() => new Promise((ok) => { const r = indexedDB.open('boiforte'); r.onsuccess = () => { const t = r.result.transaction('formulas').objectStore('formulas').getAll(); t.onsuccess = () => ok(t.result[0]?.id ?? 'nova'); }; }));
       const telas = ['/lotes', '/lotes/novo', `/lotes/${loteId}`, `/lotes/${loteId}/editar`, `/lotes/${loteId}/relatorio`, '/pesar', `/pesar/${loteId}`, '/fazenda', '/mais', '/nutricao',
-        `/nutricao/formula/${formulaId}`, '/nutricao/formula/nova', '/nutricao/ingrediente/novo', '/estoque', '/trato', '/financeiro', '/sanidade', '/simular', '/relatorios', '/nuvem', '/funcionarios', '/funcionarios/novo', '/anotacoes', '/anotacoes/nova', '/pasto', '/pasto/mover'];
+        `/nutricao/formula/${formulaId}`, '/nutricao/formula/nova', '/nutricao/ingrediente/novo', '/estoque', '/trato', '/financeiro', '/sanidade', '/simular', '/relatorios', '/nuvem', '/funcionarios', '/funcionarios/novo', '/anotacoes', '/anotacoes/nova', '/pasto', '/pasto/mover',
+        '/cria', '/cria/grupo/novo', '/cria/animal/novo', '/cria/evento/cobertura', '/cria/evento/diagnostico', '/cria/evento/parto', '/cria/pesar', '/cria/desmama', '/cria/simular'];
       const semVoltar = [], semMic = [];
       for (const t of telas) {
         await p2.goto(URL + '#' + t);

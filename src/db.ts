@@ -84,7 +84,65 @@ export interface Lote {
 }
 /** Uma mudança de fase do lote. "dieta" guarda o nome da dieta que o lote comia ATÉ essa data. */
 export interface MudancaFase { data: string; de: Fase; para: Fase; pesoMedio?: number; dieta?: string }
-export interface Animal { id?: number; gid?: string; loteId: number; brinco: string; sexo?: Sexo; raca?: string; ativo: boolean; criadoEm: number }
+/**
+ * Animal identificado. Na Recria/Engorda fica num lote (loteId); na Cria fica num grupo de manejo (grupoId).
+ * Na desmama o bezerro continua o MESMO registro (sai do grupo e entra no lote), então a rastreabilidade
+ * vai do nascimento à venda.
+ */
+export interface Animal {
+  id?: number; gid?: string; loteId?: number | null; brinco: string; sexo?: Sexo; raca?: string; ativo: boolean; criadoEm: number;
+  // ----- Cria -----
+  grupoId?: number | null;
+  categoria?: CategoriaCria;
+  chip?: string; // RFID
+  sisbov?: string; // código oficial PNIB/SISBOV (15 dígitos)
+  nome?: string;
+  nascimento?: string | null;
+  maeId?: number | null; paiId?: number | null;
+  paiTexto?: string; // sêmen (touro de central) ou touro de fora da fazenda
+  foto?: string; // id da foto (fica com as fotos das anotações)
+  pesoNascer?: number | null;
+  creep?: boolean; // bezerro recebe creep feed
+  formulaCreepId?: number | null;
+  entrada?: string | null; // entrou no rebanho de cria (compra ou virou matriz)
+  permanenciaMeses?: number | null; // tempo que fica no rebanho antes de sair (no lugar do peso alvo)
+  qtd?: number | null; // touros lançados por lote, sem brinco de cada um
+  saida?: string | null; motivoSaida?: MotivoSaida;
+  descarte?: boolean; motivoDescarte?: string; // marcada para descarte
+  obs?: string;
+}
+export type CategoriaCria = 'matriz' | 'novilha' | 'touro' | 'bezerro';
+export type MotivoSaida = 'venda' | 'descarte' | 'morte' | 'desmama' | 'outro';
+/** Grupo de manejo da Cria (no lugar de "lote", para não misturar com Recria/RIP/TIP/Confinamento). */
+export interface Grupo {
+  id?: number; gid?: string; propriedadeId: number; nome: string; tipo: TipoGrupo; piqueteId?: number | null;
+  encerrado?: boolean; obs?: string; criadoEm: number;
+}
+export type TipoGrupo = 'matrizes' | 'paridas' | 'novilhas' | 'touros' | 'bezerros' | 'misto';
+/** Estação de monta: período em que as vacas ficam com o touro ou são inseminadas. */
+export interface Estacao { id?: number; gid?: string; nome: string; inicio: string; fim: string; metodo: MetodoMonta; obs?: string; criadoEm: number }
+export type MetodoMonta = 'monta' | 'ia' | 'iatf' | 'ia_repasse';
+/** Evento reprodutivo de uma matriz (ou novilha). */
+export interface EventoReprodutivo {
+  id?: number; gid?: string; matrizId: number; data: string; tipo: TipoReproducao;
+  touroId?: number | null; semen?: string; estacaoId?: number | null;
+  resultado?: 'prenhe' | 'vazia'; diasGestacao?: number | null; // diagnóstico
+  bezerroId?: number | null; partoTipo?: 'normal' | 'assistido' | 'natimorto'; // parto
+  obs?: string; criadoEm: number;
+}
+export type TipoReproducao = 'monta' | 'ia' | 'diagnostico' | 'parto' | 'aborto';
+/** Pesagem de um animal da Cria (nascimento até a desmama, matrizes e touros). */
+export interface PesoCria { id?: number; gid?: string; animalId: number; data: string; peso: number; obs?: string; criadoEm: number }
+/**
+ * Pacote da desmama: retrato congelado dos bezerros desmamados (versão numerada por ano).
+ * Vira um lote de Recria ou RIP com o peso médio ponderado.
+ */
+export interface Desmama {
+  id?: number; gid?: string; data: string; ano: number; versao: number; grupoId?: number | null;
+  loteId?: number | null; loteFemeasId?: number | null; fase: 'recria' | 'rip';
+  itens: { animalId: number; peso: number; sexo: 'macho' | 'femea'; idadeDias: number; destino: 'lote' | 'reposicao'; grupoId?: number | null }[]; // grupoId: de onde o bezerro saiu
+  cabecas: number; kgTotal: number; pesoMedio: number; p205Medio?: number | null; obs?: string; criadoEm: number;
+}
 export interface PesoAnimal { animalId: number; peso: number }
 export interface Pesagem {
   id?: number;
@@ -146,6 +204,7 @@ export interface Config { chave: string; valor: number }
 export interface Lancamento {
   id?: number; gid?: string; data: string; tipo: 'despesa' | 'receita'; categoria: Categoria; descricao?: string; valor: number;
   loteId?: number | null; // vazio = custo indireto, rateado entre os lotes
+  grupoId?: number | null; // custo de um grupo de manejo da Cria (entra no custo do bezerro desmamado)
   origem?: 'manual' | 'compra_lote' | 'sanidade'; refId?: number; criadoEm: number;
   compraQtd?: number; compraPreco?: number; compraComissao?: number; compraFrete?: number; compraNf?: number;
 }
@@ -155,7 +214,8 @@ export interface Venda {
   rendimento?: number; comissaoPct?: number; frete?: number; outros?: number; valorBruto: number; valorLiquido: number; comprador?: string; obs?: string; criadoEm: number;
 }
 export interface EventoSanitario {
-  id?: number; gid?: string; loteId: number; data: string; feito: boolean; tipo: TipoSanidade; produto: string; dose?: string; qtdAnimais?: number; custo?: number;
+  id?: number; gid?: string; loteId?: number | null; grupoId?: number | null; animalId?: number | null; // lote (Recria/Engorda) ou grupo/animal da Cria
+  data: string; feito: boolean; tipo: TipoSanidade; produto: string; dose?: string; qtdAnimais?: number; custo?: number;
   carenciaDias?: number; repetirDias?: number; obs?: string; criadoEm: number;
 }
 export interface Lembrete { id?: number; gid?: string; titulo: string; mes: number; dia: number; antecedenciaDias: number; obs?: string; criadoEm: number }
@@ -181,7 +241,8 @@ export type CategoriaAnotacao = 'cerca' | 'agua' | 'cocho' | 'pasto' | 'animal' 
  */
 export interface FotoLocal { id: string; dados?: ArrayBuffer; estado: 'enviar' | 'ok' | 'apagar'; em: number; erro?: string; ext?: ExtMidia } // ext vazio = foto jpg
 
-export const TABELAS = ['propriedades', 'modulos', 'piquetes', 'lotes', 'animais', 'pesagens', 'ingredientes', 'formulas', 'movimentos', 'batidas', 'fornecimentos', 'config', 'lancamentos', 'custosFixos', 'vendas', 'sanidade', 'lembretes', 'funcionarios', 'anotacoes', 'ocupacoes', 'ndvi'] as const;
+export const TABELAS = ['propriedades', 'modulos', 'piquetes', 'lotes', 'animais', 'pesagens', 'ingredientes', 'formulas', 'movimentos', 'batidas', 'fornecimentos', 'config', 'lancamentos', 'custosFixos', 'vendas', 'sanidade', 'lembretes', 'funcionarios', 'anotacoes', 'ocupacoes', 'ndvi',
+  'grupos', 'estacoes', 'reproducao', 'pesosCria', 'desmamas'] as const;
 
 export class BoiForteDB extends Dexie {
   propriedades!: Table<Propriedade, number>;
@@ -206,6 +267,11 @@ export class BoiForteDB extends Dexie {
   ocupacoes!: Table<Ocupacao, number>;
   ndvi!: Table<Ndvi, number>;
   fotosAnotacao!: Table<FotoLocal, string>;
+  grupos!: Table<Grupo, number>;
+  estacoes!: Table<Estacao, number>;
+  reproducao!: Table<EventoReprodutivo, number>;
+  pesosCria!: Table<PesoCria, number>;
+  desmamas!: Table<Desmama, number>;
   pendentes!: Table<Pendente, [string, number | string]>;
   sincEstado!: Table<{ chave: string; valor: unknown }, string>;
   sincEspera!: Table<{ tabela: string; gid: string; linha: unknown }, [string, string]>;
@@ -271,6 +337,18 @@ export class BoiForteDB extends Dexie {
     this.version(6).stores({
       anotacoes: '++id, &gid, moduloId, piqueteId, data',
       fotosAnotacao: 'id, estado',
+    });
+    // Cria: grupos de manejo, estação de monta, reprodução, pesagens até a desmama e pacotes de desmama.
+    // (version 8 fica para o Pasto e 9 para a Rastreabilidade)
+    this.version(7).stores({
+      animais: '++id, loteId, brinco, &gid, grupoId, maeId',
+      sanidade: '++id, loteId, data, feito, &gid, grupoId',
+      lancamentos: '++id, data, loteId, categoria, [origem+refId], &gid, grupoId',
+      grupos: '++id, &gid, propriedadeId, piqueteId',
+      estacoes: '++id, &gid, inicio',
+      reproducao: '++id, &gid, matrizId, data, estacaoId',
+      pesosCria: '++id, &gid, animalId, data',
+      desmamas: '++id, &gid, data',
     });
     // Pasto: ocupação dos piquetes (entrada/saída) e NDVI do satélite.
     this.version(8).stores({
@@ -450,10 +528,9 @@ export async function excluirLote(id: number) {
 /** Apaga piquetes com o histórico de ocupação e o NDVI deles; lote que estava lá fica sem piquete. */
 export async function excluirPiquetes(ids: number[]) {
   if (!ids.length) return;
-  const grupos = db.tables.find((t) => t.name === 'grupos'); // grupos de manejo da cria (quando existir)
-  await db.transaction('rw', [db.piquetes, db.lotes, db.ocupacoes, db.ndvi, ...(grupos ? [grupos] : [])], async () => {
+  await db.transaction('rw', [db.piquetes, db.lotes, db.grupos, db.ocupacoes, db.ndvi], async () => {
     await db.lotes.where('piqueteId').anyOf(ids).modify({ piqueteId: null });
-    if (grupos) await db.table('grupos').filter((g: { piqueteId?: number | null }) => g.piqueteId != null && ids.includes(g.piqueteId)).modify({ piqueteId: null });
+    await db.grupos.where('piqueteId').anyOf(ids).modify({ piqueteId: null });
     await db.ocupacoes.where('piqueteId').anyOf(ids).delete();
     await db.ndvi.where('piqueteId').anyOf(ids).delete();
     await db.piquetes.bulkDelete(ids);
@@ -461,7 +538,8 @@ export async function excluirPiquetes(ids: number[]) {
 }
 
 export async function excluirPropriedade(id: number) {
-  await db.transaction('rw', [db.propriedades, db.modulos, db.piquetes, db.lotes, db.pesagens, db.animais, db.fornecimentos, db.movimentos, db.lancamentos, db.vendas, db.sanidade, db.ocupacoes, db.ndvi], async () => {
+  await db.transaction('rw', [db.propriedades, db.modulos, db.piquetes, db.lotes, db.pesagens, db.animais, db.fornecimentos, db.movimentos, db.lancamentos, db.vendas, db.sanidade, db.ocupacoes, db.ndvi,
+    db.grupos, db.reproducao, db.pesosCria, db.desmamas], async () => {
     const mods = await db.modulos.where('propriedadeId').equals(id).toArray();
     for (const m of mods) await excluirPiquetes(await db.piquetes.where('moduloId').equals(m.id!).primaryKeys());
     await db.modulos.where('propriedadeId').equals(id).delete();
@@ -477,6 +555,19 @@ export async function excluirPropriedade(id: number) {
       await db.pesagens.where('loteId').equals(l.id!).delete();
       await db.animais.where('loteId').equals(l.id!).delete();
     }
+    // Cria: grupos de manejo com os animais e tudo que é deles
+    const grupos = await db.grupos.where('propriedadeId').equals(id).primaryKeys();
+    for (const g of grupos) {
+      const animais = await db.animais.where('grupoId').equals(g).primaryKeys();
+      await db.reproducao.where('matrizId').anyOf(animais).delete();
+      await db.pesosCria.where('animalId').anyOf(animais).delete();
+      await db.sanidade.filter((e) => e.grupoId === g || (e.animalId != null && animais.includes(e.animalId))).delete();
+      await db.lancamentos.where('grupoId').equals(g).delete();
+      await db.ocupacoes.where('[tipo+ocupanteId]').equals(['grupo', g]).delete();
+      await db.desmamas.filter((d) => d.grupoId === g).delete();
+      await db.animais.bulkDelete(animais);
+    }
+    await db.grupos.bulkDelete(grupos);
     await db.lotes.where('propriedadeId').equals(id).delete();
     await db.propriedades.delete(id);
   });
@@ -733,7 +824,7 @@ export async function salvarEventoSanitario(ev: Omit<EventoSanitario, 'id' | 'cr
     if (id) await db.sanidade.update(id, ev);
     await db.lancamentos.where('[origem+refId]').equals(['sanidade', eid]).delete();
     if (ev.feito && ev.custo && ev.custo > 0) {
-      await db.lancamentos.add({ data: ev.data, tipo: 'despesa', categoria: 'sanidade', descricao: ev.produto, valor: ev.custo, loteId: ev.loteId, origem: 'sanidade', refId: eid, criadoEm: Date.now() });
+      await db.lancamentos.add({ data: ev.data, tipo: 'despesa', categoria: 'sanidade', descricao: ev.produto, valor: ev.custo, loteId: ev.loteId ?? null, grupoId: ev.grupoId ?? null, origem: 'sanidade', refId: eid, criadoEm: Date.now() });
     }
     return eid;
   });

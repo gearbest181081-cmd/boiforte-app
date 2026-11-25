@@ -29,7 +29,7 @@ export function BotaoFoto<T>({ tipo, rotulo, aoLer, aoErro, sempre }: {
   const ref = useRef<HTMLInputElement>(null);
   const [lendo, setLendo] = useState(false);
   const ligada = nuvemConfigurada() && !!est?.fazenda;
-  const oQue = tipo === 'rotulo' ? 'os valores do rótulo' : 'o peso que aparece na balança';
+  const oQue = tipo === 'rotulo' ? 'os valores do rótulo' : tipo === 'brinco' ? 'o número do brinco' : 'o peso que aparece na balança';
   if (!ligada) {
     if (!sempre || est === undefined) return null;
     return (

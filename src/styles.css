@@ -294,3 +294,10 @@ button.link { background: none; border: 0; padding: 4px 0; color: var(--verde); 
 .permissoes li { display: flex; gap: 8px; align-items: flex-start; }
 .permissoes li.nao { color: var(--texto-2, inherit); }
 .codigo-convite { font-size: 30px; letter-spacing: 4px; text-align: center; font-weight: 700; margin: 8px 0; }
+
+/* Cria */
+.abas-rolagem { overflow-x: auto; margin: 0 -16px; padding: 0 16px; scrollbar-width: none; }
+.abas-rolagem .opcoes { display: flex; gap: 6px; width: max-content; }
+.abas-rolagem .opcao { flex: none; padding: 6px 14px; min-height: 48px; }
+.marcar { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 17px; cursor: pointer; }
+.marcar input[type=checkbox] { width: 24px; height: 24px; min-height: 24px; padding: 0; flex: none; }
