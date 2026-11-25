@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import {
   BoiForteDB, usarBanco, db, criarLote, garantirIngredientesPadrao, registrarFornecimento, desfazerFornecimento, registrarBatida, desfazerBatida,
   registrarSaida, desfazerSaida, salvarEventoSanitario, excluirEventoSanitario, excluirLote, excluirPiquetes, excluirModulo, excluirPropriedade,
-  excluirRegistro, excluirIngrediente, comprarInsumo, saldoIngrediente, guardarCopiaInteira, COPIA_INTEIRA, MAX_COPIAS, registrarCompraLote,
+  excluirRegistro, excluirIngrediente, comprarInsumo, saldoIngrediente, guardarCopiaInteira, COPIA_INTEIRA, MAX_COPIAS, registrarCompraLote, TABELAS,
 } from './db';
 import {
   apagarTodosOsDados, contarLixeira, dependencias, listarLixeira, motivoNaoRestaura, restaurar, trocarPeloArquivo, voltarCopiaInteira,
@@ -260,12 +260,16 @@ describe('lixeira no celular', () => {
   });
 
   it('nenhuma tela apaga direto do banco: tudo passa pela lixeira', () => {
+    // Só as tabelas de dados (as que sincronizam); fotos guardadas no celular e afins podem sair direto.
+    const dados = new Set<string>(TABELAS);
     const ruins: string[] = [];
     for (const pasta of ['./pages/', './components/']) {
       const dir = fileURLToPath(new URL(pasta, import.meta.url));
       for (const n of readdirSync(dir).filter((x) => /\.tsx?$/.test(x))) {
         const t = readFileSync(join(dir, n), 'utf8');
-        for (const m of t.matchAll(/db\.(?:table\([^)]*\)|\w+)\.(?:delete|bulkDelete|clear)\(|\.where\([^)]*\)[^;\n]*\.delete\(\)/g)) ruins.push(`${n}: ${m[0]}`);
+        for (const m of t.matchAll(/db\.(table\([^)]*\)|\w+)\.(?:(?:delete|bulkDelete|clear)\(|where\([^)]*\)[^;\n]*\.delete\(\))/g)) {
+          if (m[1].startsWith('table(') || dados.has(m[1])) ruins.push(`${n}: ${m[0]}`);
+        }
       }
     }
     expect(ruins).toEqual([]);
