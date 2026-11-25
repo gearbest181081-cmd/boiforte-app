@@ -6,7 +6,7 @@
 // Segredos (só no servidor): CDSE_CLIENT_ID e CDSE_CLIENT_SECRET (conta gratuita do Copernicus Data Space), CRON_SECRET.
 // Cota gratuita do Copernicus: 10.000 pedidos e 10.000 unidades de processamento por mês; cada piquete gasta 1 pedido por rodada.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
-import { CDSE_ESTATISTICA, CDSE_TOKEN, lerResposta, pedidoEstatistica, somaDias } from '../_shared/ndvi.ts';
+import { anel, CDSE_ESTATISTICA, CDSE_IMAGEM, CDSE_TOKEN, lerResposta, pedidoEstatistica, pedidoImagem, pixelsDoPoligono, somaDias, type TipoFoto } from '../_shared/ndvi.ts';
 
 const ORIGEM = Deno.env.get('APP_ORIGIN') ?? '';
 const MAX = Math.min(Number(Deno.env.get('NDVI_MAX_PIQUETES') ?? 250) || 250, 2000);
@@ -35,6 +35,38 @@ async function tokenCdse(): Promise<string> {
   return (await r.json()).access_token;
 }
 
+const RE_DATA = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Foto do satélite de um piquete (cores reais ou mapa do verde), pedida por quem é da fazenda.
+ * O banco confere a pessoa, o piquete e o limite (pedir_foto_satelite) e devolve o contorno: o app não manda contorno.
+ */
+// deno-lint-ignore no-explicit-any
+async function foto(usuario: any, corpo: { fazenda?: unknown; foto?: unknown; piquete?: unknown; data?: unknown }, origem: string | null) {
+  const tipo = corpo.foto === 'cor' || corpo.foto === 'verde' ? (corpo.foto as TipoFoto) : null;
+  const hoje = new Date().toISOString().slice(0, 10);
+  if (!tipo || typeof corpo.piquete !== 'string' || !RE_UUID.test(corpo.piquete) || typeof corpo.data !== 'string' || !RE_DATA.test(corpo.data)
+    || corpo.data < '2017-01-01' || corpo.data > hoje) return resposta({ erro: 'Pedido inválido.' }, 400, origem);
+  const { data: contorno, error } = await usuario.rpc('pedir_foto_satelite', { f: corpo.fazenda, p: corpo.piquete });
+  if (error) return resposta({ erro: error.message }, 429, origem);
+  const pedido = pedidoImagem(contorno, corpo.data, tipo);
+  if (!pedido) return resposta({ erro: 'Este piquete ainda não tem contorno na nuvem.' }, 400, origem);
+  let token: string;
+  try { token = await tokenCdse(); } catch (e) {
+    console.error('ndvi foto', (e as Error).message);
+    return resposta({ erro: 'O satélite não está configurado no servidor.' }, 503, origem);
+  }
+  const r = await fetch(CDSE_IMAGEM, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'image/png' }, body: JSON.stringify(pedido) });
+  if (!r.ok) {
+    console.warn('ndvi foto', r.status, (await r.text().catch(() => '')).slice(0, 400));
+    return resposta({ erro: r.status === 429 ? 'Cota do satélite atingida. Tente amanhã.' : 'O satélite não mandou a foto agora. Tente mais tarde.' }, 502, origem);
+  }
+  const png = new Uint8Array(await r.arrayBuffer());
+  if (png.length > 3_000_000 || png[0] !== 0x89 || png[1] !== 0x50) return resposta({ erro: 'O satélite mandou uma foto inválida.' }, 502, origem);
+  // octet-stream: o cliente do Supabase entrega como Blob (image/png viraria texto)
+  return new Response(png, { status: 200, headers: { ...cors(origem), 'Content-Type': 'application/octet-stream', 'Cache-Control': 'private, max-age=86400' } });
+}
+
 Deno.serve(async (req) => {
   const origem = req.headers.get('Origin');
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(origem) });
@@ -53,8 +85,9 @@ Deno.serve(async (req) => {
     const usuario = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: auth } }, auth: { persistSession: false } });
     const { data: u, error: eu } = await usuario.auth.getUser(auth.slice(7));
     if (eu || !u?.user) return resposta({ erro: 'Sua entrada venceu. Entre de novo.' }, 401, origem);
-    const corpo = await req.json().catch(() => null) as { fazenda?: unknown } | null;
+    const corpo = await req.json().catch(() => null) as { fazenda?: unknown; foto?: unknown; piquete?: unknown; data?: unknown } | null;
     if (typeof corpo?.fazenda !== 'string' || !RE_UUID.test(corpo.fazenda)) return resposta({ erro: 'Ligue o celular a uma fazenda na nuvem.' }, 400, origem);
+    if (corpo.foto !== undefined) return await foto(usuario, corpo, origem);
     // papel (dono/gerente) e limite de 2 por hora conferidos no banco, como a própria pessoa
     const { error: ep } = await usuario.rpc('pedir_ndvi', { f: corpo.fazenda });
     if (ep) return resposta({ erro: ep.message }, 429, origem);
@@ -68,7 +101,7 @@ Deno.serve(async (req) => {
   // no agendado, pula quem já tem leitura dos últimos 5 dias (o satélite passa a cada ~5 dias)
   const fila = (piquetes as { fazenda_id: string; gid: string; contorno: unknown; ultima: string | null }[])
     .filter((p) => fazenda || !p.ultima || p.ultima < somaDias(hoje, -5));
-  if (!fila.length) return resposta({ piquetes: 0, leituras: 0 }, 200, origem);
+  if (!fila.length) return resposta({ piquetes: 0, leituras: 0, falhas: 0 }, 200, origem);
 
   let token: string;
   try { token = await tokenCdse(); } catch (e) {
@@ -77,26 +110,34 @@ Deno.serve(async (req) => {
   }
 
   let leituras = 0, feitos = 0, falhas = 0;
+  let motivo: string | undefined; // primeiro erro, para a tela e para os Logs
   const inicio = Date.now();
   for (const p of fila) {
     if (Date.now() - inicio > 120_000) break; // a função tem tempo limitado; o resto vai na próxima rodada
-    const pedido = pedidoEstatistica(p.contorno, p.ultima, hoje);
-    if (!pedido) continue;
+    // pedido do app: refaz os 120 dias (corrige leituras antigas); agendado: só desde a última leitura
+    const pedido = pedidoEstatistica(p.contorno, fazenda ? null : p.ultima, hoje);
+    if (!pedido) { falhas++; motivo ??= 'contorno inválido'; console.warn('ndvi', p.gid, 'contorno inválido'); continue; }
     try {
       const r = await fetch(CDSE_ESTATISTICA, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(pedido) });
-      if (r.status === 429) { console.warn('ndvi: cota do Copernicus atingida'); break; }
-      if (!r.ok) { falhas++; console.warn('ndvi', p.gid, r.status); continue; }
-      const linhas = lerResposta(await r.json());
+      if (r.status === 429) { console.warn('ndvi: cota do Copernicus atingida'); motivo ??= 'cota do Copernicus atingida'; break; }
+      if (!r.ok) {
+        const txt = (await r.text().catch(() => '')).slice(0, 400);
+        falhas++; motivo ??= `Copernicus ${r.status}`;
+        console.warn('ndvi', p.gid, r.status, txt);
+        continue;
+      }
+      const linhas = lerResposta(await r.json(), pixelsDoPoligono(anel(p.contorno)!));
       if (linhas.length) {
         const { data: n, error: eg } = await servico.rpc('gravar_ndvi', { p_fazenda: p.fazenda_id, p_piquete: p.gid, p_linhas: linhas });
-        if (eg) { falhas++; continue; }
+        if (eg) { falhas++; motivo ??= 'gravar'; console.warn('ndvi gravar', p.gid, eg.message); continue; }
         leituras += Number(n) || 0;
       }
       feitos++;
     } catch (e) {
-      falhas++;
+      falhas++; motivo ??= 'rede';
       console.warn('ndvi', p.gid, (e as Error).message);
     }
   }
-  return resposta({ piquetes: feitos, leituras, falhas }, 200, origem);
+  console.log('ndvi', JSON.stringify({ fazenda, fila: fila.length, feitos, leituras, falhas, motivo }));
+  return resposta({ piquetes: feitos, leituras, falhas, motivo }, 200, origem);
 });

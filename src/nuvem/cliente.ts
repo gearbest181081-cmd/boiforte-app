@@ -206,13 +206,33 @@ export async function lerFoto<T>(fazenda: string, tipo: 'rotulo' | 'balanca' | '
 // ---------- NDVI do satélite ----------
 
 /** Pede para buscar agora o NDVI dos piquetes da fazenda (dono/gerente; o servidor limita a 2 por hora). */
-export async function atualizarNdvi(fazenda: string): Promise<{ piquetes: number; leituras: number }> {
+export async function atualizarNdvi(fazenda: string): Promise<{ piquetes: number; leituras: number; falhas?: number; motivo?: string }> {
   const { data, error } = await (await sb()).functions.invoke('ndvi', { body: { fazenda } });
   if (error) {
     const corpo = await (error as { context?: Response }).context?.json?.().catch(() => null);
     throw new Error(corpo?.erro ?? 'Não deu para falar com o satélite agora. Tente mais tarde.');
   }
-  return data as { piquetes: number; leituras: number };
+  return data as { piquetes: number; leituras: number; falhas?: number; motivo?: string };
+}
+
+/**
+ * Foto do satélite de um piquete ('cor' = como o olho vê; 'verde' = mapa do verde). Fica guardada no celular:
+ * a mesma foto não é pedida de novo (cada pedido gasta a cota gratuita do Copernicus).
+ */
+export async function fotoSatelite(fazenda: string, piquete: string, data: string, tipo: 'cor' | 'verde'): Promise<Blob> {
+  const chave = `https://boiforte.local/foto-satelite/${piquete}/${data}/${tipo}.png`;
+  const cache = typeof caches !== 'undefined' ? await caches.open('boiforte-satelite').catch(() => null) : null;
+  const guardada = await cache?.match(chave).catch(() => undefined);
+  if (guardada) return guardada.blob();
+  const { data: img, error } = await (await sb()).functions.invoke('ndvi', { body: { fazenda, foto: tipo, piquete, data } });
+  if (error) {
+    const corpo = await (error as { context?: Response }).context?.json?.().catch(() => null);
+    throw new Error(corpo?.erro ?? 'Não deu para buscar a foto do satélite agora. Tente mais tarde.');
+  }
+  if (!(img instanceof Blob) || !img.size) throw new Error('O satélite não mandou a foto.');
+  const png = img.type === 'image/png' ? img : new Blob([await img.arrayBuffer()], { type: 'image/png' });
+  await cache?.put(chave, new Response(png, { headers: { 'Content-Type': 'image/png' } })).catch(() => {});
+  return png;
 }
 
 // ---------- fotos das anotações (Storage) ----------
