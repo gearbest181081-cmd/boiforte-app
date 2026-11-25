@@ -13,7 +13,7 @@ export interface Resultado { tabela: string; gid: string; ok: boolean; erro?: st
  */
 export interface LinhaRemota {
   tabela: string; gid: string; dados: Record<string, unknown> | null; excluido: boolean; versao: number | string;
-  lixeira?: string | null; apagado_em?: string | null; apagado_por?: string | null;
+  lixeira?: string | null; apagado_em?: string | Date | null; apagado_por?: string | null;
 }
 export interface Transporte {
   enviar(fazendaId: string, ops: OpEnvio[]): Promise<Resultado[]>;
@@ -186,7 +186,11 @@ async function removerSeIgual(lista: Pendente[]) {
 
 // ---------- recebimento ----------
 
-const emMs = (s?: string | null) => { const t = s ? Date.parse(s) : NaN; return Number.isFinite(t) ? t : undefined; };
+// A API manda a data como texto (ISO); o Postgres de teste, como Date.
+const emMs = (s?: string | Date | null) => {
+  const t = s instanceof Date ? s.getTime() : s ? Date.parse(s) : NaN;
+  return Number.isFinite(t) ? t : undefined;
+};
 
 async function aplicar(linhas: LinhaRemota[], rel: RelatorioSinc) {
   await semAnotar(TABS_SINC, async () => {

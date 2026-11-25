@@ -219,13 +219,15 @@ describe('servidor', () => {
     await expect(s.rpc(duda, 'criar_convite', { f: fa, p_papel: 'vaqueiro' })).rejects.toThrow('Só o dono'); // gerente não chama gente
   });
 
-  it('versões: baixa só o que mudou e apagar vira marca de apagado', async () => {
+  it('versões: baixa só o que mudou e apagar vira marca de apagado (com os dados guardados para a lixeira)', async () => {
     const tudo = await s.rpc<{ versao: number }[]>(ana, 'baixar_alteracoes', { f: fa, desde: 0 });
     const ultima = Math.max(...tudo.map((x) => Number(x.versao)));
     expect(await s.rpc<unknown[]>(ana, 'baixar_alteracoes', { f: fa, desde: ultima })).toHaveLength(0);
     await enviar(ana, fa, [{ tabela: 'vendas', gid: uuid(32), op: 'del' }]);
     const novo = await s.rpc<{ gid: string; excluido: boolean; dados: unknown }[]>(ana, 'baixar_alteracoes', { f: fa, desde: ultima });
-    expect(novo).toEqual([expect.objectContaining({ gid: uuid(32), excluido: true, dados: null })]);
+    expect(novo).toEqual([expect.objectContaining({
+      gid: uuid(32), excluido: true, dados: expect.objectContaining({ tipo: 'morte' }), lixeira: expect.any(String), apagado_por: 'Ana',
+    })]);
     // mandar de novo o mesmo registro igual não cria versão nova
     const r1 = await enviar(ana, fa, [prop(1)]);
     const r2 = await enviar(ana, fa, [prop(1)]);
