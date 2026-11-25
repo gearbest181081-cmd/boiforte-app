@@ -54,6 +54,21 @@ Aplicativo de gestão de **cria, recria e engorda** (a pasto, TIP e confinamento
 - **Indicadores**: UA/ha do piquete e do módulo, pressão de pastejo e oferta de forragem na entrada (massa estimada pela altura), dias ocupado e de descanso, ocupação ideal para fechar o descanso, próximo piquete sugerido e aviso de lotação alta (também usado pela Cria).
 - **Satélite (NDVI do Sentinel-2)** por piquete, com aviso quando o verde cai em relação ao próprio piquete ou aos vizinhos depois do descanso. O contorno do piquete é gravado andando em volta com o GPS ou importando um KML.
 
+## Lixeira (nada some de verdade)
+
+- **Tudo o que se apaga vai para a Lixeira** (*Mais › Lixeira*): lote, pesagem, venda, trato, batida, vacina, lançamento, custo fixo,
+  lembrete, funcionário, fórmula, ingrediente, anotação, entrada em piquete, piquete, módulo e fazenda. O que sai junto vai no mesmo
+  pacote (o lote com as pesagens, os tratos e as vacinas dele) e volta junto, com o mesmo registro de antes.
+- **Desfazer na hora:** depois de apagar, o aviso mostra o botão **Desfazer** por 10 segundos.
+- **Restaurar depois:** na Lixeira, um toque em **Restaurar**. Se precisar de outra coisa que também está na lixeira (a pesagem
+  precisa do lote), o app avisa e traz as duas. Se o lugar foi ocupado (outro lote entrou no piquete), volta sem o piquete e explica.
+- **Apagar todos os dados** e **Restaurar cópia** (arquivo) guardam antes uma **cópia inteira** do celular na Lixeira (as 3 últimas).
+- **Com a nuvem**, o servidor não apaga: só marca como apagado e guarda os dados. A lixeira é a mesma em todos os celulares da
+  equipe, com quem apagou e quando; restaurar passa pelas mesmas regras de gravar (o vaqueiro não restaura lote, o consultor só olha).
+  O que foi apagado antes da Lixeira existir volta para ela com os dados da auditoria (migração `20261125020000_lixeira.sql`).
+- Continuam apagando de verdade só **Apagar minha conta** e **apagar a fazenda da nuvem** (LGPD, confirmados por escrito) e trocar
+  de conta no mesmo celular (os dados da outra pessoa saem do aparelho).
+
 Para ligar a nuvem, siga [CONFIGURAR.md](CONFIGURAR.md). Segurança em [SEGURANCA.md](SEGURANCA.md) e privacidade em [PRIVACIDADE.md](PRIVACIDADE.md).
 
 ## Para desenvolver
@@ -79,6 +94,7 @@ A cada envio para `main`, o GitHub Actions roda os testes e publica o app no Git
 - `src/faixas.ts`: faixa adequada de cada nutriente por tipo de fórmula (com as fontes); `src/comparar.ts`: comparação de produtos.
 - `src/relatorios.ts` e `src/exportar.ts`: tabelas dos relatórios, Excel e PDF gerados no próprio celular.
 - `src/db.ts`: banco local (Dexie/IndexedDB), regras de estoque/trato e cópia de segurança.
+- `src/lixeira.ts`: lista, restaura e confere a Lixeira; `src/components/Apagar.tsx`: o "Desfazer" depois de apagar.
 - `src/nuvem/`: sincronização, login e equipe (`sinc.ts`, `cliente.ts`) e os testes do servidor.
 - `src/balanca.ts`: balança Bluetooth.
 - `src/pasto.ts` e `src/pastoGeo.ts`: contas do pasto, ocupação dos piquetes, leitura do NDVI e contorno do piquete; `supabase/functions/ndvi`: busca do satélite.
@@ -93,3 +109,9 @@ A cada envio para `main`, o GitHub Actions roda os testes e publica o app no Git
   Nas 3 primeiras vezes que a pessoa toca num microfone, aparece a explicação de como falar.
 - **Toda tela tem Voltar.** O `Topo` já mostra o botão "Voltar" (só o Início fica sem). Se a tela abrir um formulário dentro dela, ponha também um botão "Cancelar".
 - O teste de ponta a ponta (passo 20) confere as duas regras em todas as telas da lista `telas`: acrescente lá as telas novas.
+- **Apagar sempre pela Lixeira.** Numa tela, nunca chame `db.<tabela>.delete()`: use uma função `excluir...`/`desfazer...` de
+  `src/db.ts` (ou `excluirRegistro(tabela, id)`), que passa por `naLixeira`, e mostre o Desfazer com `useApagar()`
+  (`src/components/Apagar.tsx`). Tudo o que for apagado dentro da mesma `naLixeira` vira um pacote só. Quando é o próprio app
+  trocando um registro por outro (não a pessoa apagando), use `trocaDoApp`: não vai para a lixeira. Um teste em
+  `src/lixeira.test.ts` recusa `delete()` direto nas telas. Tabela nova: confira em `src/lixeira.ts` o título (`tituloDe`) e se
+  alguma referência pode ficar vazia ao restaurar (`PODE_FICAR_SEM`).

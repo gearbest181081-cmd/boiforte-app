@@ -1,6 +1,6 @@
 # Política de privacidade do BoiForte
 
-Última atualização: 19/11/2026.
+Última atualização: 25/11/2026.
 
 **Resumo:** os dados da sua fazenda são seus. Sem a nuvem ligada, nada sai do seu celular.
 
@@ -23,4 +23,6 @@ Não vendemos nem compartilhamos seus dados, não mostramos anúncios e não usa
 
 - **Ver e levar seus dados:** em *Mais › Cópia de segurança* você baixa tudo num arquivo.
 - **Apagar:** em *Mais › Nuvem e equipe › Apagar minha conta*. A conta e as fazendas só suas são apagadas do servidor.
+  O que você apaga dentro do app (um lote, uma pesagem...) vai para a *Lixeira* e pode voltar; com a nuvem, fica guardado
+  na fazenda até a conta ou a fazenda ser apagada.
 - Dúvidas: escreva para o contato informado na página do app na loja.
