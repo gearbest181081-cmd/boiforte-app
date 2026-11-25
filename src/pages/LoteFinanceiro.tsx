@@ -5,15 +5,16 @@ import { analisarLotes, useTudo } from '../hooks';
 import { calcularVenda, NOMES_CATEGORIA } from '../financeiro';
 import { fmtData, fmtNum, fmtPct, hojeISO } from '../calc';
 import { CampoData, CampoNumero, CampoTexto, num, Opcoes, useAviso } from '../components/ui';
+import { useApagar, VAI_PARA_LIXEIRA } from '../components/Apagar';
 import { rs } from './Nutricao';
 
 export function LoteFinanceiro({ lote }: { lote: Lote }) {
+  const apagarComDesfazer = useApagar();
   const t = useTudo();
   const [form, setForm] = useState<'compra' | 'saida' | null>(null);
   const analise = useMemo(() => (t ? analisarLotes(t).find((a) => a.info.lote.id === lote.id) : undefined), [t, lote.id]);
   const vendas = useLiveQuery(() => db.vendas.where('loteId').equals(lote.id!).toArray(), [lote.id]);
   const compra = useLiveQuery(() => db.lancamentos.where('[origem+refId]').equals(['compra_lote', lote.id!]).first(), [lote.id]);
-  const aviso = useAviso();
   if (!analise || !t) return null;
   const d = analise.dre;
   const linhas = Object.entries(d.custos).sort((a, b) => b[1] - a[1]);
@@ -61,7 +62,7 @@ export function LoteFinanceiro({ lote }: { lote: Lote }) {
                   <tr key={v.id}>
                     <td>{fmtData(v.data)}<div className="mudo" style={{ fontSize: 13 }}>{v.tipo === 'morte' ? 'Morte' : `Venda${v.comprador ? ' · ' + v.comprador : ''}`}</div></td>
                     <td className="n">{v.cabecas}</td><td className="n">{v.pesoMedio ? fmtNum(v.pesoMedio, 0) : '—'}</td><td className="n">{rs(v.valorLiquido, 0)}</td>
-                    <td><button className="remover" aria-label="Desfazer saída" onClick={async () => { if (window.confirm('Desfazer esta saída? As cabeças voltam para o lote.')) { await desfazerSaida(v.id!); aviso('Saída desfeita.'); } }}>×</button></td>
+                    <td><button className="remover" aria-label="Desfazer saída" onClick={async () => { if (window.confirm(`Desfazer esta saída? As cabeças voltam para o lote. ${VAI_PARA_LIXEIRA}`)) await apagarComDesfazer(() => desfazerSaida(v.id!), 'Saída desfeita. As cabeças voltaram para o lote.'); }}>×</button></td>
                   </tr>
                 ))}
               </tbody>

@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { concluirEventoSanitario, db, excluirEventoSanitario, garantirLembretesPadrao, salvarEventoSanitario, type Lote } from '../db';
+import { concluirEventoSanitario, db, excluirEventoSanitario, excluirRegistro, garantirLembretesPadrao, salvarEventoSanitario, type Lote } from '../db';
 import { emCarencia, pendenciasSanidade, proximaData, TIPOS_SANIDADE, type TipoSanidade } from '../sanidade';
 import { fmtData, hojeISO } from '../calc';
 import { CampoData, CampoEscolha, CampoNumero, CampoTexto, num, Opcoes, Topo, useAviso } from '../components/ui';
 import { rs } from './Nutricao';
+import { useApagar, VAI_PARA_LIXEIRA } from '../components/Apagar';
 
 /** Aba "Saúde" dentro do lote. */
 export function LoteSanidade({ lote }: { lote: Lote }) {
   const eventos = useLiveQuery(() => db.sanidade.where('loteId').equals(lote.id!).toArray(), [lote.id]);
   const [novo, setNovo] = useState(false);
   const aviso = useAviso();
+  const apagar = useApagar();
   if (!eventos) return null;
   const hoje = hojeISO();
   const car = emCarencia(eventos, lote.id!, hoje);
@@ -29,7 +31,7 @@ export function LoteSanidade({ lote }: { lote: Lote }) {
           <p className="mudo">{TIPOS_SANIDADE[e.tipo]}{e.dose ? ` · ${e.dose}` : ''}{e.repetirDias ? ` · repete a cada ${e.repetirDias} dias` : ''}</p>
           <div className="botoes" style={{ margin: 0 }}>
             <button className="btn pequeno" onClick={async () => { await concluirEventoSanitario(e.id!, hoje); aviso(e.repetirDias ? 'Feito. A próxima dose já ficou agendada.' : 'Marcado como feito.'); }}>Feito hoje</button>
-            <button className="btn perigo pequeno" onClick={async () => { if (window.confirm('Apagar este agendamento?')) await excluirEventoSanitario(e.id!); }}>Apagar</button>
+            <button className="btn perigo pequeno" onClick={async () => { if (window.confirm(`Apagar este agendamento? ${VAI_PARA_LIXEIRA}`)) await apagar(() => excluirEventoSanitario(e.id!), 'Agendamento apagado.'); }}>Apagar</button>
           </div>
         </div>
       ))}
@@ -45,7 +47,7 @@ export function LoteSanidade({ lote }: { lote: Lote }) {
                   <td>{fmtData(e.data)}</td>
                   <td>{e.produto}<div className="mudo" style={{ fontSize: 13 }}>{TIPOS_SANIDADE[e.tipo]}{e.custo ? ` · ${rs(e.custo)}` : ''}</div></td>
                   <td className="n">{e.carenciaDias ? `${e.carenciaDias} d` : '—'}</td>
-                  <td><button className="remover" aria-label="Apagar aplicação" onClick={async () => { if (window.confirm('Apagar esta aplicação?')) await excluirEventoSanitario(e.id!); }}>×</button></td>
+                  <td><button className="remover" aria-label="Apagar aplicação" onClick={async () => { if (window.confirm(`Apagar esta aplicação (e a despesa dela)? ${VAI_PARA_LIXEIRA}`)) await apagar(() => excluirEventoSanitario(e.id!), 'Aplicação apagada.'); }}>×</button></td>
                 </tr>
               ))}
             </tbody>
@@ -103,6 +105,7 @@ export function Sanidade() {
   useEffect(() => { garantirLembretesPadrao().catch(() => {}); }, []);
   const dados = useLiveQuery(async () => ({ eventos: await db.sanidade.toArray(), lotes: await db.lotes.toArray(), lembretes: await db.lembretes.toArray() }));
   const aviso = useAviso();
+  const apagar = useApagar();
   const [titulo, setTitulo] = useState('');
   const [mes, setMes] = useState('5');
   const [dia, setDia] = useState('31');
@@ -132,7 +135,7 @@ export function Sanidade() {
         {dados.lembretes.map((l) => (
           <div key={l.id} className="cartao linha-lote">
             <span>{l.titulo}<div className="mudo">próximo: {fmtData(proximaData(l, hoje))}{l.obs ? ` · ${l.obs}` : ''}</div></span>
-            <button className="remover" aria-label="Apagar lembrete" onClick={() => db.lembretes.delete(l.id!)}>×</button>
+            <button className="remover" aria-label="Apagar lembrete" onClick={() => apagar(() => excluirRegistro('lembretes', l.id!), `Lembrete "${l.titulo}" apagado.`)}>×</button>
           </div>
         ))}
         <div className="cartao">

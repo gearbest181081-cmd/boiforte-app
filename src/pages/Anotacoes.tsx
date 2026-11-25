@@ -9,6 +9,7 @@ import {
 } from '../anotacoes';
 import { fmtData } from '../calc';
 import { CampoEscolha, CampoTexto, Opcoes, Topo, useAviso, useOnline } from '../components/ui';
+import { useApagar, VAI_PARA_LIXEIRA } from '../components/Apagar';
 import { armazemNuvem, nuvemConfigurada } from '../nuvem/cliente';
 import { useEstadoNuvem, usePapel } from '../nuvem/useNuvem';
 import { nomeParaMostrar, useSessao } from '../nuvem/sessao';
@@ -150,6 +151,7 @@ export function AnotacaoDetalhe() {
   const { id } = useParams();
   const nav = useNavigate();
   const aviso = useAviso();
+  const apagarComDesfazer = useApagar();
   const a = useLiveQuery(async () => (await db.anotacoes.get(Number(id))) ?? null, [id]);
   const lugares = useLugares();
   const { grava, podeApagar, eu } = usePermissoes();
@@ -160,10 +162,8 @@ export function AnotacaoDetalhe() {
   }
   const cat = CATEGORIAS[a.categoria ?? 'outro'];
   const apagar = async () => {
-    if (!window.confirm('Apagar esta anotação e as fotos dela?')) return;
-    await excluirAnotacao(a.id!);
-    aviso('Anotação apagada.');
-    nav('/anotacoes', { replace: true });
+    if (!window.confirm(`Apagar esta anotação (com as fotos)? ${VAI_PARA_LIXEIRA}`)) return;
+    if (await apagarComDesfazer(() => excluirAnotacao(a.id!), 'Anotação apagada.')) nav('/anotacoes', { replace: true });
   };
   return (
     <>

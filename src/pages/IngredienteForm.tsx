@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { db, excluirIngrediente } from '../db';
 import { AvisoNutricao, CampoEscolha, CampoNumero, CampoTexto, num, Topo, useAviso } from '../components/ui';
+import { useApagar, VAI_PARA_LIXEIRA } from '../components/Apagar';
 import { BotaoFoto } from '../components/Foto';
 import { useVeDinheiro } from '../nuvem/useNuvem';
 import { TIPOS, valorExtra, type CategoriaIngrediente, type TipoFormula } from '../nutricao';
@@ -25,6 +26,7 @@ export const CATEGORIAS: { valor: CategoriaIngrediente; rotulo: string; pronto?:
 const prontoDe = (c: CategoriaIngrediente) => CATEGORIAS.find((x) => x.valor === c)?.pronto;
 
 export function IngredienteForm() {
+  const apagarComDesfazer = useApagar();
   const { id } = useParams();
   const editando = id != null && id !== 'novo';
   const veDinheiro = useVeDinheiro();
@@ -97,8 +99,8 @@ export function IngredienteForm() {
     } catch (e) { aviso((e as Error).message, true); }
   };
   const apagar = async () => {
-    if (!window.confirm(`Apagar "${nome}"?`)) return;
-    try { await excluirIngrediente(Number(id)); aviso('Ingrediente apagado.'); nav(-1); } catch (e) { aviso((e as Error).message, true); }
+    if (!window.confirm(`Apagar "${nome}" (com as compras e o estoque dele)? ${VAI_PARA_LIXEIRA}`)) return;
+    if (await apagarComDesfazer(() => excluirIngrediente(Number(id)), `"${nome}" apagado.`)) nav(-1);
   };
 
   return (

@@ -5,10 +5,12 @@ import { ajustarEstoque, comprarInsumo, db, desfazerBatida, garantirIngredientes
 import { useEstoque, type ItemEstoque } from '../hooks';
 import { fmtData, fmtNum, hojeISO } from '../calc';
 import { CampoData, CampoEscolha, CampoNumero, Entrada, num, Opcoes, Topo, useAviso } from '../components/ui';
+import { useApagar, VAI_PARA_LIXEIRA } from '../components/Apagar';
 import { rs } from './Nutricao';
 import { useVeDinheiro } from '../nuvem/useNuvem';
 
 export function Estoque() {
+  const apagarComDesfazer = useApagar();
   const itens = useEstoque();
   const veDinheiro = useVeDinheiro();
   const [acao, setAcao] = useState<'compra' | 'batida' | null>(null);
@@ -17,7 +19,6 @@ export function Estoque() {
     const fs = await db.formulas.bulkGet([...new Set(bs.map((b) => b.formulaId))]);
     return bs.map((b) => ({ ...b, nome: fs.find((f) => f?.id === b.formulaId)?.nome ?? '?' }));
   });
-  const aviso = useAviso();
   return (
     <>
       <Topo titulo="Estoque" voltar />
@@ -42,7 +43,7 @@ export function Estoque() {
                   {batidas.map((b) => (
                     <tr key={b.id}>
                       <td>{fmtData(b.data)}</td><td>{b.nome}</td><td className="n">{fmtNum(b.kg, 0)}</td>{veDinheiro && <td className="n">{fmtNum(b.custoTotal / b.kg, 3)}</td>}
-                      <td><button className="remover" aria-label="Desfazer batida" onClick={async () => { if (window.confirm('Desfazer esta batida? Os ingredientes voltam para o estoque.')) { await desfazerBatida(b.id!); aviso('Batida desfeita.'); } }}>×</button></td>
+                      <td><button className="remover" aria-label="Desfazer batida" onClick={async () => { if (window.confirm(`Desfazer esta batida? Os ingredientes voltam para o estoque. ${VAI_PARA_LIXEIRA}`)) await apagarComDesfazer(() => desfazerBatida(b.id!), 'Batida desfeita.'); }}>×</button></td>
                     </tr>
                   ))}
                 </tbody>
