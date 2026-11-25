@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, excluirLote, FASES, lerConfig, pontosDoAnimal, pontosDoLote, SEXOS } from '../db';
+import { db, excluirLote, excluirRegistro, FASES, lerConfig, pontosDoAnimal, pontosDoLote, SEXOS } from '../db';
 import { montarInfo } from '../hooks';
 import { arrobas, fmtData, fmtGmd, fmtKg, fmtNum, fmtPct, desvioMeta, hojeISO, periodos, pesoEstimado, resumo } from '../calc';
 import { calcularFormula, custoArrobaNutricao, kgCabDia } from '../nutricao';
 import { rs } from './Nutricao';
 import { GraficoCrescimento } from '../components/Grafico';
 import { Indicador, Opcoes, Topo, useAviso } from '../components/ui';
+import { useApagar, VAI_PARA_LIXEIRA } from '../components/Apagar';
 import { LoteFinanceiro } from './LoteFinanceiro';
 import { LoteSanidade } from './Sanidade';
 import { nomeCurtoFase, PROXIMA_FASE, trechosDeFase } from '../fases';
@@ -18,6 +19,7 @@ export function LoteDetalhe() {
   const loteId = Number(id);
   const nav = useNavigate();
   const aviso = useAviso();
+  const apagarComDesfazer = useApagar();
   const papel = usePapel();
   const [aba, setAba] = useState<'resumo' | 'pesagens' | 'animais' | 'dinheiro' | 'saude'>('resumo');
   const dados = useLiveQuery(async () => {
@@ -53,19 +55,16 @@ export function LoteDetalhe() {
   const pertoDoAlvo = (lote.fase === 'rip' || lote.fase === 'recria') && !!lote.pesoAlvo && r.pesoAtual != null && r.pesoAtual >= lote.pesoAlvo * 0.95;
 
   const apagarPesagem = async (pid: number) => {
-    if (!window.confirm('Apagar esta pesagem?')) return;
-    await db.pesagens.delete(pid);
-    aviso('Pesagem apagada.');
+    if (!window.confirm(`Apagar esta pesagem? ${VAI_PARA_LIXEIRA}`)) return;
+    await apagarComDesfazer(() => excluirRegistro('pesagens', pid), 'Pesagem apagada.');
   };
   const encerrar = async () => {
     await db.lotes.update(loteId, { encerrado: !lote.encerrado });
     aviso(lote.encerrado ? 'Lote reaberto.' : 'Lote encerrado. Ele continua no histórico.');
   };
   const apagar = async () => {
-    if (!window.confirm(`Apagar o lote "${lote.nome}" e todas as pesagens? Não dá para desfazer.`)) return;
-    await excluirLote(loteId);
-    aviso('Lote apagado.');
-    nav('/lotes', { replace: true });
+    if (!window.confirm(`Apagar o lote "${lote.nome}" com as pesagens, tratos, vacinas e vendas dele? ${VAI_PARA_LIXEIRA}`)) return;
+    if (await apagarComDesfazer(() => excluirLote(loteId), `Lote "${lote.nome}" apagado.`)) nav('/lotes', { replace: true });
   };
 
   return (

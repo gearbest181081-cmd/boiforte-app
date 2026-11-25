@@ -21,7 +21,7 @@ describe('lixeira no servidor', () => {
   let fa: string, fb: string;
   const enviar = (u: string, f: string, ops: unknown[]) => s.rpc<Res>(u, 'enviar_alteracoes', { f, ops });
   const put = (tabela: string, n: number, dados: Record<string, unknown>) => ({ tabela, gid: uuid(n), op: 'put', dados: { criadoEm: 0, ...dados } });
-  const del = (tabela: string, n: number, lixeira?: string) => ({ tabela, gid: uuid(n), op: 'del', ...(lixeira !== undefined ? { lixeira } : {}) });
+  const del = (tabela: string, n: number, lixeira?: string | false) => ({ tabela, gid: uuid(n), op: 'del', ...(lixeira !== undefined ? { lixeira } : {}) });
   const baixar = (u: string, f = fa) => s.rpc<Linha[]>(u, 'baixar_alteracoes', { f, desde: 0 });
   const linha = async (u: string, n: number) => (await baixar(u)).find((l) => l.gid === uuid(n));
   const banco = async (n: number, tabela?: string) => (await s.pg.query<NoBanco>(
@@ -52,7 +52,8 @@ describe('lixeira no servidor', () => {
       put('pesagens', 11, PESAGEM),
       put('lotes', 30, LOTE('Nelore 2')),
       put('lotes', 31, LOTE('Nelore 3')),
-      put('vendas', 12, MORTE(10)), put('vendas', 13, MORTE(11)), put('vendas', 14, MORTE(12)), put('vendas', 16, MORTE(13)),
+      put('vendas', 12, MORTE(10)), put('vendas', 13, MORTE(11)), put('vendas', 14, MORTE(12)), put('vendas', 16, MORTE(13)), put('vendas', 17, MORTE(14)),
+      put('sanidade', 70, { loteId: uuid(30), data: '2026-11-19', feito: true, tipo: 'vacina', produto: 'Aftosa', custo: 240 }),
       put('fornecimentos', 15, TRATO),
       put('modulos', 20, { propriedadeId: uuid(1), nome: 'Retiro', sistema: 'rotacionado', diasOcupacao: 5, diasDescanso: 30, capacidadeUA: 2.5 }),
       put('piquetes', 21, { moduloId: uuid(20), nome: 'Piquete 1', areaHa: 10, contorno: CONTORNO }),
@@ -83,6 +84,12 @@ describe('lixeira no servidor', () => {
     expect(b.lixeira).toBe(a.lixeira);
     expect(c.lixeira).not.toBe(a.lixeira);
     expect(c.dados).toMatchObject({ tipo: 'morte', data: '2026-11-12' });
+  });
+
+  it('o app trocando um registro por outro (lixeira = false): os dados ficam, mas fora da lixeira', async () => {
+    tudoOk(await enviar(ana, fa, [del('vendas', 17, false)]));
+    expect(await banco(17)).toMatchObject({ excluido: true, lixeira: null, dados: expect.objectContaining({ data: '2026-11-14' }) });
+    expect(await linha(gil, 17)).toMatchObject({ excluido: true, lixeira: null, apagado_em: null, apagado_por: null });
   });
 
   it('restaurar é gravar de novo: volta inteiro, sai da lixeira e fica na auditoria', async () => {
@@ -188,6 +195,12 @@ describe('lixeira no servidor', () => {
     await apagou('precoArroba', 'config', { chave: 'precoArroba', valor: 300 }, '2026-11-20 10:00:00+00');
     await apagou(uuid(63), 'ndvi', { piqueteId: uuid(21), data: '2026-10-01', ndvi: 0.5 }, '2026-11-20 10:00:00+00');
     await apagou(uuid(64), 'vendas', null, '2026-11-20 10:00:00+00'); // sem "antes": fica como está
+    // despesa da vacina que o app refez (a vacina continua lá): fica de fora; a da vacina apagada junto, volta
+    const despesa = (n: number) => ({ data: '2026-11-19', tipo: 'despesa', categoria: 'sanidade', valor: 240, origem: 'sanidade', refId: uuid(n), criadoEm: 0 });
+    await velho(71, 'lancamentos'); await velho(72, 'sanidade'); await velho(73, 'lancamentos');
+    await apagou(uuid(71), 'lancamentos', despesa(70), '2026-11-19 10:00:00+00');
+    await apagou(uuid(72), 'sanidade', { loteId: uuid(30), data: '2026-11-18', feito: true, tipo: 'vacina', produto: 'Raiva', custo: 50, criadoEm: 0 }, '2026-11-19 11:00:00+00');
+    await apagou(uuid(73), 'lancamentos', despesa(72), '2026-11-19 11:00:00+00');
     const antes = await banco(60);
 
     const sql = readFileSync(MIGRACAO, 'utf8');
@@ -202,6 +215,10 @@ describe('lixeira no servidor', () => {
     expect(a.versao).toBeGreaterThan(antes.versao); // desce para os celulares
     expect((await banco(63, 'ndvi')).dados).toBeNull();
     expect((await banco(64)).dados).toBeNull();
+    expect((await banco(71)).dados).toBeNull();
+    const [vac, desp] = [await banco(72), await banco(73)];
+    expect(vac.dados).toMatchObject({ produto: 'Raiva' });
+    expect(desp).toMatchObject({ dados: expect.objectContaining({ refId: uuid(72) }), lixeira: vac.lixeira });
     const cfg = await s.pg.query<{ dados: unknown }>(`select dados from public.registros where fazenda_id = $1 and tabela = 'config' and gid = 'precoArroba'`, [fa]);
     expect(cfg.rows[0].dados).toBeNull();
     // quem apagou e quando continuam os de antes

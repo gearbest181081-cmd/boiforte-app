@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, exportarBackup, importarBackup, lerArquivoBackup, lerConfig, lerConfigFin, TABELAS } from '../db';
+import { db, exportarBackup, lerArquivoBackup, lerConfig, lerConfigFin } from '../db';
+import { apagarTodosOsDados, contarLixeira, trocarPeloArquivo } from '../lixeira';
 import { carregarExemplo } from '../exemplo';
 import { desligarFazenda, fazendaLigada } from '../nuvem/sinc';
 import { useEstadoNuvem, usePapel } from '../nuvem/useNuvem';
@@ -17,6 +18,7 @@ export function Mais() {
   const nuvem = useEstadoNuvem();
   const papel = usePapel();
   const veDinheiro = papel !== 'vaqueiro';
+  const naLixeira = useLiveQuery(() => contarLixeira());
 
   useEffect(() => {
     const h = (e: Event) => { e.preventDefault(); setInstalar(e); };
@@ -47,9 +49,9 @@ export function Mais() {
     try {
       if (await fazendaLigada()) return aviso('Este celular está ligado à nuvem. Desligue em Nuvem e equipe antes de restaurar uma cópia.', true);
       const bk = lerArquivoBackup(await f.text());
-      if (!window.confirm('Isto vai SUBSTITUIR tudo o que está no celular pelos dados da cópia. Continuar?')) return;
-      await importarBackup(bk);
-      aviso('Cópia restaurada.');
+      if (!window.confirm('Isto vai TROCAR tudo o que está no celular pelos dados da cópia. O que está agora não se perde: fica guardado na Lixeira. Continuar?')) return;
+      await trocarPeloArquivo(bk);
+      aviso('Cópia restaurada. O que estava antes ficou na Lixeira.');
       nav('/');
     } catch (e) {
       aviso((e as Error).name === 'ErroValidacao' ? (e as Error).message : 'Não consegui ler este arquivo.', true);
@@ -65,12 +67,11 @@ export function Mais() {
 
   const apagarTudo = async () => {
     const ligada = await fazendaLigada();
-    if (!window.confirm(ligada ? 'Apagar os dados SÓ deste celular? Na nuvem continuam guardados, e o celular é desligado da fazenda.' : 'Apagar TODOS os dados do BoiForte deste celular? Faça uma cópia antes.')) return;
+    const copia = 'Fica uma cópia de tudo na Lixeira (aqui em Mais), para voltar se foi sem querer.';
+    if (!window.confirm(ligada ? `Apagar os dados SÓ deste celular? Na nuvem continuam guardados, e o celular é desligado da fazenda. ${copia}` : `Apagar TODOS os dados do BoiForte deste celular? ${copia}`)) return;
     await desligarFazenda();
-    await db.transaction('rw', TABELAS.map((t) => db.table(t)), async () => { for (const t of TABELAS) await db.table(t).clear(); });
-    await db.pendentes.clear();
-    await db.fotosAnotacao.clear();
-    aviso('Dados apagados.');
+    await apagarTodosOsDados();
+    aviso('Dados apagados. A cópia está na Lixeira.');
     nav('/');
   };
 
@@ -94,6 +95,7 @@ export function Mais() {
           {veDinheiro && <Link to="/relatorios" className="btn sec">Relatórios</Link>}
           {veDinheiro && <Link to="/simular" className="btn sec">Simulação</Link>}
           <Link to="/lotes" className="btn sec">Lotes</Link>
+          <Link to="/lixeira" className="btn sec">🗑️ Lixeira{naLixeira ? ` (${naLixeira})` : ''}</Link>
         </div>
         <Mercado />
         <ConfigFinanceira />

@@ -333,8 +333,12 @@ export function novoGid(): string {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
 
-/** Alteração esperando para subir. lixeira: no "del", o pacote da lixeira (a nuvem guarda o registro apagado junto com ele). */
-export interface Pendente { tabela: string; chave: number | string; op: 'put' | 'del'; gid?: string; em: number; erro?: string; lixeira?: string }
+/**
+ * Alteração esperando para subir. lixeira, no "del": o pacote da lixeira (a nuvem guarda o registro apagado junto com ele),
+ * ou false quando foi o próprio app que trocou um registro por outro (trocaDoApp), que não vai para a lixeira.
+ * Sem lixeira (fila de antes da lixeira), a nuvem põe o que veio no mesmo envio num pacote só.
+ */
+export interface Pendente { tabela: string; chave: number | string; op: 'put' | 'del'; gid?: string; em: number; erro?: string; lixeira?: string | false }
 // O NDVI vem só do servidor (satélite): o celular nunca manda.
 export const SO_DO_SERVIDOR = new Set<string>(['ndvi']);
 const SINC = new Set<string>(TABELAS.filter((t) => !SO_DO_SERVIDOR.has(t)));
@@ -347,9 +351,24 @@ function silenciosa(): boolean {
 
 /** Apagando dentro de naLixeira: tudo o que sair das tabelas vai para a lixeira com o mesmo pacote. */
 interface CtxLixeira { pacote: string; em: number; apagados: { tabela: string; reg: Record<string, unknown> }[] }
+type TxMarcada = Transaction & { __lixeira?: CtxLixeira; __troca?: boolean; parent?: unknown };
 function lixeiraAtual(): CtxLixeira | null {
-  for (let t = Dexie.currentTransaction as (Transaction & { __lixeira?: CtxLixeira; parent?: unknown }) | null; t; t = t.parent as typeof t) if (t.__lixeira) return t.__lixeira;
+  for (let t = Dexie.currentTransaction as TxMarcada | null; t; t = t.parent as typeof t) if (t.__lixeira) return t.__lixeira;
   return null;
+}
+function trocaAtual(): boolean {
+  for (let t = Dexie.currentTransaction as TxMarcada | null; t; t = t.parent as typeof t) if (t.__troca) return true;
+  return false;
+}
+/**
+ * O próprio app trocando um registro por outro (não é a pessoa apagando): o que sair das tabelas aqui não vai para
+ * a lixeira, nem no celular nem na nuvem (a nuvem guarda os dados mesmo assim). Tudo o que a PESSOA apaga usa naLixeira.
+ */
+export function trocaDoApp<T>(tabelas: Table[], fn: () => Promise<T>): Promise<T> {
+  return db.transaction('rw', tabelas, async (tx) => {
+    (tx as TxMarcada).__troca = true;
+    return fn();
+  });
 }
 
 /**
@@ -423,7 +442,7 @@ const middlewarePendentes: Middleware<DBCore> = {
               const res = await t.mutate(req);
               await anotar(req.trans, chaves.map((k, i) => ({
                 tabela: nome, chave: k as number | string, op: 'del', gid: nome === 'config' ? String(k) : (antes[i] as { gid?: string } | undefined)?.gid, em,
-                ...(lx ? { lixeira: lx.pacote } : {}),
+                ...(lx ? { lixeira: lx.pacote } : trocaAtual() ? { lixeira: false as const } : {}),
               })));
               return res;
             }
@@ -782,12 +801,16 @@ export async function registrarCompraLote(loteId: number, d: { data: string; pre
     const vendidas = await db.vendas.where('loteId').equals(loteId).toArray();
     const qtd = lote.qtdCabecas + vendidas.reduce((t, v) => t + v.cabecas, 0);
     const valor = custoCompra(qtd, d.precoCab, d.comissaoPct, d.frete, d.nfGta);
-    await db.lancamentos.where('[origem+refId]').equals(['compra_lote', loteId]).delete();
     const desc = `${qtd} cab × R$ ${d.precoCab.toLocaleString('pt-BR')} + ${(d.comissaoPct * 100).toLocaleString('pt-BR')}% comissão + frete + NF/GTA`;
-    return db.lancamentos.add({
-      data: d.data, tipo: 'despesa', categoria: 'compra_animais', descricao: desc, valor: Math.round(valor * 100) / 100, loteId, origem: 'compra_lote', refId: loteId,
-      compraQtd: qtd, compraPreco: d.precoCab, compraComissao: d.comissaoPct, compraFrete: d.frete, compraNf: d.nfGta, criadoEm: Date.now(),
-    });
+    const novo = {
+      data: d.data, tipo: 'despesa' as const, categoria: 'compra_animais' as const, descricao: desc, valor: Math.round(valor * 100) / 100, loteId,
+      origem: 'compra_lote' as const, refId: loteId, compraQtd: qtd, compraPreco: d.precoCab, compraComissao: d.comissaoPct, compraFrete: d.frete, compraNf: d.nfGta,
+    };
+    // Refazer a compra atualiza o mesmo lançamento (não apaga: não vai para a lixeira).
+    const [atual, ...sobra] = await db.lancamentos.where('[origem+refId]').equals(['compra_lote', loteId]).toArray();
+    if (sobra.length) await trocaDoApp([db.lancamentos], () => db.lancamentos.bulkDelete(sobra.map((x) => x.id!)));
+    if (atual) { await db.lancamentos.update(atual.id!, novo); return atual.id!; }
+    return db.lancamentos.add({ ...novo, criadoEm: Date.now() });
   });
 }
 
@@ -831,9 +854,16 @@ export async function salvarEventoSanitario(ev: Omit<EventoSanitario, 'id' | 'cr
   return db.transaction('rw', db.sanidade, db.lancamentos, async () => {
     const eid = id ?? (await db.sanidade.add({ ...ev, criadoEm: Date.now() }));
     if (id) await db.sanidade.update(id, ev);
-    await db.lancamentos.where('[origem+refId]').equals(['sanidade', eid]).delete();
-    if (ev.feito && ev.custo && ev.custo > 0) {
-      await db.lancamentos.add({ data: ev.data, tipo: 'despesa', categoria: 'sanidade', descricao: ev.produto, valor: ev.custo, loteId: ev.loteId, origem: 'sanidade', refId: eid, criadoEm: Date.now() });
+    // A despesa acompanha a aplicação: atualiza a mesma; some só se a aplicação deixou de ter custo
+    // (isso é o app ajustando, não a pessoa apagando: não vai para a lixeira).
+    const [atual, ...sobra] = await db.lancamentos.where('[origem+refId]').equals(['sanidade', eid]).toArray();
+    const temCusto = !!(ev.feito && ev.custo && ev.custo > 0);
+    const tirar = [...sobra, ...(atual && !temCusto ? [atual] : [])];
+    if (tirar.length) await trocaDoApp([db.lancamentos], () => db.lancamentos.bulkDelete(tirar.map((x) => x.id!)));
+    if (temCusto) {
+      const novo = { data: ev.data, tipo: 'despesa' as const, categoria: 'sanidade' as const, descricao: ev.produto, valor: ev.custo!, loteId: ev.loteId, origem: 'sanidade' as const, refId: eid };
+      if (atual) await db.lancamentos.update(atual.id!, novo);
+      else await db.lancamentos.add({ ...novo, criadoEm: Date.now() });
     }
     return eid;
   });

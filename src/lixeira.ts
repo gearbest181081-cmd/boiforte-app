@@ -414,6 +414,14 @@ class Restauracao {
         }
         return true;
       }
+      case 'lancamentos': {
+        // Despesa da compra do lote ou da vacina: só existe uma por compra/aplicação.
+        if ((reg.origem === 'compra_lote' || reg.origem === 'sanidade') && reg.refId != null
+            && (await db.lancamentos.where('[origem+refId]').equals([reg.origem, reg.refId]).first())) {
+          throw new ErroValidacao(`Não dá para voltar "${titulo}": ${reg.origem === 'compra_lote' ? 'a compra desse lote' : 'a despesa dessa aplicação'} já está lançada.`);
+        }
+        return true;
+      }
       case 'ocupacoes': return this.ajustarOcupacao(reg, titulo);
     }
     return true;

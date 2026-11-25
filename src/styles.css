@@ -228,6 +228,9 @@ table.tab td.n, table.tab th.n { text-align: right; }
   background: #222; color: #fff; padding: 14px 16px; border-radius: 12px; font-size: 17px; box-shadow: 0 4px 16px rgba(0,0,0,.3);
 }
 .toast.erro { background: var(--alerta); color: #fff; }
+.toast.com-acao { display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 16px; }
+.toast.com-acao > span { flex: 1; }
+.toast-acao { flex: none; background: #fff; color: #1b1b1b; border: 0; border-radius: 10px; min-height: 48px; padding: 0 18px; font-size: 17px; font-weight: 700; cursor: pointer; }
 
 .vazio { text-align: center; padding: 30px 10px; }
 .vazio .grande { font-size: 54px; }
@@ -294,3 +297,9 @@ button.link { background: none; border: 0; padding: 4px 0; color: var(--verde); 
 .permissoes li { display: flex; gap: 8px; align-items: flex-start; }
 .permissoes li.nao { color: var(--texto-2, inherit); }
 .codigo-convite { font-size: 30px; letter-spacing: 4px; text-align: center; font-weight: 700; margin: 8px 0; }
+
+/* Lixeira */
+.item-lixeira-topo { display: flex; gap: 12px; align-items: flex-start; }
+.item-lixeira-ic { font-size: 30px; line-height: 1.1; flex: none; }
+.item-lixeira-topo > span:last-child { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.item-lixeira-topo b { font-size: 17px; overflow-wrap: anywhere; }

@@ -1,9 +1,12 @@
 import 'fake-indexeddb/auto';
 import { describe, it, expect, beforeEach } from 'vitest';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   BoiForteDB, usarBanco, db, criarLote, garantirIngredientesPadrao, registrarFornecimento, desfazerFornecimento, registrarBatida, desfazerBatida,
   registrarSaida, desfazerSaida, salvarEventoSanitario, excluirEventoSanitario, excluirLote, excluirPiquetes, excluirModulo, excluirPropriedade,
-  excluirRegistro, excluirIngrediente, comprarInsumo, saldoIngrediente, guardarCopiaInteira, COPIA_INTEIRA, MAX_COPIAS,
+  excluirRegistro, excluirIngrediente, comprarInsumo, saldoIngrediente, guardarCopiaInteira, COPIA_INTEIRA, MAX_COPIAS, registrarCompraLote,
 } from './db';
 import {
   apagarTodosOsDados, contarLixeira, dependencias, listarLixeira, motivoNaoRestaura, restaurar, trocarPeloArquivo, voltarCopiaInteira,
@@ -225,6 +228,47 @@ describe('lixeira no celular', () => {
     expect(r.avisos).toEqual(['Anotação: Cerca caída no fundo voltou sem o piquete, porque ele foi apagado.']);
     expect(await db.anotacoes.get(id)).toMatchObject({ texto: 'Cerca caída no fundo', moduloId: f.mod });
     expect((await db.anotacoes.get(id))!.piqueteId).toBeUndefined();
+  });
+
+  it('o app refazendo a compra ou a despesa da vacina não manda nada para a lixeira', async () => {
+    const f = await fazenda();
+    const compra = { data: '2026-10-01', precoCab: 2000, comissaoPct: 0.02, frete: 0, nfGta: 0 };
+    const id1 = await registrarCompraLote(f.lote, compra);
+    const gid1 = (await db.lancamentos.get(id1))!.gid;
+    expect(await registrarCompraLote(f.lote, { ...compra, precoCab: 2100 })).toBe(id1); // o mesmo lançamento, atualizado
+    expect(await db.lancamentos.get(id1)).toMatchObject({ gid: gid1, compraPreco: 2100 });
+    expect(await db.lancamentos.where('[origem+refId]').equals(['compra_lote', f.lote]).count()).toBe(1);
+    // vacina: muda o custo (a mesma despesa) e depois tira o custo (a despesa sai, mas não vai para a lixeira)
+    const ev = (await db.sanidade.toArray())[0];
+    const desp = (await db.lancamentos.where('[origem+refId]').equals(['sanidade', ev.id!]).first())!;
+    const { id: _i, criadoEm: _c, gid: _g, ...resto } = ev;
+    await salvarEventoSanitario({ ...resto, custo: 150 }, ev.id);
+    expect(await db.lancamentos.get(desp.id!)).toMatchObject({ gid: desp.gid, valor: 150 });
+    await salvarEventoSanitario({ ...resto, custo: 0 }, ev.id);
+    expect(await db.lancamentos.get(desp.id!)).toBeUndefined();
+    expect(await contarLixeira()).toBe(0);
+    expect(await db.pendentes.get(['lancamentos', desp.id!])).toMatchObject({ op: 'del', lixeira: false }); // a nuvem também não põe na lixeira
+  });
+
+  it('a despesa da compra não volta em dobro', async () => {
+    const f = await fazenda();
+    const compra = { data: '2026-10-01', precoCab: 2000, comissaoPct: 0.02, frete: 0, nfGta: 0 };
+    const id = await registrarCompraLote(f.lote, compra);
+    const pac = await excluirRegistro('lancamentos', id);
+    await registrarCompraLote(f.lote, compra); // lançada de novo
+    await expect(restaurar(pac!)).rejects.toThrow('a compra desse lote já está lançada');
+  });
+
+  it('nenhuma tela apaga direto do banco: tudo passa pela lixeira', () => {
+    const ruins: string[] = [];
+    for (const pasta of ['./pages/', './components/']) {
+      const dir = fileURLToPath(new URL(pasta, import.meta.url));
+      for (const n of readdirSync(dir).filter((x) => /\.tsx?$/.test(x))) {
+        const t = readFileSync(join(dir, n), 'utf8');
+        for (const m of t.matchAll(/db\.(?:table\([^)]*\)|\w+)\.(?:delete|bulkDelete|clear)\(|\.where\([^)]*\)[^;\n]*\.delete\(\)/g)) ruins.push(`${n}: ${m[0]}`);
+      }
+    }
+    expect(ruins).toEqual([]);
   });
 
   it('quem pode restaurar (com a nuvem)', () => {

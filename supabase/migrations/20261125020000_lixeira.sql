@@ -5,6 +5,7 @@
 --      e as vacinas dele). Só tem valor enquanto o registro está apagado.
 --   2. enviar_alteracoes, ao apagar: marca como apagado (excluido) e GUARDA os dados (antes, os dados saíam do registro
 --      e ficavam só na auditoria). O pacote vem do app; se não vier (app antigo), o servidor cria um por envio.
+--      Quando é o próprio app trocando um registro por outro (lixeira = false), os dados ficam, mas fora da lixeira.
 --      Restaurar = gravar de novo o mesmo registro (mesmo gid), com as mesmas regras de sempre: quem pode gravar aquela
 --      tabela, referências que existem e não estão apagadas, contas refeitas no servidor e os gatilhos (um lote por piquete,
 --      área do módulo, cadastro de funcionário...). Fica na auditoria como "restaurar".
@@ -16,7 +17,8 @@
 --   4. NDVI: ao apagar um piquete, o NDVI dele fica guardado; se o piquete voltar, o NDVI volta junto.
 --   5. Anotação restaurada continua com quem anotou (não passa a ser de quem restaurou).
 --   6. O que foi apagado ANTES desta migração volta para a lixeira, com os dados guardados na auditoria
---      (o que foi apagado no mesmo envio vira um item só).
+--      (o que foi apagado no mesmo envio vira um item só). Fica de fora a despesa ou o movimento de estoque que o app
+--      refez sozinho (a compra, a vacina, a batida ou o trato a que ele pertence continua lá), para não lançar duas vezes.
 --
 -- Não muda: apagar a conta (apagar_minha_conta, LGPD) e apagar a fazenda da nuvem (apagar_fazenda) continuam apagando
 -- de verdade: a lei manda e a pessoa confirma digitando. Ninguém lê "registros" direto (só pelas funções), como antes.
@@ -69,8 +71,12 @@ begin
           continue;
         end if;
         -- LIXEIRA: os dados ficam no registro (só marca como apagado), com o pacote do que foi apagado junto.
-        lx := case when coalesce(op->>'lixeira', '') ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-                   then (op->>'lixeira')::uuid else lx_envio end;
+        -- "lixeira": false = o próprio app trocou o registro por outro (ex.: a despesa da vacina refeita): os dados
+        -- ficam, mas não aparece na lixeira.
+        lx := case when op->'lixeira' = 'false'::jsonb then null
+                   when coalesce(op->>'lixeira', '') ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+                   then (op->>'lixeira')::uuid
+                   else lx_envio end;
         v := nextval('public.registros_versao');
         update public.registros set excluido = true, lixeira = lx, versao = v, atualizado_em = now(), atualizado_por = u
           where fazenda_id = f and tabela = tab and gid = g;
@@ -278,6 +284,16 @@ begin
     from public.auditoria au
     join public.registros r on r.fazenda_id = au.fazenda_id and r.tabela = au.tabela and r.gid = au.gid and r.excluido and r.dados is null
     where au.acao = 'apagar' and au.antes is not null and jsonb_typeof(au.antes) = 'object' and au.tabela not in ('config', 'ndvi')
+      -- a despesa/movimento que o app refez sozinho: o registro de origem continua lá
+      and not exists (
+        select 1 from public.registros o
+        where o.fazenda_id = au.fazenda_id and not o.excluido and o.gid = au.antes->>'refId'
+          and o.tabela = case
+            when au.tabela = 'lancamentos' and au.antes->>'origem' = 'compra_lote' then 'lotes'
+            when au.tabela = 'lancamentos' and au.antes->>'origem' = 'sanidade' then 'sanidade'
+            when au.tabela = 'movimentos' and au.antes->>'origem' = 'batida' then 'batidas'
+            when au.tabela = 'movimentos' and au.antes->>'origem' = 'fornecimento' then 'fornecimentos'
+          end)
     order by au.fazenda_id, au.tabela, au.gid, au.em desc, au.id desc
   loop
     begin

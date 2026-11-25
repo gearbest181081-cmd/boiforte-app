@@ -4,8 +4,11 @@
 import { COPIA_INTEIRA, db, guardarCopiaInteira, semAnotar, SO_DO_SERVIDOR, TABELAS, type Pendente } from '../db';
 import { ORDEM_SINC, trocarReferencias, type Papel } from './esquema';
 
-/** lixeira: no "del", o pacote da lixeira (o servidor guarda o registro apagado, que pode voltar). */
-export interface OpEnvio { tabela: string; gid: string; op: 'put' | 'del'; dados?: Record<string, unknown>; lixeira?: string }
+/**
+ * lixeira, no "del": o pacote da lixeira (o servidor guarda o registro apagado, que pode voltar), ou false quando
+ * o próprio app troca um registro por outro (ex.: o lançamento da compra refeito), que não vai para a lixeira.
+ */
+export interface OpEnvio { tabela: string; gid: string; op: 'put' | 'del'; dados?: Record<string, unknown>; lixeira?: string | false }
 export interface Resultado { tabela: string; gid: string; ok: boolean; erro?: string; versao?: number }
 /**
  * Linha que vem da nuvem. Apagada (excluido) com "lixeira": está na lixeira da fazenda, com os dados
@@ -145,7 +148,7 @@ async function enviar(t: Transporte, f: FazendaNuvem, rel: RelatorioSinc) {
       if (p.op === 'del') {
         const gid = p.tabela === 'config' ? String(p.chave) : p.gid;
         if (!gid) { sobra.push(p); continue; }
-        ops.push({ tabela: p.tabela, gid, op: 'del', ...(p.lixeira ? { lixeira: p.lixeira } : {}) }); de.push(p);
+        ops.push({ tabela: p.tabela, gid, op: 'del', ...(p.lixeira !== undefined ? { lixeira: p.lixeira } : {}) }); de.push(p);
         continue;
       }
       const r = (await db.table(p.tabela).get(p.chave)) as Reg | undefined;
