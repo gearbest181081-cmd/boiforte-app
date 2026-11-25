@@ -17,6 +17,14 @@ export interface RelatorioSinc { enviados: number; recebidos: number; erros: { t
 const LOTE_ENVIO = 200;
 /** Começo da mensagem do servidor quando o piquete já tem outro lote/grupo (gatilho em 20261124150000_pasto.sql). */
 export const PIQUETE_OCUPADO = 'Piquete ocupado';
+/** Começo da mensagem do servidor quando os piquetes passariam da área do módulo (gatilho em 20261124204700_area_modulo.sql). */
+export const AREA_DO_MODULO = 'Área do módulo';
+/**
+ * Recusas que dependem da ordem de envio e somem depois que o resto subiu. Ex.: diminuiu um piquete e depois o módulo;
+ * o módulo sobe antes (ordem das tabelas) e é recusado porque, na nuvem, o piquete ainda está grande.
+ */
+const TENTAR_DEPOIS = [PIQUETE_OCUPADO, AREA_DO_MODULO];
+const tentarDepois = (erro?: string) => !!erro && TENTAR_DEPOIS.some((x) => erro.startsWith(x));
 const LOTE_BAIXA = 500;
 const ordem = (t: string) => { const i = (ORDEM_SINC as readonly string[]).indexOf(t); return i < 0 ? 99 : i; };
 const TABS_SINC = [...TABELAS, 'pendentes', 'sincEstado', 'sincEspera', 'fotosAnotacao'];
@@ -253,13 +261,14 @@ export function sincronizar(t: Transporte): Promise<RelatorioSinc> {
     if (f.papel !== 'consultor') {
       await enviar(t, f, rel);
       // Troca de piquete: se o lote que entrou foi enviado antes do que saiu, o servidor recusa ("Piquete ocupado").
+      // Área do módulo: se o módulo diminuiu depois do piquete, o módulo sobe antes e é recusado ("Área do módulo").
       // Depois que o resto subiu, tenta de novo esses (até 2 vezes).
       for (let i = 0; i < 2; i++) {
-        const presos = (await db.pendentes.toArray()).filter((p) => p.erro?.startsWith(PIQUETE_OCUPADO));
+        const presos = (await db.pendentes.toArray()).filter((p) => tentarDepois(p.erro));
         if (!presos.length || !rel.enviados) break;
         const antes = rel.enviados;
         await db.pendentes.bulkPut(presos.map(({ erro: _e, ...p }) => p));
-        rel.erros = rel.erros.filter((e) => !e.erro.startsWith(PIQUETE_OCUPADO));
+        rel.erros = rel.erros.filter((e) => !tentarDepois(e.erro));
         await enviar(t, f, rel);
         if (rel.enviados === antes) break;
       }

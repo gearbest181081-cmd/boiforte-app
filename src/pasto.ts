@@ -75,14 +75,16 @@ export function lotacaoPiquete(areaHa: number | undefined, ocupantes: Ocupante[]
 /**
  * Lotação do módulo: UA de todos os animais nos piquetes do módulo dividida pela área do módulo inteiro.
  * No rotacionado é essa a lotação que conta (os piquetes vazios estão descansando para o mesmo gado).
+ * A área é a gravada no módulo; módulo antigo, sem área, usa a soma das áreas dos piquetes.
  */
-export function lotacaoModulo(piquetes: Pick<Piquete, 'id' | 'areaHa'>[], ocupantes: Ocupante[]) {
+export function lotacaoModulo(piquetes: Pick<Piquete, 'id' | 'areaHa'>[], ocupantes: Ocupante[], areaModulo?: number | null) {
   const ids = new Set(piquetes.map((p) => p.id));
-  const areaHa = piquetes.reduce((s, p) => s + (p.areaHa ?? 0), 0);
+  const areaPiquetes = piquetes.reduce((s, p) => s + (p.areaHa ?? 0), 0);
+  const areaHa = areaModulo && areaModulo > 0 ? areaModulo : areaPiquetes;
   const dentro = ocupantes.filter((o) => o.piqueteId != null && ids.has(o.piqueteId));
   const uaTotal = dentro.reduce((s, o) => s + uaDe(o), 0);
   const cabecas = dentro.reduce((s, o) => s + o.cabecas, 0);
-  return { areaHa, ua: uaTotal, cabecas, uaHa: areaHa > 0 ? uaTotal / areaHa : null, semArea: piquetes.filter((p) => !p.areaHa).length };
+  return { areaHa, areaPiquetes, ua: uaTotal, cabecas, uaHa: areaHa > 0 ? uaTotal / areaHa : null, semArea: piquetes.filter((p) => !p.areaHa).length };
 }
 
 export type NivelLotacao = 'ok' | 'atencao' | 'alta' | 'sem_dados';
@@ -94,12 +96,12 @@ export interface Lotacao { nivel: NivelLotacao; uaHa: number | null; capacidade:
  * 2) sem capacidade gravada: as 2 últimas saídas com o capim abaixo da altura de saída (pasto rapado) = alta.
  */
 export function lotacaoAlta(
-  modulo: Pick<Modulo, 'capacidadeUA'>,
+  modulo: Pick<Modulo, 'capacidadeUA' | 'areaHa'>,
   piquetes: Pick<Piquete, 'id' | 'areaHa' | 'capim' | 'alturaEntrada' | 'alturaSaida' | 'kgMsCm'>[],
   ocupantes: Ocupante[],
   ocupacoes: Pick<Ocupacao, 'piqueteId' | 'saida' | 'alturaSaida'>[] = [],
 ): Lotacao {
-  const l = lotacaoModulo(piquetes, ocupantes);
+  const l = lotacaoModulo(piquetes, ocupantes, modulo.areaHa);
   const cap = modulo.capacidadeUA ?? null;
   if (cap && l.uaHa != null) {
     const r = l.uaHa / cap;
@@ -115,7 +117,7 @@ export function lotacaoAlta(
     return alvo != null && o.alturaSaida! < alvo * 0.8;
   });
   if (rapado) return { nivel: 'alta', uaHa: l.uaHa, capacidade: null, motivo: 'Os animais saíram das 2 últimas vezes com o capim bem abaixo da altura de saída (pasto rapado).' };
-  if (l.uaHa == null) return { nivel: 'sem_dados', uaHa: null, capacidade: null, motivo: 'Falta a área dos piquetes.' };
+  if (l.uaHa == null) return { nivel: 'sem_dados', uaHa: null, capacidade: null, motivo: 'Falta a área do módulo.' };
   return { nivel: cap ? 'ok' : 'sem_dados', uaHa: l.uaHa, capacidade: cap, motivo: 'Grave a capacidade de suporte do módulo (UA/ha) para o app avisar quando passar.' };
 }
 
@@ -257,6 +259,115 @@ export function analisarNdvi(nome: string, serie: PontoNdvi[], outros: PontoNdvi
     }
   }
   return { atual, base, vizinhos, tendencia, alertas };
+}
+
+// ---------------------------------------------------------------- área do módulo × área dos piquetes
+// A soma das áreas dos piquetes não pode passar da área do módulo (senão a lotação em UA/ha sai errada).
+// A mesma regra vale no servidor (gatilho em 20261124204700_area_modulo.sql).
+
+/** Folga para o arredondamento (10 m²): 3,33 + 3,33 + 3,34 dá 10,000000000000002 no computador. O servidor usa a mesma. */
+export const FOLGA_AREA_HA = 0.001;
+const ha = (v: number) => `${fmtNum(v, 2)} ha`;
+
+export interface UsoArea {
+  /** Área gravada no módulo; null = módulo antigo, sem área (sem limite). */
+  areaModulo: number | null;
+  /** Soma das áreas dos piquetes (sem contar o piquete "fora"). */
+  usada: number;
+  /** Quanto ainda cabe em piquetes; null = sem limite. */
+  livre: number | null;
+}
+
+/** Quanto da área do módulo os piquetes já usam. "fora": o piquete que está sendo editado (não entra na soma). */
+export function usoDaArea(modulo: Pick<Modulo, 'areaHa'> | null | undefined, piquetes: Pick<Piquete, 'id' | 'areaHa'>[], fora?: number): UsoArea {
+  const usada = piquetes.filter((p) => fora == null || p.id !== fora).reduce((s, p) => s + (p.areaHa ?? 0), 0);
+  const areaModulo = modulo?.areaHa && modulo.areaHa > 0 ? modulo.areaHa : null;
+  return { areaModulo, usada, livre: areaModulo == null ? null : Math.max(0, areaModulo - usada) };
+}
+
+/** Frase embaixo do campo Área do piquete: quanto ainda cabe no módulo. */
+export function dicaAreaPiquete(uso: UsoArea): string | undefined {
+  if (uso.livre == null) return undefined;
+  return uso.livre > FOLGA_AREA_HA ? `Cabe até ${ha(uso.livre)} neste módulo.` : 'O módulo já está todo dividido em piquetes.';
+}
+
+/** Confere se um piquete com esta área cabe no módulo. Se não cabe, a mensagem diz quanto cabe. */
+export function conferirAreaPiquete(modulo: Pick<Modulo, 'nome' | 'areaHa'>, piquetes: Pick<Piquete, 'id' | 'areaHa'>[], areaHa: number | null | undefined, fora?: number) {
+  if (!areaHa || areaHa <= 0) return; // piquete sem área não pesa na soma
+  const u = usoDaArea(modulo, piquetes, fora);
+  if (u.areaModulo == null || u.usada + areaHa <= u.areaModulo + FOLGA_AREA_HA) return;
+  const outros = u.usada > FOLGA_AREA_HA ? ` e os outros piquetes já usam ${ha(u.usada)}` : '';
+  throw new ErroValidacao(u.livre! > FOLGA_AREA_HA
+    ? `O módulo ${modulo.nome} tem ${ha(u.areaModulo)}${outros}. Este piquete pode ter no máximo ${ha(u.livre!)}.`
+    : `O módulo ${modulo.nome} tem ${ha(u.areaModulo)}${outros}: não sobra área para este piquete. Diminua a área de outro piquete ou aumente a do módulo.`);
+}
+
+/** Confere a área do módulo: maior que zero e nunca menor que a soma dos piquetes dele. */
+export function conferirAreaModulo(nome: string, areaHa: number, piquetes: Pick<Piquete, 'areaHa'>[]) {
+  if (!(areaHa > 0)) throw new ErroValidacao('A área do módulo precisa ser maior que zero.');
+  const usada = piquetes.reduce((s, p) => s + (p.areaHa ?? 0), 0);
+  if (usada > areaHa + FOLGA_AREA_HA) {
+    throw new ErroValidacao(`Os piquetes do módulo ${nome} já somam ${ha(usada)}. A área do módulo não pode ser menor que isso (ou diminua a área dos piquetes antes).`);
+  }
+}
+
+/** Cadastra um módulo. A área é obrigatória: é ela que limita a soma dos piquetes. */
+export async function novoModulo(d: { propriedadeId: number; nome: string; areaHa: number | null | undefined }): Promise<number> {
+  const nome = d.nome.trim();
+  if (!nome) throw new ErroValidacao('Dê um nome ao módulo. Ex.: "Retiro de cima".');
+  if (d.areaHa == null) throw new ErroValidacao('Informe a área do módulo em hectares.');
+  conferirAreaModulo(nome, d.areaHa, []);
+  return db.modulos.add({ propriedadeId: d.propriedadeId, nome, areaHa: d.areaHa, criadoEm: Date.now() });
+}
+
+export type MudancaModulo = Partial<Pick<Modulo, 'nome' | 'areaHa' | 'sistema' | 'diasOcupacao' | 'diasDescanso' | 'capacidadeUA'>>;
+
+/** Muda o módulo. A área nova não pode ser menor que a soma dos piquetes, nem ficar em branco depois de gravada. */
+export async function atualizarModulo(id: number, mud: MudancaModulo): Promise<void> {
+  await db.transaction('rw', db.modulos, db.piquetes, async () => {
+    const m = await db.modulos.get(id);
+    if (!m) throw new ErroValidacao('Módulo não encontrado.');
+    if ('areaHa' in mud) {
+      if (mud.areaHa == null) { if (m.areaHa != null) throw new ErroValidacao('Informe a área do módulo em hectares.'); }
+      // Igual ao servidor: só confere quando a área é informada pela primeira vez ou diminui. Manter a área
+      // (mudando só o manejo) ou aumentar sempre pode, mesmo que os piquetes já passem dela.
+      else if (m.areaHa == null || mud.areaHa < m.areaHa) {
+        conferirAreaModulo(mud.nome ?? m.nome, mud.areaHa, await db.piquetes.where('moduloId').equals(id).toArray());
+      }
+    }
+    await db.modulos.update(id, mud);
+  });
+}
+
+export type MudancaPiquete = Partial<Omit<Piquete, 'id' | 'gid' | 'criadoEm'>>;
+
+/** Cadastra um piquete. A área (se informada) precisa caber no que sobra do módulo. */
+export async function novoPiquete(d: Omit<Piquete, 'id' | 'gid' | 'criadoEm'>): Promise<number> {
+  return db.transaction('rw', db.modulos, db.piquetes, async () => {
+    const m = await db.modulos.get(d.moduloId);
+    if (!m) throw new ErroValidacao('Módulo não encontrado.');
+    conferirAreaPiquete(m, await db.piquetes.where('moduloId').equals(d.moduloId).toArray(), d.areaHa);
+    return db.piquetes.add({ ...d, criadoEm: Date.now() });
+  });
+}
+
+/**
+ * Muda o piquete. Se a área crescer (ou o piquete for para outro módulo), confere que cabe no módulo;
+ * diminuir a área ou mudar só o nome, o capim ou o contorno sempre pode (igual ao servidor).
+ */
+export async function atualizarPiquete(id: number, mud: MudancaPiquete): Promise<void> {
+  await db.transaction('rw', db.modulos, db.piquetes, async () => {
+    const p = await db.piquetes.get(id);
+    if (!p) throw new ErroValidacao('Piquete não encontrado.');
+    const moduloId = mud.moduloId ?? p.moduloId;
+    const area = 'areaHa' in mud ? mud.areaHa : p.areaHa;
+    if (moduloId !== p.moduloId || (area ?? 0) > (p.areaHa ?? 0)) {
+      const m = await db.modulos.get(moduloId);
+      if (!m) throw new ErroValidacao('Módulo não encontrado.');
+      conferirAreaPiquete(m, await db.piquetes.where('moduloId').equals(moduloId).toArray(), area, id);
+    }
+    await db.piquetes.update(id, mud);
+  });
 }
 
 // ---------------------------------------------------------------- gravar no celular
