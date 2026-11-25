@@ -12,6 +12,7 @@ const caminhos: Record<string, ReactNode> = {
   balanca: <><path d="M12 3v3M5 8h14l-2.5 11a2 2 0 0 1-2 1.5h-5a2 2 0 0 1-2-1.5z" /><path d="M12 12l2.5-2.5" /><circle cx="12" cy="13.5" r="1.5" /></>,
   fazenda: <><path d="M3 21V10l5-4 5 4v11" /><path d="M13 21h8V13l-4-3-4 3" /><path d="M7 21v-5h2v5" /></>,
   mais: <><circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" /></>,
+  menu: <><rect x="4" y="4" width="7" height="7" rx="1.5" /><rect x="13" y="4" width="7" height="7" rx="1.5" /><rect x="4" y="13" width="7" height="7" rx="1.5" /><rect x="13" y="13" width="7" height="7" rx="1.5" /></>,
   cocho: <><path d="M3 10h18l-2 8H5z" /><path d="M6 10V7M18 10V7M9 14h6" /></>,
   mic: <><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3" /></>,
   mais_sinal: <path d="M12 5v14M5 12h14" />,

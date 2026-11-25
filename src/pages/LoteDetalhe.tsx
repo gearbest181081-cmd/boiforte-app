@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useAbaNoEndereco } from '../navegacao';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, excluirLote, FASES, lerConfig, pontosDoAnimal, pontosDoLote, SEXOS } from '../db';
@@ -13,13 +13,17 @@ import { LoteSanidade } from './Sanidade';
 import { nomeCurtoFase, PROXIMA_FASE, trechosDeFase } from '../fases';
 import { usePapel, useVeDinheiro } from '../nuvem/useNuvem';
 
+type Aba = 'resumo' | 'pesagens' | 'animais' | 'dinheiro' | 'saude';
+
 export function LoteDetalhe() {
   const { id } = useParams();
   const loteId = Number(id);
   const nav = useNavigate();
   const aviso = useAviso();
   const papel = usePapel();
-  const [aba, setAba] = useState<'resumo' | 'pesagens' | 'animais' | 'dinheiro' | 'saude'>('resumo');
+  // A aba fica no endereço (?aba=saude): o Menu e os avisos abrem direto nela e o Voltar de outra tela volta para ela.
+  // ?acao=venda | compra já abre o formulário na aba Dinheiro.
+  const { aba: abaPedida, acao, trocar: setAba } = useAbaNoEndereco('resumo');
   const dados = useLiveQuery(async () => {
     const lote = await db.lotes.get(loteId);
     if (!lote) return null;
@@ -49,6 +53,9 @@ export function LoteDetalhe() {
   const gmdRef = r.gmdUltimo ?? r.gmdTotal;
   const desvio = desvioMeta(gmdRef, lote.gmdMeta);
   const podeMudarFase = !lote.encerrado && papel !== 'vaqueiro' && papel !== 'consultor';
+  const podeLancar = !lote.encerrado && papel !== 'consultor';
+  const abas: Aba[] = ['resumo', 'pesagens', ...(lote.controle === 'individual' ? ['animais' as const] : []), ...(papel !== 'vaqueiro' ? ['dinheiro' as const] : []), 'saude'];
+  const aba: Aba = abas.includes(abaPedida as Aba) ? (abaPedida as Aba) : 'resumo';
   // RIP (ou recria) pronta para a TIP: o botão aparece em destaque quando o lote chega perto do peso alvo.
   const pertoDoAlvo = (lote.fase === 'rip' || lote.fase === 'recria') && !!lote.pesoAlvo && r.pesoAtual != null && r.pesoAtual >= lote.pesoAlvo * 0.95;
 
@@ -78,6 +85,13 @@ export function LoteDetalhe() {
         </p>
 
         <Link to={`/pesar/${lote.id}`} className="btn largo" style={{ marginBottom: 14 }}>Nova pesagem</Link>
+        {podeLancar && (
+          <div className="acoes-lote">
+            <Link to={`/lotes/${lote.id}?aba=saude`} replace className="btn sec pequeno" data-testid="acaoVacina"><span className="ic" aria-hidden="true">💉</span>Vacina ou remédio</Link>
+            {podeMudarFase && <Link to={`/lotes/${lote.id}?aba=dinheiro&acao=venda`} replace className="btn sec pequeno" data-testid="acaoVenda"><span className="ic" aria-hidden="true">💰</span>Venda ou morte</Link>}
+            <Link to={`/pasto/mover?de=lote:${lote.id}`} className="btn sec pequeno" data-testid="acaoMover"><span className="ic" aria-hidden="true">🐂</span>Mudar de piquete</Link>
+          </div>
+        )}
 
         <Opcoes tres={lote.controle === 'individual'} valor={aba} aoMudar={setAba} opcoes={[
           { valor: 'resumo', rotulo: 'Resumo' },
@@ -120,8 +134,8 @@ export function LoteDetalhe() {
             {pesagens.length > 0 && <Link to={`/lotes/${lote.id}/relatorio`} className="btn sec largo" style={{ marginBottom: 14 }}>Relatório de pesagem (PDF, Excel, WhatsApp)</Link>}
             {(lote.fases?.length ?? 0) > 0 && <CartaoFases lote={lote} pontos={pontos} />}
             {lote.obs && <div className="cartao"><b>Observações</b><p>{lote.obs}</p></div>}
-            <div className="botoes">
-              {!lote.encerrado && papel !== 'consultor' && <Link to={`/pasto/mover?de=lote:${lote.id}`} className="btn sec pequeno">Mudar de piquete</Link>}
+            <h2>Outras opções do lote</h2>
+            <div className="botoes" style={{ marginTop: 0 }}>
               {podeMudarFase && <Link to={`/lotes/${lote.id}/fase`} className="btn sec pequeno">{lote.fase === 'rip' || lote.fase === 'recria' ? 'Passar para TIP' : 'Mudar de fase'}</Link>}
               <Link to={`/lotes/${lote.id}/editar`} className="btn sec pequeno">Editar lote</Link>
               <button className="btn sec pequeno" onClick={encerrar}>{lote.encerrado ? 'Reabrir lote' : 'Encerrar lote'}</button>
@@ -158,7 +172,7 @@ export function LoteDetalhe() {
           </div>
         )}
 
-        {aba === 'dinheiro' && <LoteFinanceiro lote={lote} />}
+        {aba === 'dinheiro' && <LoteFinanceiro key={acao ?? ''} lote={lote} abrir={acao === 'venda' ? 'saida' : acao === 'compra' ? 'compra' : undefined} />}
         {aba === 'saude' && <LoteSanidade lote={lote} />}
         {aba === 'animais' && <ListaAnimais loteId={loteId} animais={animais} pesagens={pesagens} gmdMeta={lote.gmdMeta} />}
       </main>

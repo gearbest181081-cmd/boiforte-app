@@ -77,7 +77,7 @@ export const PERMISSOES: Record<Papel, { pode: string[]; naoPode: string[] }> = 
 export function mensagemConvite(papel: Papel, codigo: string, fazenda?: string): string {
   return `Você foi chamado para a equipe${fazenda ? (/^fazenda\b/i.test(fazenda.trim()) ? ` da ${fazenda.trim()}` : ` da fazenda ${fazenda.trim()}`) : ''} no BoiForte como ${PAPEIS[papel].nome.toLowerCase()}.\n\n`
     + `Seu código: ${codigo}\n\n`
-    + `1. Abra o app BoiForte (ou instale)\n2. Entre com o seu e-mail\n3. Vá em Mais > Nuvem e equipe\n4. Digite o código e toque em "Entrar na equipe"\n\nO código vale 7 dias e só para você.`;
+    + `1. Abra o app BoiForte (ou instale)\n2. Entre com o seu e-mail\n3. Toque em Menu > Nuvem e equipe\n4. Digite o código e toque em "Entrar na equipe"\n\nO código vale 7 dias e só para você.`;
 }
 
 /** Tabelas que o vaqueiro pode ver e gravar (o resto, principalmente o dinheiro e os salários dos funcionários, fica de fora). */

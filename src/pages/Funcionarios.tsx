@@ -230,7 +230,7 @@ function AcessoApp({ f, fazendaId, souDono, usuarioId, setUsuarioId, nome, telef
     return (
       <div className="cartao" data-testid="acessoApp">
         <h3>Usar o app</h3>
-        <p className="mudo" style={{ margin: 0 }}>Para o funcionário lançar pesagens e o trato no celular dele, ligue a fazenda na nuvem em <Link to="/nuvem">Mais › Nuvem e equipe</Link>. Depois volte aqui para chamar ele.</p>
+        <p className="mudo" style={{ margin: 0 }}>Para o funcionário lançar pesagens e o trato no celular dele, ligue a fazenda na nuvem em <Link to="/nuvem">Menu › Nuvem e equipe</Link>. Depois volte aqui para chamar ele.</p>
       </div>
     );
   }

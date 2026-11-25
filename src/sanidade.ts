@@ -42,15 +42,19 @@ export function proximaData(l: LembreteSan, hoje: string): string {
   return esteAno >= hoje ? esteAno : fmt(ano + 1);
 }
 
-export interface Pendencia { nivel: 'ruim' | 'atencao'; titulo: string; texto: string; data: string }
+export interface Pendencia {
+  nivel: 'ruim' | 'atencao'; titulo: string; texto: string; data: string;
+  /** Lote da aplicação marcada (os lembretes do calendário não têm). */
+  loteId?: number | null;
+}
 
 export function pendenciasSanidade(eventos: (EventoSan & { nomeLote?: string })[], lembretes: LembreteSan[], hoje: string, janela = 7): Pendencia[] {
   const out: Pendencia[] = [];
   for (const e of eventos) {
     if (e.feito) continue;
     const d = diasEntre(hoje, e.data);
-    if (d < 0) out.push({ nivel: 'ruim', titulo: `${TIPOS_SANIDADE[e.tipo]} atrasado${e.nomeLote ? `: ${e.nomeLote}` : ''}`, texto: `${e.produto} estava marcado para ${e.data.split('-').reverse().join('/')} (${-d} dia(s) de atraso).`, data: e.data });
-    else if (d <= janela) out.push({ nivel: 'atencao', titulo: `${TIPOS_SANIDADE[e.tipo]}${e.nomeLote ? `: ${e.nomeLote}` : ''} ${d === 0 ? 'hoje' : `em ${d} dia(s)`}`, texto: `${e.produto} em ${e.data.split('-').reverse().join('/')}.`, data: e.data });
+    if (d < 0) out.push({ nivel: 'ruim', titulo: `${TIPOS_SANIDADE[e.tipo]} atrasado${e.nomeLote ? `: ${e.nomeLote}` : ''}`, texto: `${e.produto} estava marcado para ${e.data.split('-').reverse().join('/')} (${-d} dia(s) de atraso).`, data: e.data, loteId: e.loteId });
+    else if (d <= janela) out.push({ nivel: 'atencao', titulo: `${TIPOS_SANIDADE[e.tipo]}${e.nomeLote ? `: ${e.nomeLote}` : ''} ${d === 0 ? 'hoje' : `em ${d} dia(s)`}`, texto: `${e.produto} em ${e.data.split('-').reverse().join('/')}.`, data: e.data, loteId: e.loteId });
   }
   for (const l of lembretes) {
     const p = proximaData(l, hoje);

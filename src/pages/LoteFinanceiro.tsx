@@ -7,9 +7,10 @@ import { fmtData, fmtNum, fmtPct, hojeISO } from '../calc';
 import { CampoData, CampoNumero, CampoTexto, num, Opcoes, useAviso } from '../components/ui';
 import { rs } from './Nutricao';
 
-export function LoteFinanceiro({ lote }: { lote: Lote }) {
+/** Aba Dinheiro do lote. abrir: já mostra o formulário (quando a pessoa veio de "Vender" ou "Lançar compra" no Menu). */
+export function LoteFinanceiro({ lote, abrir }: { lote: Lote; abrir?: 'compra' | 'saida' }) {
   const t = useTudo();
-  const [form, setForm] = useState<'compra' | 'saida' | null>(null);
+  const [form, setForm] = useState<'compra' | 'saida' | null>(abrir === 'saida' && lote.encerrado ? null : abrir ?? null);
   const analise = useMemo(() => (t ? analisarLotes(t).find((a) => a.info.lote.id === lote.id) : undefined), [t, lote.id]);
   const vendas = useLiveQuery(() => db.vendas.where('loteId').equals(lote.id!).toArray(), [lote.id]);
   const compra = useLiveQuery(() => db.lancamentos.where('[origem+refId]').equals(['compra_lote', lote.id!]).first(), [lote.id]);
@@ -23,7 +24,7 @@ export function LoteFinanceiro({ lote }: { lote: Lote }) {
       {!compra && <div className="alerta atencao"><span className="ic">💲</span><div><b>Falta lançar a compra do lote</b>Sem ela o resultado e a margem ficam errados.</div></div>}
       <div className="botoes">
         <button className="btn" onClick={() => setForm(form === 'compra' ? null : 'compra')}>{compra ? 'Refazer compra' : 'Lançar compra'}</button>
-        {!lote.encerrado && <button className="btn sec" onClick={() => setForm(form === 'saida' ? null : 'saida')}>Venda / baixa</button>}
+        {!lote.encerrado && <button className="btn sec" onClick={() => setForm(form === 'saida' ? null : 'saida')}>Venda ou morte</button>}
       </div>
       {form === 'compra' && <FormCompra lote={lote} aoTerminar={() => setForm(null)} />}
       {form === 'saida' && <FormSaida lote={lote} precoArroba={t.precoArroba} rendimento={t.rendimento} comissao={t.comissaoVenda} pesoSugerido={analise.info.resumo.pesoAtual} aoTerminar={() => setForm(null)} />}

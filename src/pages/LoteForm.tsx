@@ -150,7 +150,7 @@ export function LoteForm() {
         {editando && <div className="dica">Para mudar o lote de piquete, use o botão "Mudar de piquete" na tela do lote.</div>}
 
         <CampoEscolha rotulo="Dieta / suplemento" nome="formula" valor={f.formulaId} aoMudar={(v) => set('formulaId')(Number(v))}
-          dica={formulas?.length === 0 ? 'Crie fórmulas em Mais › Nutrição.' : 'Usada no trato do dia e no custo do lote.'}>
+          dica={formulas?.length === 0 ? 'Crie fórmulas em Menu › Fórmulas de ração.' : 'Usada no trato do dia e no custo do lote.'}>
           <option value={0}>Nenhuma (só pasto e sal)</option>
           {formulas?.map((x) => <option key={x.id} value={x.id}>{x.nome}</option>)}
         </CampoEscolha>

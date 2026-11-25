@@ -21,6 +21,6 @@ Não vendemos nem compartilhamos seus dados, não mostramos anúncios e não usa
 
 ## Seus direitos (LGPD)
 
-- **Ver e levar seus dados:** em *Mais › Cópia de segurança* você baixa tudo num arquivo.
-- **Apagar:** em *Mais › Nuvem e equipe › Apagar minha conta*. A conta e as fazendas só suas são apagadas do servidor.
+- **Ver e levar seus dados:** em *Menu › Cópia de segurança* você baixa tudo num arquivo.
+- **Apagar:** em *Menu › Nuvem e equipe › Apagar minha conta*. A conta e as fazendas só suas são apagadas do servidor.
 - Dúvidas: escreva para o contato informado na página do app na loja.

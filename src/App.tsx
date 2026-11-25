@@ -23,6 +23,7 @@ import { FuncionarioForm, Funcionarios } from './pages/Funcionarios';
 import { AnotacaoDetalhe, AnotacaoForm, Anotacoes } from './pages/Anotacoes';
 import { MoverGado, Pasto, PiqueteDetalhe } from './pages/Pasto';
 import { SincAutomatica } from './nuvem/useNuvem';
+import { RoloNoTopo } from './navegacao';
 import { SessaoProvider } from './nuvem/sessao';
 import { Porta } from './pages/Login';
 
@@ -34,6 +35,7 @@ export function App() {
         <SessaoProvider>
           <Porta>
             <SincAutomatica />
+            <RoloNoTopo />
             <Routes>
               <Route path="/" element={<Inicio />} />
               <Route path="/lotes" element={<Lotes />} />
@@ -72,7 +74,7 @@ export function App() {
               <NavLink to="/lotes"><Icone nome="lotes" />Lotes</NavLink>
               <NavLink to="/pesar" className="pesar"><span className="bola"><Icone nome="balanca" /></span><small>Pesar</small></NavLink>
               <NavLink to="/trato"><Icone nome="cocho" />Trato</NavLink>
-              <NavLink to="/mais"><Icone nome="mais" />Mais</NavLink>
+              <NavLink to="/mais"><Icone nome="menu" />Menu</NavLink>
             </nav>
           </Porta>
         </SessaoProvider>

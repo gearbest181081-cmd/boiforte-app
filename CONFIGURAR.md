@@ -137,6 +137,6 @@ Pronto: o próximo envio para `main` publica o app já com a nuvem.
 
 ## 6. Conferir
 
-1. Abra o app, *Mais › Nuvem e equipe*, entre com seu e-mail e o código.
+1. Abra o app, *Menu › Nuvem e equipe*, entre com seu e-mail e o código.
 2. *Criar fazenda na nuvem*: os dados do celular sobem e você vira o dono.
 3. *Convidar* gera um código de 10 letras. No outro celular, entre e use o código.

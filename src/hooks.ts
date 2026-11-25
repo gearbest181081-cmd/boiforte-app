@@ -173,23 +173,24 @@ export function alertasInteligentes(t: Tudo, hoje = hojeISO()): Alerta[] {
     const v = variacao(antes?.dre.custoArrobaProduzida ?? null, a.dre.custoArrobaProduzida);
     // só compara depois de 45 dias de lote: no começo a @ produzida é pequena e qualquer gasto muda muito o custo
     if (v != null && v >= 0.05 && antes && antes.dre.dias >= 45) {
-      out.push({ nivel: 'atencao', titulo: `${l.nome}: custo da @ subiu ${Math.round(v * 100)}% este mês`, texto: `Passou de ${moeda(antes!.dre.custoArrobaProduzida)} para ${moeda(a.dre.custoArrobaProduzida)} por @ produzida. Confira o consumo do trato e o GMD.` });
+      out.push({ nivel: 'atencao', titulo: `${l.nome}: custo da @ subiu ${Math.round(v * 100)}% este mês`, texto: `Passou de ${moeda(antes!.dre.custoArrobaProduzida)} para ${moeda(a.dre.custoArrobaProduzida)} por @ produzida. Confira o consumo do trato e o GMD.`, para: `/lotes/${l.id}?aba=dinheiro` });
     }
     if (a.dre.custoArrobaProduzida != null && a.dre.custoArrobaProduzida > t.precoArroba) {
-      out.push({ nivel: 'ruim', titulo: `${l.nome}: a @ produzida custa mais que a @ vendida`, texto: `Custo de ${moeda(a.dre.custoArrobaProduzida)} por @ contra ${moeda(t.precoArroba)} do mercado. Cada @ a mais dá prejuízo.` });
+      out.push({ nivel: 'ruim', titulo: `${l.nome}: a @ produzida custa mais que a @ vendida`, texto: `Custo de ${moeda(a.dre.custoArrobaProduzida)} por @ contra ${moeda(t.precoArroba)} do mercado. Cada @ a mais dá prejuízo.`, para: `/lotes/${l.id}?aba=dinheiro` });
     }
     const car = emCarencia(t.sanidade, l.id!, hoje);
     if (car) {
       const prev = a.info.projecao?.dataPrevista;
-      if (prev && prev < car.data) out.push({ nivel: 'ruim', titulo: `${l.nome}: carência atrapalha a venda`, texto: `A previsão de saída (${prev.split('-').reverse().join('/')}) é antes do fim da carência de ${car.produto} (${car.data.split('-').reverse().join('/')}). Não mande para o abate antes.` });
-      else if (diasEntre(hoje, car.data) <= 30 || (a.info.projecao && diasEntre(hoje, a.info.projecao.dataPrevista) <= 45)) out.push({ nivel: 'atencao', titulo: `${l.nome} em carência até ${car.data.split('-').reverse().join('/')}`, texto: `Por causa de ${car.produto}. Só libere para abate depois dessa data.` });
+      if (prev && prev < car.data) out.push({ nivel: 'ruim', titulo: `${l.nome}: carência atrapalha a venda`, texto: `A previsão de saída (${prev.split('-').reverse().join('/')}) é antes do fim da carência de ${car.produto} (${car.data.split('-').reverse().join('/')}). Não mande para o abate antes.`, para: `/lotes/${l.id}?aba=saude` });
+      else if (diasEntre(hoje, car.data) <= 30 || (a.info.projecao && diasEntre(hoje, a.info.projecao.dataPrevista) <= 45)) out.push({ nivel: 'atencao', titulo: `${l.nome} em carência até ${car.data.split('-').reverse().join('/')}`, texto: `Por causa de ${car.produto}. Só libere para abate depois dessa data.`, para: `/lotes/${l.id}?aba=saude` });
     }
   }
   const nomes = new Map(t.lotes.map((l) => [l.id!, l.nome]));
   for (const p of pendenciasSanidade(t.sanidade.filter((e) => !t.lotes.find((l) => l.id === e.loteId)?.encerrado).map((e) => ({ ...e, nomeLote: nomes.get(e.loteId) })), t.lembretes, hoje)) {
     out.push({ nivel: p.nivel, titulo: p.titulo, texto: p.texto });
   }
-  return out;
+  // vacina marcada e prazos do calendário: o aviso leva para a Sanidade
+  return out.map((a) => (a.para ? a : { ...a, para: '/sanidade' }));
 }
 
 import { diasEntre, somaDias as somaDiasLocal } from './calc';
